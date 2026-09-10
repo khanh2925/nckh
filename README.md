@@ -1,16 +1,38 @@
-# React + Vite
+# Airport Indoor Map — Jakarta EE
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Prototype bản đồ sân bay trong nhà cho môn Lập trình WWW.
 
-Currently, two official plugins are available:
+## Công nghệ
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Java 17
+- Jakarta Servlet 6.0
+- JSP, Maven và Apache Tomcat 10.1+
+- Leaflet và JavaScript thuần
 
-## React Compiler
+## Chạy project
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+mvn clean package
+```
 
-## Expanding the ESLint configuration
+Copy `target/airport-map.war` vào thư mục `webapps` của Tomcat, khởi động Tomcat rồi mở:
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```text
+http://localhost:8080/airport-map/airport-map
+```
+
+Nếu chạy trực tiếp từ IDE với context path khác:
+
+```text
+http://localhost:8080/<context-path>/airport-map
+```
+
+## Cấu trúc chính
+
+- Servlet: `src/main/java/vn/edu/airportmap/web/AirportMapServlet.java`
+- JSP: `src/main/webapp/WEB-INF/views/airport-map.jsp`
+- JavaScript và dữ liệu mẫu: `src/main/webapp/js/airport-map.js`
+- CSS: `src/main/webapp/css/airport-map.css`
+- Mặt bằng rời trong tương lai: `src/main/webapp/images/maps/`
+
+Mặt bằng T1 hiện được dựng bằng SVG từ JavaScript để giữ phép xoay và căn tọa độ với bản đồ nền. Dữ liệu địa điểm mẫu nằm trong hằng `locations`; sau này có thể thay bằng dữ liệu trả về từ Servlet hoặc REST API.
