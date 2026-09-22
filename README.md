@@ -1,38 +1,48 @@
-# Airport Indoor Map — Jakarta EE
+# Airport Indoor Map
 
-Prototype bản đồ sân bay trong nhà cho môn Lập trình WWW.
+Prototype bản đồ sân bay gồm hai phần tách biệt:
 
-## Công nghệ
+```text
+React + Leaflet  →  Spring Boot REST API
+```
 
-- Java 17
-- Jakarta Servlet 6.0
-- JSP, Maven và Apache Tomcat 10.1+
-- Leaflet và JavaScript thuần
+Chưa sử dụng database, đăng nhập hoặc Spring Security. Dữ liệu địa điểm mẫu nằm trong backend để dễ học luồng Controller → JSON → React.
 
-## Chạy project
+## 1. Chạy backend Spring Boot
+
+Yêu cầu Java 17. Không cần cài Maven vì project có Maven Wrapper.
 
 ```bash
-mvn clean package
+cd Back-End
+./mvnw spring-boot:run
 ```
 
-Copy `target/airport-map.war` vào thư mục `webapps` của Tomcat, khởi động Tomcat rồi mở:
+Backend chạy tại `http://localhost:8080`. API kiểm tra:
 
 ```text
-http://localhost:8080/airport-map/airport-map
+http://localhost:8080/api/locations
+http://localhost:8080/api/locations?floor=1
 ```
 
-Nếu chạy trực tiếp từ IDE với context path khác:
+## 2. Chạy frontend React
 
-```text
-http://localhost:8080/<context-path>/airport-map
+Mở Terminal thứ hai:
+
+```bash
+cd Front-End
+npm install
+npm run dev
 ```
 
-## Cấu trúc chính
+Mở URL Vite in ra, mặc định là `http://localhost:5173`.
 
-- Servlet: `src/main/java/vn/edu/airportmap/web/AirportMapServlet.java`
-- JSP: `src/main/webapp/WEB-INF/views/airport-map.jsp`
-- JavaScript và dữ liệu mẫu: `src/main/webapp/js/airport-map.js`
-- CSS: `src/main/webapp/css/airport-map.css`
-- Mặt bằng rời trong tương lai: `src/main/webapp/images/maps/`
+## Cấu trúc cần học trước
 
-Mặt bằng T1 hiện được dựng bằng SVG từ JavaScript để giữ phép xoay và căn tọa độ với bản đồ nền. Dữ liệu địa điểm mẫu nằm trong hằng `locations`; sau này có thể thay bằng dữ liệu trả về từ Servlet hoặc REST API.
+- `Back-End/.../AirportMapApplication.java`: điểm khởi động Spring Boot.
+- `Back-End/.../LocationController.java`: REST API trả dữ liệu địa điểm.
+- `Back-End/.../Location.java`: cấu trúc một địa điểm.
+- `Front-End/src/App.jsx`: giao diện React.
+- `Front-End/src/airport-map.js`: Leaflet, tọa độ và cách vẽ mặt bằng.
+- `Front-End/vite.config.js`: chuyển tiếp `/api` từ frontend sang backend.
+
+Sau này có thể bổ sung Entity, Repository và MySQL mà không phải viết lại phần bản đồ.

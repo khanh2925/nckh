@@ -1,4 +1,10 @@
-(function () {
+import * as Leaflet from 'leaflet';
+
+window.L = Leaflet;
+await import('leaflet-rotate');
+const L = window.L;
+
+(async function () {
   'use strict';
 
   const DEFAULT_BEARING = 85;
@@ -25,17 +31,18 @@
     [10.8112056,106.6527862],[10.8115576,106.6526460],[10.8112121,106.6517196]
   ];
 
-  const locations = [
-    { id: 1, name: 'Cửa 01–02', type: 'gate', typeName: 'Cửa ra máy bay', x: 239, y: 168, floor: 1 },
-    { id: 2, name: 'Cửa 09', type: 'gate', typeName: 'Cửa ra máy bay', x: 775, y: 168, floor: 1 },
-    { id: 3, name: 'Cửa 15', type: 'gate', typeName: 'Cửa ra máy bay', x: 1203, y: 234, floor: 1 },
-    { id: 4, name: 'WC khu A', type: 'restroom', typeName: 'Nhà vệ sinh', x: 405, y: 476, floor: 1 },
-    { id: 5, name: 'Quầy thông tin', type: 'information', typeName: 'Thông tin sân bay', x: 317, y: 497, floor: 1 },
-    { id: 6, name: 'Phòng chờ', type: 'lounge', typeName: 'Phòng chờ hành khách', x: 824, y: 325, floor: 1 },
-    { id: 7, name: 'Thang máy tầng 2', type: 'elevator', typeName: 'Thang máy', x: 515, y: 355, floor: 2 },
-    { id: 8, name: 'WC tầng 2', type: 'restroom', typeName: 'Nhà vệ sinh', x: 885, y: 355, floor: 2 },
-    { id: 9, name: 'Phòng chờ tầng 2', type: 'lounge', typeName: 'Phòng chờ hành khách', x: 1040, y: 350, floor: 2 }
-  ];
+  let locations = [];
+  async function loadLocations() {
+    try {
+      const response = await fetch('/api/locations');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      locations = await response.json();
+    } catch (error) {
+      console.error('Không tải được địa điểm từ Spring Boot:', error);
+      document.getElementById('map-status').textContent = 'Không kết nối được backend tại cổng 8080';
+    }
+  }
+  await loadLocations();
 
   const map = L.map('airport-map', {
     center: OVERVIEW_CENTER, zoom: 16.2, minZoom: 14, maxZoom: 22,
@@ -82,6 +89,17 @@
   function imagePointToLatLng(x, y) {
     const point = projectImage(x, y);
     return L.CRS.EPSG3857.unproject(L.point(point.x, point.y));
+  }
+
+  function latLngToImagePoint(latlng) {
+    const point = L.CRS.EPSG3857.project(latlng);
+    const dx = point.x - startWorld.x;
+    const dy = point.y - startWorld.y;
+    const square = ux * ux + uy * uy;
+    return {
+      x: ANCHOR.image[0] + (dx * ux + dy * uy) / square,
+      y: ANCHOR.image[1] + (dx * uy - dy * ux) / (DEPTH_SCALE * square)
+    };
   }
 
   function makeSvgElement(floor) {
@@ -248,5 +266,21 @@
     map.setView(OVERVIEW_CENTER, 16.2, { animate: false });
   });
   document.getElementById('go-t1').addEventListener('click', resetMap);
+  window.addEventListener('locations:refresh', async () => {
+    await loadLocations();
+    renderLocations(currentFloor);
+  });
+  window.addEventListener('admin:start-pick', event => {
+    const floor = Number(event.detail.floor);
+    if (floor !== currentFloor) changeFloor(floor);
+    if (map.setBearing) map.setBearing(DEFAULT_BEARING);
+    map.setView(T1_CENTER, 18.8, { animate: false });
+    map.getContainer().classList.add('picking-location');
+    map.once('click', clickEvent => {
+      const point = latLngToImagePoint(clickEvent.latlng);
+      map.getContainer().classList.remove('picking-location');
+      window.dispatchEvent(new CustomEvent('admin:point-picked', { detail: { ...point, floor } }));
+    });
+  });
   window.addEventListener('resize', () => map.invalidateSize());
 }());
