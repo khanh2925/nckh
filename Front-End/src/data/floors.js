@@ -35,7 +35,7 @@ const floors = [
                 <rect x="915" y="325" width="215" height="110" fill="#d6d3e9"/>
                 <path d="M163 240h1014M260 460h917" fill="none"/>
             </g>
-            <text x="720" y="275" font-size="22" font-weight="700">TẦNG 2 · MẶT BẰNG MẪU</text>
+            <text x="720" y="226" font-size="22" font-weight="700">TẦNG 2 · MẶT BẰNG MẪU</text>
         `
     }
 ];

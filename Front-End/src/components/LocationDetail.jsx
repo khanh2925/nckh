@@ -3,7 +3,7 @@ import { getGroup, getLocationType } from "../data/locationTypes";
 
 // Desktop: a panel on the left, always showing everything.
 // Phone: a bottom sheet. Collapsed = short preview, "Xem chi tiết" expands it (see App.css).
-function LocationDetail({ location, onClose }) {
+function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const type = getLocationType(location.type);
@@ -30,6 +30,15 @@ function LocationDetail({ location, onClose }) {
                 <span className="badge text-bg-light border"><i className="bi bi-building me-1" />Ga {location.terminal || "T1"}</span>
                 <span className="badge text-bg-light border"><i className="bi bi-layers me-1" />Tầng {location.floor}</span>
                 {location.area && <span className="badge text-bg-light border"><i className="bi bi-geo-alt me-1" />{location.area}</span>}
+            </div>
+
+            <div className="d-flex gap-2 mt-3">
+                <button type="button" className="btn btn-primary btn-sm flex-grow-1" onClick={() => onRouteFrom(location)}>
+                    <i className="bi bi-person-walking me-1" />Chỉ đường từ đây
+                </button>
+                <button type="button" className="btn btn-outline-primary btn-sm flex-grow-1" onClick={() => onRouteTo(location)}>
+                    <i className="bi bi-flag me-1" />Đến đây
+                </button>
             </div>
 
             {hasMoreInfo && (

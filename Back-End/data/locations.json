@@ -1,0 +1,369 @@
+[ {
+  "id" : 1,
+  "name" : "Cửa 01–02",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 239.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 2,
+  "name" : "Cửa 03",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 340.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 3,
+  "name" : "Cửa 04",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 408.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 4,
+  "name" : "Cửa 05",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 475.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 5,
+  "name" : "Cửa 06",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 540.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 6,
+  "name" : "Cửa 07",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 609.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 7,
+  "name" : "Cửa 08",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 686.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 8,
+  "name" : "Cửa 09",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 775.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 9,
+  "name" : "Cửa 10",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 860.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 10,
+  "name" : "Cửa 12",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 956.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 11,
+  "name" : "Cửa 13",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 1057.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 12,
+  "name" : "Cửa 14",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 1128.0,
+  "y" : 168.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 13,
+  "name" : "Cửa 15",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 1203.0,
+  "y" : 234.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa ra máy bay. Hãy đối chiếu số cửa và giờ lên máy bay trên thẻ lên máy bay."
+}, {
+  "id" : 14,
+  "name" : "Khu kiểm tra an ninh",
+  "type" : "security",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 318.0,
+  "y" : 500.0,
+  "area" : "Khu công cộng → Khu cách ly",
+  "description" : "Kiểm tra giấy tờ tùy thân, thẻ lên máy bay và soi chiếu hành lý xách tay.",
+  "facilities" : [ "Máy soi hành lý", "Cổng từ", "Lối ưu tiên" ]
+}, {
+  "id" : 15,
+  "name" : "Quầy làm thủ tục",
+  "type" : "checkin",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 760.0,
+  "y" : 546.0,
+  "area" : "Khu công cộng",
+  "description" : "Làm thủ tục chuyến bay và ký gửi hành lý.",
+  "openingHours" : "Mở cửa theo lịch chuyến bay",
+  "facilities" : [ "Ký gửi hành lý", "Quầy hỗ trợ đặc biệt" ]
+}, {
+  "id" : 16,
+  "name" : "Quầy thông tin",
+  "type" : "information",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 450.0,
+  "y" : 546.0,
+  "area" : "Khu công cộng",
+  "description" : "Hỗ trợ thông tin chuyến bay, hướng dẫn di chuyển trong nhà ga.",
+  "openingHours" : "24/7"
+}, {
+  "id" : 17,
+  "name" : "Nhà vệ sinh A",
+  "type" : "restroom",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 186.0,
+  "y" : 277.0,
+  "area" : "Khu cách ly",
+  "facilities" : [ "Nam", "Nữ", "Người khuyết tật" ]
+}, {
+  "id" : 18,
+  "name" : "Nhà vệ sinh B",
+  "type" : "restroom",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 363.0,
+  "y" : 400.0,
+  "area" : "Khu cách ly",
+  "facilities" : [ "Nam", "Nữ" ]
+}, {
+  "id" : 19,
+  "name" : "Nhà vệ sinh C",
+  "type" : "restroom",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 706.0,
+  "y" : 334.0,
+  "area" : "Khu cách ly",
+  "facilities" : [ "Nam", "Nữ", "Phòng cho mẹ và bé" ]
+}, {
+  "id" : 20,
+  "name" : "Nhà vệ sinh D",
+  "type" : "restroom",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 1036.0,
+  "y" : 417.0,
+  "area" : "Khu cách ly",
+  "facilities" : [ "Nam", "Nữ" ]
+}, {
+  "id" : 21,
+  "name" : "Phòng chờ hạng thương gia",
+  "type" : "lounge",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 824.0,
+  "y" : 325.0,
+  "area" : "Khu cách ly",
+  "description" : "Phòng chờ dành cho khách hạng thương gia và thẻ hội viên.",
+  "facilities" : [ "Wi-Fi", "Đồ ăn nhẹ", "Ổ cắm sạc" ]
+}, {
+  "id" : 22,
+  "name" : "Orchids Gold",
+  "type" : "lounge",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 1080.0,
+  "y" : 356.0,
+  "area" : "Khu cách ly",
+  "description" : "Phòng chờ hành khách."
+}, {
+  "id" : 23,
+  "name" : "Sasco Shop",
+  "type" : "shop",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 705.0,
+  "y" : 388.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa hàng quà lưu niệm và đặc sản."
+}, {
+  "id" : 24,
+  "name" : "Twike Joys",
+  "type" : "shop",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 715.0,
+  "y" : 474.0,
+  "area" : "Khu cách ly",
+  "description" : "Cửa hàng bánh kẹo và quà tặng."
+}, {
+  "id" : 25,
+  "name" : "Quầy cà phê",
+  "type" : "coffee",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 430.0,
+  "y" : 332.0,
+  "area" : "Khu dịch vụ",
+  "description" : "Cà phê, trà và đồ uống mang đi.",
+  "openingHours" : "05:00 – 23:00",
+  "facilities" : [ "Mang đi", "Thanh toán thẻ" ]
+}, {
+  "id" : 26,
+  "name" : "Khu ẩm thực",
+  "type" : "restaurant",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 1005.0,
+  "y" : 372.0,
+  "area" : "Khu cách ly",
+  "description" : "Món Việt và đồ ăn nhanh.",
+  "openingHours" : "05:00 – 23:00"
+}, {
+  "id" : 27,
+  "name" : "ATM",
+  "type" : "atm",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 620.0,
+  "y" : 395.0,
+  "area" : "Khu cách ly",
+  "openingHours" : "24/7"
+}, {
+  "id" : 28,
+  "name" : "Thang máy",
+  "type" : "elevator",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 899.0,
+  "y" : 300.0,
+  "area" : "Khu cách ly",
+  "description" : "Lên tầng 2.",
+  "facilities" : [ "Hỗ trợ xe lăn" ]
+}, {
+  "id" : 29,
+  "name" : "Thang cuốn",
+  "type" : "escalator",
+  "terminal" : "T1",
+  "floor" : 1,
+  "x" : 899.0,
+  "y" : 390.0,
+  "area" : "Khu cách ly",
+  "description" : "Lên tầng 2."
+}, {
+  "id" : 30,
+  "name" : "Thang máy tầng 2",
+  "type" : "elevator",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 899.0,
+  "y" : 300.0,
+  "area" : "Tầng 2",
+  "facilities" : [ "Hỗ trợ xe lăn" ]
+}, {
+  "id" : 31,
+  "name" : "Nhà vệ sinh tầng 2",
+  "type" : "restroom",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 885.0,
+  "y" : 355.0,
+  "area" : "Tầng 2",
+  "facilities" : [ "Nam", "Nữ" ]
+}, {
+  "id" : 32,
+  "name" : "Phòng chờ tầng 2",
+  "type" : "lounge",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 1040.0,
+  "y" : 350.0,
+  "area" : "Tầng 2",
+  "facilities" : [ "Wi-Fi", "Ổ cắm sạc" ]
+}, {
+  "id" : 33,
+  "name" : "Khu ẩm thực tầng 2",
+  "type" : "restaurant",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 790.0,
+  "y" : 390.0,
+  "area" : "Tầng 2",
+  "openingHours" : "06:00 – 22:00"
+}, {
+  "id" : 34,
+  "name" : "Quầy thông tin tầng 2",
+  "type" : "information",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 400.0,
+  "y" : 380.0,
+  "area" : "Tầng 2"
+}, {
+  "id" : 35,
+  "name" : "Thang cuốn tầng 2",
+  "type" : "escalator",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 899.0,
+  "y" : 395.0,
+  "area" : "Tầng 2",
+  "description" : "Xuống tầng 1."
+}, {
+  "id" : 36,
+  "name" : "Check point",
+  "type" : "gate",
+  "terminal" : "T1",
+  "floor" : 2,
+  "x" : 479.6,
+  "y" : 498.2,
+  "area" : "Check adding-point",
+  "openingHours" : "05:30-14:20"
+} ]

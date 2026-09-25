@@ -30,13 +30,40 @@ public class LocationController {
     public Location getLocationById(@PathVariable Long id) {
         Location location = locationService.getLocationById(id);
         if (location == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy địa điểm " + id);
+            throw notFound(id);
         }
         return location;
     }
 
+    // POST /api/locations
     @PostMapping
     public Location addLocation(@RequestBody Location location) {
+        validate(location);
+        return locationService.addLocation(location);
+    }
+
+    // PUT /api/locations/5
+    @PutMapping("/{id}")
+    public Location updateLocation(@PathVariable Long id, @RequestBody Location location) {
+        validate(location);
+        Location updated = locationService.updateLocation(id, location);
+        if (updated == null) {
+            throw notFound(id);
+        }
+        return updated;
+    }
+
+    // DELETE /api/locations/5  -> 204 No Content
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteLocation(@PathVariable Long id) {
+        if (!locationService.deleteLocation(id)) {
+            throw notFound(id);
+        }
+    }
+
+    // Checks required fields and fills default values
+    private void validate(Location location) {
         if (location.getName() == null || location.getName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên địa điểm không được để trống");
         }
@@ -51,6 +78,9 @@ public class LocationController {
         if (location.getTerminal() == null) {
             location.setTerminal("T1");
         }
-        return locationService.addLocation(location);
+    }
+
+    private ResponseStatusException notFound(Long id) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy địa điểm " + id);
     }
 }

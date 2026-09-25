@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Header from "./components/Header";
 import MapView from "./components/MapView";
 import SearchBox from "./components/SearchBox";
 import CategoryFilter from "./components/CategoryFilter";
 import LocationDetail from "./components/LocationDetail";
-import AdminForm from "./components/AdminForm";
+import RoutePanel from "./components/RoutePanel";
+import AdminPanel from "./components/AdminPanel";
 import { getLocations } from "./api/locationApi";
 import { getLocationType } from "./data/locationTypes";
+import { findRoute } from "./utils/routing";
 
 function App() {
     const [locations, setLocations] = useState([]);
@@ -17,7 +19,14 @@ function App() {
     const [activeGroup, setActiveGroup] = useState("all");
     const [selectedId, setSelectedId] = useState(null);
 
+    // Directions
+    const [isRouting, setIsRouting] = useState(false);
+    const [routeFromId, setRouteFromId] = useState(null);
+    const [routeToId, setRouteToId] = useState(null);
+
+    // Admin: editingId = location id, "new" (adding) or null (showing the list)
     const [role, setRole] = useState("user");
+    const [editingId, setEditingId] = useState(null);
     const [isPicking, setIsPicking] = useState(false);
     const [pickedPoint, setPickedPoint] = useState(null);
 
@@ -34,17 +43,39 @@ function App() {
             });
     }, [reloadCount]);
 
+    const isAdmin = role === "admin";
+    const findById = (id) => locations.find(location => location.id === id) || null;
     const isInGroup = (location, groupId) => groupId === "all" || getLocationType(location.type).group === groupId;
 
     // Derived data: calculated from state on every render, not stored in state
-    const selectedLocation = locations.find(location => location.id === selectedId) || null;
-    const visibleLocations = locations.filter(location => location.floor === floor && isInGroup(location, activeGroup));
+    const selectedLocation = findById(selectedId);
+    const routeFrom = findById(routeFromId);
+    const routeTo = findById(routeToId);
+    const editingLocation = editingId === "new" ? null : findById(editingId);
 
+    // useMemo: only search for a new path when the start or the end changes
+    const route = useMemo(
+        () => (routeFrom && routeTo && routeFrom.id !== routeTo.id ? findRoute(routeFrom, routeTo) : null),
+        [routeFrom, routeTo]
+    );
+
+    // Places that must stay visible even when the filter hides their group
+    const pinnedIds = [selectedId, routeFromId, routeToId, editingId];
+    const visibleLocations = locations.filter(location =>
+        location.floor === floor && (isInGroup(location, activeGroup) || pinnedIds.includes(location.id))
+    );
+
+    // ---------- Selecting a place (marker click or search result) ----------
     const handleSelect = (location) => {
-        setSelectedId(location.id);
-        setFloor(location.floor);
-        // The chosen place is hidden by the current filter -> show everything again
-        if (!isInGroup(location, activeGroup)) setActiveGroup("all");
+        if (isPicking) return;   // the admin is choosing a point, ignore marker clicks
+        if (isAdmin) {
+            handleEdit(location.id);
+        } else if (isRouting) {
+            handleRoutePick(location);
+        } else {
+            setSelectedId(location.id);
+            setFloor(location.floor);
+        }
     };
 
     const handleFloorChange = (newFloor) => {
@@ -57,42 +88,104 @@ function App() {
         if (selectedLocation && !isInGroup(selectedLocation, groupId)) setSelectedId(null);
     };
 
+    // ---------- Directions ----------
+    const handleRouteFrom = (location) => {
+        setIsRouting(true);
+        setRouteFromId(location.id);
+        setRouteToId(null);
+        setSelectedId(null);
+    };
+
+    const handleRouteTo = (location) => {
+        setIsRouting(true);
+        setRouteToId(location.id);
+        setRouteFromId(null);
+        setSelectedId(null);
+    };
+
+    // While directions are open, a clicked place fills the missing end.
+    // When both ends exist, a new click replaces the destination.
+    const handleRoutePick = (location) => {
+        if (!routeFrom) {
+            setRouteFromId(location.id);
+            setFloor(location.floor);
+        } else if (location.id !== routeFrom.id) {
+            setRouteToId(location.id);
+            setFloor(routeFrom.floor);   // the route is shown from its start
+        }
+    };
+
+    const handleSwapRoute = () => {
+        setRouteFromId(routeToId);
+        setRouteToId(routeFromId);
+        if (routeTo) setFloor(routeTo.floor);
+    };
+
+    const handleCloseRoute = () => {
+        setIsRouting(false);
+        setRouteFromId(null);
+        setRouteToId(null);
+    };
+
+    // ---------- Admin ----------
     const handleRoleChange = (newRole) => {
         setRole(newRole);
-        setIsPicking(false);
+        setSelectedId(null);
+        handleCloseRoute();
+        handleCancelEdit();
+    };
+
+    const handleEdit = (id) => {
+        const location = findById(id);
+        setEditingId(id);
         setPickedPoint(null);
+        setIsPicking(false);
+        if (location) setFloor(location.floor);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setPickedPoint(null);
+        setIsPicking(false);
     };
 
     const handleStartPick = (pickFloor) => {
         setFloor(pickFloor);
-        setSelectedId(null);
-        setPickedPoint(null);
         setIsPicking(true);
     };
 
     const handlePickPoint = (point) => {
-        setPickedPoint(point);
+        setPickedPoint({ ...point, floor });
         setIsPicking(false);
     };
 
-    const handleSaved = (newLocation) => {
-        setLocations([...locations, newLocation]);
-        setPickedPoint(null);
-        handleSelect(newLocation);
+    const handleSaved = (saved, isNew) => {
+        setLocations(isNew
+            ? [...locations, saved]
+            : locations.map(location => (location.id === saved.id ? saved : location)));
+        handleCancelEdit();
+    };
+
+    const handleDeleted = (id) => {
+        setLocations(locations.filter(location => location.id !== id));
+        handleCancelEdit();
     };
 
     return (
         <main className="app-shell">
             <Header floor={floor} onFloorChange={handleFloorChange} role={role} onRoleChange={handleRoleChange} />
 
-            <section className={`map-shell ${role === "admin" ? "is-admin" : ""}`} aria-label="Bản đồ nhà ga T1">
+            <section className={`map-shell ${isAdmin ? "is-admin" : ""}`} aria-label="Bản đồ nhà ga T1">
                 <MapView
                     floor={floor}
                     locations={visibleLocations}
-                    selectedLocation={selectedLocation}
+                    selectedLocation={isAdmin ? editingLocation : selectedLocation}
                     onSelect={handleSelect}
                     isPicking={isPicking}
                     onPickPoint={handlePickPoint}
+                    previewPoint={pickedPoint}
+                    route={route}
+                    onFloorChange={handleFloorChange}
                 />
 
                 <div className="map-top">
@@ -107,14 +200,47 @@ function App() {
                         </div>
                     )}
 
+                    {isRouting && (
+                        <RoutePanel
+                            fromLocation={routeFrom}
+                            toLocation={routeTo}
+                            route={route}
+                            floor={floor}
+                            onSwap={handleSwapRoute}
+                            onClearFrom={() => setRouteFromId(null)}
+                            onClearTo={() => setRouteToId(null)}
+                            onClose={handleCloseRoute}
+                            onFloorChange={handleFloorChange}
+                        />
+                    )}
+
                     {/* key = location id: choosing another place creates a fresh (collapsed) panel */}
-                    {selectedLocation && (
-                        <LocationDetail key={selectedLocation.id} location={selectedLocation} onClose={() => setSelectedId(null)} />
+                    {!isRouting && selectedLocation && (
+                        <LocationDetail
+                            key={selectedLocation.id}
+                            location={selectedLocation}
+                            onClose={() => setSelectedId(null)}
+                            onRouteFrom={handleRouteFrom}
+                            onRouteTo={handleRouteTo}
+                        />
                     )}
                 </div>
 
-                {role === "admin" && (
-                    <AdminForm pickedPoint={pickedPoint} isPicking={isPicking} onStartPick={handleStartPick} onSaved={handleSaved} />
+                {isAdmin && (
+                    <AdminPanel
+                        locations={locations}
+                        floor={floor}
+                        editingLocation={editingLocation}
+                        isCreating={editingId === "new"}
+                        pickedPoint={pickedPoint}
+                        isPicking={isPicking}
+                        onEdit={handleEdit}
+                        onCreate={() => handleEdit("new")}
+                        onCancel={handleCancelEdit}
+                        onStartPick={handleStartPick}
+                        onSaved={handleSaved}
+                        onDeleted={handleDeleted}
+                    />
                 )}
             </section>
         </main>

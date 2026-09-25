@@ -1,9 +1,12 @@
 package vn.edu.airportmap.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
 import java.util.List;
 
+// NON_NULL: empty fields are not written to the JSON file, keeping it short and readable
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @Setter
 @Getter
 @NoArgsConstructor

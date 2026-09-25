@@ -4,16 +4,14 @@ import "leaflet-rotate";
 import terminals from "../data/terminals";
 import floors from "../data/floors";
 import { getGroup, getLocationType } from "../data/locationTypes";
-import { createProjection } from "../utils/projection";
+import { mainTerminal, projection } from "../utils/mapProjection";
 
 const DEFAULT_BEARING = 85;      // rotate the map so T1 lies horizontally, like the drawing
 const DETAIL_ZOOM = 17.4;        // zoom >= 17.4: floor plan + markers. Below: terminal outlines only
 const TERMINAL_ZOOM = 18.8;
 const OVERVIEW_CENTER = [10.8133, 106.6574];
 const OVERVIEW_ZOOM = 16.2;
-
-const mainTerminal = terminals.find(terminal => terminal.id === "T1");
-const projection = createProjection(mainTerminal.plan);
+const ROUTE_COLOR = "#1a73e8";
 
 // Only devices with a real mouse get hover previews. On phones a tap opens the detail sheet instead.
 const canHover = window.matchMedia("(hover: hover)").matches;
@@ -70,7 +68,52 @@ function createFloorSvg(floorData) {
     return svg;
 }
 
-function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPickPoint }) {
+// Angle (degrees) on SCREEN from the first point to the first point at least 20px away.
+// Screen angle, not map angle, because the map is rotated (bearing).
+function getScreenAngle(map, latlngs) {
+    const points = latlngs.map(latlng => map.latLngToContainerPoint(latlng));
+    const start = points[0];
+    const next = points.find(point => point.distanceTo(start) > 20) || points[points.length - 1];
+    if (next.distanceTo(start) === 0) return 0;
+    return Math.atan2(next.y - start.y, next.x - start.x) * 180 / Math.PI;
+}
+
+// Walking person inside a circle + an arrow around it pointing where to walk
+function createWalkerIcon(angle) {
+    const element = document.createElement("span");
+    element.className = "route-walker";
+
+    const arrow = document.createElement("span");
+    arrow.className = "route-walker-arrow";
+    arrow.style.transform = `rotate(${angle}deg)`;
+
+    const person = document.createElement("i");
+    person.className = "bi bi-person-walking";
+    // The icon faces right, so mirror it when walking to the left
+    if (Math.abs(angle) > 90) person.style.transform = "scaleX(-1)";
+
+    element.append(arrow, person);
+    return L.divIcon({ className: "", html: element, iconSize: [38, 38], iconAnchor: [19, 19] });
+}
+
+function createDestinationIcon() {
+    const element = document.createElement("span");
+    element.className = "route-destination";
+    element.innerHTML = '<i class="bi bi-geo-alt-fill"></i>';
+    // Anchor at the bottom tip of the pin
+    return L.divIcon({ className: "", html: element, iconSize: [34, 34], iconAnchor: [17, 34] });
+}
+
+function createTransferIcon(connector, nextFloor, isGoingUp) {
+    const element = document.createElement("button");
+    element.type = "button";
+    element.className = "route-transfer";
+    element.innerHTML = `<i class="bi ${isGoingUp ? "bi-arrow-up" : "bi-arrow-down"}"></i>`;
+    element.append(` ${connector} → Tầng ${nextFloor}`);
+    return L.divIcon({ className: "", html: element, iconSize: null, iconAnchor: [0, 36] });
+}
+
+function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPickPoint, previewPoint, route, onFloorChange }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const layersRef = useRef(null);
@@ -89,9 +132,15 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
             attribution: "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap"
         }).addTo(map);
 
+        // The floor-plan SVG is its own layer on top of overlayPane, so the route line needs a pane above it.
+        // It must live inside leaflet-rotate's "rotatePane" to rotate together with the map.
+        map.createPane("routePane", map.getPane("rotatePane")).style.zIndex = 450;
+
         const overview = L.layerGroup().addTo(map);
         const floorPlan = L.layerGroup().addTo(map);
+        const routeLayer = L.layerGroup().addTo(map);
         const markers = L.layerGroup().addTo(map);
+        const pickLayer = L.layerGroup().addTo(map);
 
         terminals.forEach(terminal => {
             const polygon = L.polygon(terminal.outline, {
@@ -106,7 +155,7 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         map.on("zoomend", () => setIsDetailView(map.getZoom() >= DETAIL_ZOOM));
 
         mapRef.current = map;
-        layersRef.current = { overview, floorPlan, markers };
+        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer };
 
         return () => {
             map.remove();
@@ -166,7 +215,7 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         map.setView(projection.toLatLng(selectedLocation.x, selectedLocation.y), Math.max(map.getZoom(), 19.5));
     }, [selectedLocation]);
 
-    // 5. Admin "pick a point" mode: the next click on the map becomes the new location's x, y
+    // 5. Admin "pick a point" mode: the next click on the map becomes the location's x, y
     useEffect(() => {
         if (!isPicking) return;
         const map = mapRef.current;
@@ -185,6 +234,75 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
             map.getContainer().classList.remove("picking-location");
         };
     }, [isPicking, onPickPoint]);
+
+    // 6. Admin: show where the picked point is before saving
+    useEffect(() => {
+        const { pickLayer } = layersRef.current;
+        pickLayer.clearLayers();
+        if (!previewPoint || previewPoint.floor !== floor) return;
+
+        const icon = L.divIcon({ className: "", html: '<span class="pick-preview"><i class="bi bi-crosshair"></i></span>', iconSize: [30, 30], iconAnchor: [15, 15] });
+        pickLayer.addLayer(L.marker(projection.toLatLng(previewPoint.x, previewPoint.y), { icon, interactive: false, zIndexOffset: 3000 }));
+    }, [previewPoint, floor]);
+
+    // 7. Draw the route of the CURRENT floor: dots + walking person + destination / floor change
+    useEffect(() => {
+        const map = mapRef.current;
+        const { routeLayer } = layersRef.current;
+        routeLayer.clearLayers();
+        if (!route || !isDetailView) return;
+
+        const walkers = [];
+        route.legs.forEach((leg, index) => {
+            if (leg.floor !== floor) return;
+            const latlngs = leg.points.map(point => projection.toLatLng(point.x, point.y));
+
+            // Dotted line: each dash has length 0 and round ends, so it looks like a row of dots
+            routeLayer.addLayer(L.polyline(latlngs, { pane: "routePane", color: ROUTE_COLOR, weight: 7, dashArray: "0 13", lineCap: "round", interactive: false }));
+
+            const walker = L.marker(latlngs[0], { icon: createWalkerIcon(getScreenAngle(map, latlngs)), interactive: false, zIndexOffset: 2000 });
+            routeLayer.addLayer(walker);
+            walkers.push({ marker: walker, latlngs });
+
+            const nextLeg = route.legs[index + 1];
+            const end = latlngs[latlngs.length - 1];
+            if (nextLeg) {
+                const transfer = L.marker(end, { icon: createTransferIcon(leg.connector, nextLeg.floor, nextLeg.floor > leg.floor), zIndexOffset: 2500 });
+                transfer.on("click", () => onFloorChange(nextLeg.floor));
+                routeLayer.addLayer(transfer);
+            } else {
+                routeLayer.addLayer(L.marker(end, { icon: createDestinationIcon(), interactive: false, zIndexOffset: 1500 }));
+            }
+        });
+
+        // The arrow direction depends on the map rotation, so redraw it when the map rotates
+        const handleRotate = () => {
+            walkers.forEach(({ marker, latlngs }) => marker.setIcon(createWalkerIcon(getScreenAngle(map, latlngs))));
+        };
+        map.on("rotate", handleRotate);
+        return () => map.off("rotate", handleRotate);
+    }, [route, floor, isDetailView, onFloorChange]);
+
+    // 8. Zoom to the part of the route on the current floor
+    useEffect(() => {
+        if (!route) return;
+        const leg = route.legs.find(item => item.floor === floor);
+        if (!leg) return;
+
+        const map = mapRef.current;
+        const bounds = L.latLngBounds(leg.points.map(point => projection.toLatLng(point.x, point.y)));
+        // Leave room for the panels: left column on desktop, bottom sheet on phones
+        const isPhone = window.matchMedia("(max-width: 767.98px)").matches;
+        map.setBearing(DEFAULT_BEARING);
+        map.fitBounds(bounds, {
+            paddingTopLeft: isPhone ? [30, 140] : [440, 60],
+            paddingBottomRight: isPhone ? [60, 300] : [80, 60],
+            maxZoom: 20,
+            animate: false
+        });
+        // Never stay below DETAIL_ZOOM, otherwise the floor plan disappears
+        if (map.getZoom() < DETAIL_ZOOM + 0.2) map.setZoom(DETAIL_ZOOM + 0.2, { animate: false });
+    }, [route, floor]);
 
     const handleZoomIn = () => mapRef.current.zoomIn();
     const handleZoomOut = () => mapRef.current.zoomOut();
