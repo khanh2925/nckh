@@ -27,6 +27,13 @@ public class Location {
     private Double x;
     private Double y;
 
+    // Geographic coordinates from the source map, retained for accurate marker placement.
+    private Double lat;
+    private Double lng;
+    private Long sourceId;
+    private String phone;
+    private String website;
+
     // Optional information, can be null
     private String area;
     private String description;

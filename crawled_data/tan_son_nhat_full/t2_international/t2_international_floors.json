@@ -1,0 +1,191 @@
+{
+  "420322445656": {
+    "id": 420322445656,
+    "venue_id": 420321697575,
+    "name": "F0 - Arrival",
+    "level": 0,
+    "center": {
+      "lat": 10.81505965,
+      "lng": 106.66320487
+    },
+    "bounds": {
+      "ne": {
+        "lat": 10.818439,
+        "lng": 106.667123
+      },
+      "sw": {
+        "lat": 10.814901,
+        "lng": 106.659915
+      }
+    },
+    "default_zoom": 17,
+    "include_background": true,
+    "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5370_56031749099093.svg",
+    "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5370_59071749099093.pdf",
+    "bg_path_svg": null,
+    "bg_path_pdf": null,
+    "bg_tile_url": "https://mapscustom.inmapz.com/tiles/bg_2364_5367_vja/{z}_{x}_{y}.png?v=1770006412",
+    "tile_url": "https://mapscustom.inmapz.com/tiles/2365_5370_vna_2024/{z}_{x}_{y}.png?v=1770006412",
+    "tile_min_zoom": 14,
+    "tile_max_zoom": 22,
+    "heading": 0,
+    "tilt": 0,
+    "meta": null,
+    "multilingual_name": {
+      "en": "F0 - Arrival",
+      "vi": "Tầng Trệt – Khu Đến",
+      "fr": "Rez-de-chaussée – Arrivées",
+      "de": "Erdgeschoss – Ankunft",
+      "ru": "Цокольный этаж – Прибытие",
+      "ja": "地上階 – 到着",
+      "ko": "지상층 – 도착",
+      "cn": "底层 – 到达",
+      "tw": "底層– 抵達",
+      "km": "",
+      "it": "Piano terra – Arrivi",
+      "th": "ชั้นล่าง – ขาเข้า",
+      "es": "Planta baja – Llegadas"
+    }
+  },
+  "420322445858": {
+    "id": 420322445858,
+    "venue_id": 420321697575,
+    "name": "F1 - Gate",
+    "level": 1,
+    "center": {
+      "lat": 10.81589875,
+      "lng": 106.66289262
+    },
+    "bounds": {
+      "ne": {
+        "lat": 10.818439,
+        "lng": 106.667123
+      },
+      "sw": {
+        "lat": 10.814901,
+        "lng": 106.659915
+      }
+    },
+    "default_zoom": 17,
+    "include_background": true,
+    "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5368_29601749099090.svg",
+    "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5368_77041749099091.pdf",
+    "bg_path_svg": null,
+    "bg_path_pdf": null,
+    "bg_tile_url": "https://mapscustom.inmapz.com/tiles/bg_2364_5367_vja/{z}_{x}_{y}.png?v=1770006412",
+    "tile_url": "https://mapscustom.inmapz.com/tiles/2365_5368_vna_2024/{z}_{x}_{y}.png?v=1770006412",
+    "tile_min_zoom": 14,
+    "tile_max_zoom": 22,
+    "heading": 0,
+    "tilt": 0,
+    "meta": null,
+    "multilingual_name": {
+      "en": "F1 - Gate",
+      "vi": "Tầng 1 - Cửa Lên Máy Bay",
+      "fr": "1er étage - Porte d'embarquement",
+      "de": "1. Etage - Boarding Gate",
+      "ru": "1 этаж - Ворота на посадку",
+      "ja": "1階 - 搭乗ゲート",
+      "ko": "1층 - 탑승 게이트",
+      "cn": "1楼 - 登机口",
+      "tw": "1樓 - 登機口",
+      "km": "",
+      "it": "1º piano - Porta d'imbarco",
+      "th": "ชั้น 1 - ประตูขึ้นเครื่อง",
+      "es": "Piso 1 - Puerta de embarque"
+    }
+  },
+  "420322445959": {
+    "id": 420322445959,
+    "venue_id": 420321697575,
+    "name": "F2 - Departure",
+    "level": 2,
+    "center": {
+      "lat": 10.81641565,
+      "lng": 106.66412869
+    },
+    "bounds": {
+      "ne": {
+        "lat": 10.818439,
+        "lng": 106.667123
+      },
+      "sw": {
+        "lat": 10.814901,
+        "lng": 106.659915
+      }
+    },
+    "default_zoom": 18,
+    "include_background": true,
+    "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5369_10771749099092.svg",
+    "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5369_30911749099092.pdf",
+    "bg_path_svg": null,
+    "bg_path_pdf": null,
+    "bg_tile_url": "https://mapscustom.inmapz.com/tiles/bg_2364_5367_vja/{z}_{x}_{y}.png?v=1770006412",
+    "tile_url": "https://mapscustom.inmapz.com/tiles/2365_5369_vna_2024/{z}_{x}_{y}.png?v=1770006412",
+    "tile_min_zoom": 14,
+    "tile_max_zoom": 22,
+    "heading": 0,
+    "tilt": 0,
+    "meta": null,
+    "multilingual_name": {
+      "en": "F2 - Departure",
+      "vi": "Tầng 2 – Khu Khởi Hành",
+      "fr": "2e étage – Départs",
+      "de": "2. Etage – Abflug",
+      "ru": "2 этаж – Отправление",
+      "ja": "2階 – 出発",
+      "ko": "2층 – 출발",
+      "cn": "2楼 – 出发",
+      "tw": "2樓 – 出發",
+      "km": "",
+      "it": "2º piano – Partenze",
+      "th": "ชั้น 2 – ขาออก",
+      "es": "Piso 2 – Salidas"
+    }
+  },
+  "420322445757": {
+    "id": 420322445757,
+    "venue_id": 420321697575,
+    "name": "F3",
+    "level": 3,
+    "center": null,
+    "bounds": {
+      "ne": {
+        "lat": 10.818439,
+        "lng": 106.667123
+      },
+      "sw": {
+        "lat": 10.814901,
+        "lng": 106.659915
+      }
+    },
+    "default_zoom": 0,
+    "include_background": true,
+    "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5371_74461749099094.svg",
+    "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2365/walkingpaths/floor_5371_58471749099094.pdf",
+    "bg_path_svg": null,
+    "bg_path_pdf": null,
+    "bg_tile_url": "https://mapscustom.inmapz.com/tiles/bg_2364_5367_vja/{z}_{x}_{y}.png?v=1770006412",
+    "tile_url": "https://mapscustom.inmapz.com/tiles/2365_5371_vna_2024/{z}_{x}_{y}.png?v=1770006412",
+    "tile_min_zoom": 14,
+    "tile_max_zoom": 22,
+    "heading": 0,
+    "tilt": 0,
+    "meta": null,
+    "multilingual_name": {
+      "en": "F3",
+      "vi": "Tầng 3",
+      "fr": "3e étage",
+      "de": "3. Etage",
+      "ru": "3 этаж",
+      "ja": "3階",
+      "ko": "3층",
+      "cn": "3楼",
+      "tw": "3樓",
+      "km": "",
+      "it": "3º piano",
+      "th": "ชั้น 3",
+      "es": "Piso 3"
+    }
+  }
+}

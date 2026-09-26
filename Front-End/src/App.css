@@ -65,7 +65,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .leaflet-control-attribution { font-size: 10px; background: #f0f0f0c8 !important; }
 
 /* ---------- Leaflet layers ---------- */
-.leaflet-container { font-family: inherit; }
+.leaflet-container { font-family: inherit; background: #f1f1f1; }
+.campus-terminal { display: flex; align-items: center; gap: 14px; transform: translate(-50%, -50%); border: 2px solid white; border-radius: 999px; padding: 0 20px 0 0; background: #454545; color: white; white-space: nowrap; font: 700 16px/1.2 inherit; box-shadow: 0 2px 3px #0001; }
+.campus-terminal { font-family: inherit; font-size: 16px; font-weight: 700; line-height: 1.2; }
+button.campus-terminal { cursor: pointer; }
+.campus-symbol { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 50%; background: white; color: #ed1c24; font-size: 28px; }
+.campus-terminal:focus-visible { outline: 3px solid #1a73e8; outline-offset: 4px; }
+.campus-parking { display: grid; place-items: center; width: 66px; height: 66px; transform: translate(-50%, -50%); background: #666; border: 3px solid white; border-radius: 50%; box-shadow: 0 3px 4px #0002; }
+.campus-parking .campus-symbol { color: #666; font-weight: 800; }
 .leaflet-tile-pane { filter: saturate(.65); }
 .floor-plan-svg text { fill: #535353; font-family: Arial, sans-serif; text-anchor: middle; user-select: none; }
 .terminal-label { background: #484848; color: #fff; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 3px 10px #0003; padding: 8px 14px; font-weight: 700; white-space: nowrap; cursor: pointer; }

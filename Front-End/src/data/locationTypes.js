@@ -21,9 +21,14 @@ export const locationTypes = {
     restroom: { label: "Nhà vệ sinh", icon: "bi-badge-wc", group: "restroom" },
     elevator: { label: "Thang máy", icon: "bi-arrow-down-up", group: "transport" },
     escalator: { label: "Thang cuốn", icon: "bi-chevron-double-up", group: "transport" },
+    staircase: { label: "Cầu thang bộ", icon: "bi-stairs", group: "transport" },
     gate: { label: "Cửa ra máy bay", icon: "bi-door-open", group: "gate" },
     checkin: { label: "Quầy làm thủ tục", icon: "bi-suitcase", group: "procedure" },
+    baggage: { label: "Băng chuyền hành lý", icon: "bi-luggage", group: "procedure" },
+    ticket: { label: "Quầy vé", icon: "bi-ticket-perforated", group: "procedure" },
     security: { label: "Kiểm tra an ninh", icon: "bi-shield-check", group: "procedure" },
+    medical: { label: "Phòng y tế", icon: "bi-hospital", group: "service" },
+    smoking: { label: "Phòng hút thuốc", icon: "bi-slash-circle", group: "service" },
     other: { label: "Địa điểm khác", icon: "bi-geo-alt", group: "service" }
 };
 

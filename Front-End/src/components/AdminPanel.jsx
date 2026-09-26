@@ -4,7 +4,7 @@ import { getLocationType } from "../data/locationTypes";
 import { normalizeText } from "../utils/text";
 
 // Admin CRUD: a list of locations on the current floor, or the add/edit form
-function AdminPanel({ locations, floor, editingLocation, isCreating, pickedPoint, isPicking, onEdit, onCreate, onCancel, onStartPick, onSaved, onDeleted }) {
+function AdminPanel({ terminal, locations, floor, editingLocation, isCreating, pickedPoint, isPicking, onEdit, onCreate, onCancel, onStartPick, onSaved, onDeleted }) {
     const [keyword, setKeyword] = useState("");
     const [message, setMessage] = useState("");
 
@@ -33,6 +33,7 @@ function AdminPanel({ locations, floor, editingLocation, isCreating, pickedPoint
             <aside className="admin-card">
                 {/* key: switching to another location resets the form */}
                 <AdminLocationForm
+                    terminal={terminal}
                     key={editingLocation ? editingLocation.id : "new"}
                     location={editingLocation}
                     floor={floor}
@@ -93,7 +94,7 @@ function AdminPanel({ locations, floor, editingLocation, isCreating, pickedPoint
                 })}
             </div>
 
-            <p className="small text-muted mt-2 mb-0">Mẹo: bấm vào marker trên bản đồ để sửa nhanh. Dữ liệu lưu trong Back-End/data/locations.json.</p>
+            <p className="small text-muted mt-2 mb-0">Mẹo: bấm vào marker trên bản đồ để sửa nhanh. Dữ liệu được lưu trong file JSON của backend.</p>
         </aside>
     );
 }

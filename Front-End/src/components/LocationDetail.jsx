@@ -9,7 +9,7 @@ function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
     const type = getLocationType(location.type);
     const group = getGroup(type.group);
     const facilities = location.facilities || [];
-    const hasMoreInfo = location.description || location.openingHours || facilities.length > 0;
+    const hasMoreInfo = location.description || location.openingHours || location.phone || location.website || facilities.length > 0;
 
     return (
         <aside className={`location-detail ${isExpanded ? "is-expanded" : ""}`} aria-label={`Thông tin ${location.name}`}>
@@ -32,14 +32,14 @@ function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
                 {location.area && <span className="badge text-bg-light border"><i className="bi bi-geo-alt me-1" />{location.area}</span>}
             </div>
 
-            <div className="d-flex gap-2 mt-3">
+            {location.terminal !== 'T1' || location.x == null || location.y == null ? <p className="small text-muted mt-3">Địa điểm đã có tọa độ. Chỉ đường sẽ khả dụng khi bổ sung các đoạn nối lối đi.</p> : <div className="d-flex gap-2 mt-3">
                 <button type="button" className="btn btn-primary btn-sm flex-grow-1" onClick={() => onRouteFrom(location)}>
                     <i className="bi bi-person-walking me-1" />Chỉ đường từ đây
                 </button>
                 <button type="button" className="btn btn-outline-primary btn-sm flex-grow-1" onClick={() => onRouteTo(location)}>
                     <i className="bi bi-flag me-1" />Đến đây
                 </button>
-            </div>
+            </div>}
 
             {hasMoreInfo && (
                 <button type="button" className="btn btn-link btn-sm detail-toggle px-0 mt-2" onClick={() => setIsExpanded(!isExpanded)} aria-expanded={isExpanded}>
@@ -51,6 +51,8 @@ function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
                 {!hasMoreInfo && <p className="text-muted small mt-3 mb-0">Chưa có thêm thông tin cho địa điểm này.</p>}
 
                 {location.description && <p className="mt-3 mb-0">{location.description}</p>}
+                {location.phone && <p className="mt-2 mb-0">Điện thoại: {location.phone}</p>}
+                {location.website && <p className="mt-2 mb-0">Website: {location.website}</p>}
 
                 {location.openingHours && (
                     <div className="detail-row">

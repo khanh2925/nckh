@@ -1,17 +1,21 @@
-import floors from "../data/floors";
+import { airportFloors, airportTerminals } from "../data/airportCatalog";
 
-function Header({ floor, onFloorChange, role, onRoleChange }) {
+function Header({ terminal, onTerminalChange, floor, onFloorChange, role, onRoleChange }) {
+    const floors = airportFloors.filter(item => item.terminal === terminal);
     return (
         <header className="topbar">
             <div className="identity">
-                <span className="terminal-badge">T1</span>
+                <span className="terminal-badge">SGN</span>
                 <div>
-                    <h1>Ga Nội Địa T1</h1>
+                    <h1>{airportTerminals.find(item => item.id === terminal)?.name}</h1>
                     <p className="d-none d-md-block">Sân bay Tân Sơn Nhất · Bản đồ mặt bằng</p>
                 </div>
             </div>
 
             <div className="header-actions">
+                <select className="form-select form-select-sm" aria-label="Chọn nhà ga" value={terminal} onChange={event => onTerminalChange(event.target.value)}>
+                    {airportTerminals.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
                 <nav className="floor-tabs" aria-label="Chọn tầng">
                     {floors.map(item => (
                         <button

@@ -9,6 +9,7 @@ import AdminPanel from "./components/AdminPanel";
 import { getLocations } from "./api/locationApi";
 import { getLocationType } from "./data/locationTypes";
 import { findRoute } from "./utils/routing";
+import { airportFloors } from "./data/airportCatalog";
 
 function App() {
     const [locations, setLocations] = useState([]);
@@ -16,6 +17,7 @@ function App() {
     const [reloadCount, setReloadCount] = useState(0);
 
     const [floor, setFloor] = useState(1);
+    const [terminal, setTerminal] = useState("T1");
     const [activeGroup, setActiveGroup] = useState("all");
     const [selectedId, setSelectedId] = useState(null);
 
@@ -55,19 +57,26 @@ function App() {
 
     // useMemo: only search for a new path when the start or the end changes
     const route = useMemo(
-        () => (routeFrom && routeTo && routeFrom.id !== routeTo.id ? findRoute(routeFrom, routeTo) : null),
+        () => (routeFrom && routeTo && routeFrom.terminal === 'T1' && routeTo.terminal === 'T1' && !routeFrom.catalogOnly && !routeTo.catalogOnly && routeFrom.id !== routeTo.id ? findRoute(routeFrom, routeTo) : null),
         [routeFrom, routeTo]
     );
 
     // Places that must stay visible even when the filter hides their group
     const pinnedIds = [selectedId, routeFromId, routeToId, editingId];
     const visibleLocations = locations.filter(location =>
-        location.floor === floor && (isInGroup(location, activeGroup) || pinnedIds.includes(location.id))
+        location.terminal === terminal && location.floor === floor && (isInGroup(location, activeGroup) || pinnedIds.includes(location.id))
     );
 
     // ---------- Selecting a place (marker click or search result) ----------
     const handleSelect = (location) => {
         if (isPicking) return;   // the admin is choosing a point, ignore marker clicks
+        setTerminal(location.terminal);
+        setFloor(location.floor);
+        if (location.catalogOnly && isAdmin) {
+            setSelectedId(location.id);
+            setRole("user");
+            return;
+        }
         if (isAdmin) {
             handleEdit(location.id);
         } else if (isRouting) {
@@ -81,6 +90,15 @@ function App() {
     const handleFloorChange = (newFloor) => {
         setFloor(newFloor);
         if (selectedLocation && selectedLocation.floor !== newFloor) setSelectedId(null);
+    };
+
+    const handleTerminalChange = (value) => {
+        setTerminal(value);
+        setFloor(airportFloors.find(item => item.terminal === value)?.id ?? 0);
+        setSelectedId(null);
+        handleCloseRoute();
+        handleCancelEdit();
+        setRole("user");
     };
 
     const handleGroupChange = (groupId) => {
@@ -173,10 +191,12 @@ function App() {
 
     return (
         <main className="app-shell">
-            <Header floor={floor} onFloorChange={handleFloorChange} role={role} onRoleChange={handleRoleChange} />
+            <Header terminal={terminal} onTerminalChange={handleTerminalChange} floor={floor} onFloorChange={handleFloorChange} role={role} onRoleChange={handleRoleChange} />
 
             <section className={`map-shell ${isAdmin ? "is-admin" : ""}`} aria-label="Bản đồ nhà ga T1">
                 <MapView
+                    terminal={terminal}
+                    onTerminalChange={handleTerminalChange}
                     floor={floor}
                     locations={visibleLocations}
                     selectedLocation={isAdmin ? editingLocation : selectedLocation}
@@ -228,7 +248,8 @@ function App() {
 
                 {isAdmin && (
                     <AdminPanel
-                        locations={locations}
+                        terminal={terminal}
+                        locations={locations.filter(item => item.terminal === terminal)}
                         floor={floor}
                         editingLocation={editingLocation}
                         isCreating={editingId === "new"}

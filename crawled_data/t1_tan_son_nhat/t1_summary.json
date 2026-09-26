@@ -1,0 +1,150 @@
+{
+  "venue": {
+    "id": 420321697272,
+    "pid": 420321697474,
+    "slug": "sgn-ga-noi-dia-domestic-terminal-copy-airport-83646021",
+    "name": "SGN - Ga Nội Địa T1",
+    "is_subvenue": true,
+    "sub_venues": [],
+    "default_floor_id": 420322446363,
+    "floors": [
+      420322446262,
+      420322446363
+    ],
+    "poi_reference": 420370091616,
+    "type_id": 2,
+    "type_name": "Airport",
+    "default_company": "HDV",
+    "seo_header": "maps of SGN - Ga Nội Địa / Domestic Terminal, Airport, TP Hồ Chí Minh",
+    "seo_description": "Indoor maps and navigation of SGN - Ga Nội Địa / Domestic Terminal, Airport, TP Hồ Chí Minh. Find stores and facilities. Get turn-by-turn walking directions. Get promotions deals and events",
+    "seo_keywords": "indoor maps, SGN - Ga Nội Địa / Domestic Terminal, indoor navigation",
+    "seo_image_alt": null,
+    "cover_image": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/1632/venue_1632_54481539851691.jpg",
+    "photo": null,
+    "thumb": null,
+    "phone": "+84 28 3848 5634",
+    "address": "Trường Sơn, Phường 2, Quận Tân Bình, Tp. Hồ Chí Minh",
+    "website": "http://tansonnhatairport.vn/",
+    "open_close_at": "24 Hours",
+    "multilingual_name": {
+      "en": "SGN - Domestic Terminal T1",
+      "vi": "SGN - Ga Nội Địa T1",
+      "fr": "SGN - Terminal Domestique T1",
+      "de": "SGN - Inlandsflug Terminal T1",
+      "ru": "SGN - Внутренний терминал T1",
+      "ja": "SGN - 国内線ターミナル T1",
+      "ko": "SGN - 국내선 터미널 T1",
+      "cn": "SGN - 国内航站楼 T1",
+      "tw": "SGN - 國內航站樓 T1",
+      "km": "",
+      "it": "SGN - Terminal Nazionale T1",
+      "th": "SGN - อาคารผู้โดยสารภายในประเทศ T1",
+      "es": "SGN - Terminal Nacional T1"
+    },
+    "multilingual_desc": [],
+    "multilingual_keywords": [],
+    "multilingual_h1_header": [],
+    "updated_at": 1769163932
+  },
+  "total_floors": 2,
+  "floors": [
+    {
+      "id": 420322446262,
+      "venue_id": 420321697272,
+      "name": "F0 - Arrival|Checkin",
+      "level": 0,
+      "center": {
+        "lat": 10.8140709,
+        "lng": 106.66215019
+      },
+      "bounds": {
+        "ne": {
+          "lat": 10.815483,
+          "lng": 106.663239
+        },
+        "sw": {
+          "lat": 10.812182,
+          "lng": 106.661051
+        }
+      },
+      "default_zoom": 18,
+      "include_background": true,
+      "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2366/walkingpaths/floor_5372_65791749098642.svg",
+      "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2366/walkingpaths/floor_5372_79931749098643.pdf",
+      "bg_path_svg": null,
+      "bg_path_pdf": null,
+      "bg_tile_url": "https://mapscustom.inmapz.com/tiles/bg_2364_5367_vja/{z}_{x}_{y}.png?v=1770006412",
+      "tile_url": "https://mapscustom.inmapz.com/tiles/2366_5372_vna_2024/{z}_{x}_{y}.png?v=1770006412",
+      "tile_min_zoom": 14,
+      "tile_max_zoom": 22,
+      "heading": 0,
+      "tilt": 0,
+      "meta": null,
+      "multilingual_name": {
+        "en": "F0 - Arrival | Checkin",
+        "vi": "Tầng Trệt - Khu Đến | Làm Thủ Tục",
+        "fr": "Rez-de-chaussée – Arrivées | Enregistrement",
+        "de": "Erdgeschoss – Ankunft | Check-in",
+        "ru": "Цокольный этаж – Прибытие | Регистрация",
+        "ja": "地上階 – 到着 | チェックイン",
+        "ko": "지상층 – 도착 | 체크인",
+        "cn": "地面层 – 到达 | 登机手续",
+        "tw": "地面層 – 抵達 | 登機手續",
+        "km": "",
+        "it": "Piano terra – Arrivi | Check-in",
+        "th": "ชั้นล่าง – ขาเข้า | เช็คอิน",
+        "es": "Planta baja – Llegadas | Registro"
+      }
+    },
+    {
+      "id": 420322446363,
+      "venue_id": 420321697272,
+      "name": "F1 - Departure",
+      "level": 1,
+      "center": {
+        "lat": 10.81429179,
+        "lng": 106.66176453
+      },
+      "bounds": {
+        "ne": {
+          "lat": 10.815483,
+          "lng": 106.663239
+        },
+        "sw": {
+          "lat": 10.812182,
+          "lng": 106.661051
+        }
+      },
+      "default_zoom": 21,
+      "include_background": true,
+      "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2366/walkingpaths/floor_5373_67921749098644.svg",
+      "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2366/walkingpaths/floor_5373_82741749098644.pdf",
+      "bg_path_svg": null,
+      "bg_path_pdf": null,
+      "bg_tile_url": "https://mapscustom.inmapz.com/tiles/bg_2364_5367_vja/{z}_{x}_{y}.png?v=1770006412",
+      "tile_url": "https://mapscustom.inmapz.com/tiles/2366_5373_vna_2024/{z}_{x}_{y}.png?v=1770006412",
+      "tile_min_zoom": 14,
+      "tile_max_zoom": 22,
+      "heading": 0,
+      "tilt": 0,
+      "meta": null,
+      "multilingual_name": {
+        "en": "F1 - Departure",
+        "vi": "Tầng 1 – Khu Khởi Hành",
+        "fr": "1e étage – Départs",
+        "de": "1. Etage – Abflug",
+        "ru": "1 этаж – Отправление",
+        "ja": "1階 – 出発",
+        "ko": "1층 – 출발",
+        "cn": "1楼 – 出发",
+        "tw": "1樓 – 出發",
+        "km": "",
+        "it": "1º piano – Partenze",
+        "th": "ชั้น 1 – ขาออก",
+        "es": "Piso 1 – Salidas"
+      }
+    }
+  ],
+  "total_pois": 189,
+  "total_nodes": 313
+}

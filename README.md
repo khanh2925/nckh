@@ -3,25 +3,26 @@
 Prototype bản đồ sân bay gồm hai phần tách biệt:
 
 ```text
-React + Leaflet + Bootstrap  →  Spring Boot REST API  →  Back-End/data/locations.json
+React + Leaflet + Bootstrap  →  Spring Boot REST API  →  JSON file configured in application.properties
 ```
 
 Chưa sử dụng database, đăng nhập hoặc Spring Security. Toàn bộ địa điểm nằm trong file
-`Back-End/data/locations.json`: backend đọc file khi khởi động và ghi lại file sau mỗi lần
-Admin thêm / sửa / xóa. Có thể sửa file này bằng tay khi backend đang tắt.
+`Back-End/data/airport-locations.json`: backend đọc file khi khởi động và ghi lại file
+sau mỗi lần Admin thêm / sửa / xóa. Có thể sửa file này bằng tay khi backend đang tắt.
 
 ## 1. Chạy backend Spring Boot
 
 Yêu cầu Java 17 trở lên. Không cần cài Maven vì project có Maven Wrapper.
-**Chạy từ trong thư mục `Back-End`**, vì đường dẫn `data/locations.json` tính từ thư mục đang đứng
-(đổi trong `application.properties` → `app.data-file`).
+**Chạy từ trong thư mục `Back-End`**, vì đường dẫn trong `application.properties` → `app.data-file`
+tính từ thư mục đang đứng.
 
 ```bash
 cd Back-End
 ./mvnw spring-boot:run        # Windows: .\mvnw.cmd spring-boot:run
 ```
 
-Khi chạy đúng, log có dòng `Loaded 35 locations from ...\Back-End\data\locations.json`.
+File lưu hiện có 705 địa điểm thuộc T1, T2, T3 và khuôn viên. Nếu file chưa tồn tại,
+backend nhập một lần từ `crawled_data/tan_son_nhat_full` và giữ các chỉnh sửa T1 cũ.
 
 Backend chạy tại `http://localhost:8080`:
 
@@ -45,6 +46,11 @@ npm run dev
 
 Mở `http://localhost:5173`.
 
+Nếu 8080 và 5173 đang được project khác sử dụng, chạy backend với
+`./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=8081`, và frontend với
+`AIRPORT_MAP_API_URL=http://localhost:8081 npm run dev -- --port 5174` (macOS/Linux).
+Khi đó mở `http://localhost:5174`.
+
 Xem trên điện thoại: điện thoại và máy tính dùng chung Wi-Fi, mở địa chỉ `Network` mà Vite in ra
 (ví dụ `http://192.168.1.5:5173`). Nếu Windows hỏi quyền tường lửa cho Node.js, chọn cho phép.
 
@@ -59,7 +65,6 @@ Xem trên điện thoại: điện thoại và máy tính dùng chung Wi-Fi, m�
 
 ```text
 Back-End/
-├─ data/locations.json                 dữ liệu địa điểm (backend đọc + ghi file này)
 └─ src/main/java/vn/edu/airportmap/
    ├─ AirportMapApplication.java       điểm khởi động Spring Boot
    ├─ controller/LocationController    REST API /api/locations

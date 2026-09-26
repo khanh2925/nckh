@@ -67,7 +67,7 @@ public class LocationController {
         if (location.getName() == null || location.getName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên địa điểm không được để trống");
         }
-        if (location.getFloor() == null || location.getX() == null || location.getY() == null) {
+        if (location.getFloor() == null || ((location.getX() == null || location.getY() == null) && (location.getLat() == null || location.getLng() == null))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu tầng hoặc tọa độ");
         }
 

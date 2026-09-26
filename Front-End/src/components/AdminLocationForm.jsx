@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { addLocation, deleteLocation, updateLocation } from "../api/locationApi";
 import { locationTypes } from "../data/locationTypes";
-import floors from "../data/floors";
+import { airportFloors } from "../data/airportCatalog";
 
 // Location object -> values shown in the inputs (lists become "a, b, c" text)
 function toForm(location, floor) {
     return {
         name: location?.name || "",
         type: location?.type || "gate",
-        floor: location?.floor || floor,
+        floor: location?.floor ?? floor,
         area: location?.area || "",
         description: location?.description || "",
         openingHours: location?.openingHours || "",
@@ -20,13 +20,14 @@ function toForm(location, floor) {
 const textOrNull = (text) => text.trim() || null;
 
 // location = null -> "add new" mode, otherwise "edit" mode
-function AdminLocationForm({ location, floor, pickedPoint, isPicking, onStartPick, onCancel, onSaved, onDeleted }) {
+function AdminLocationForm({ terminal, location, floor, pickedPoint, isPicking, onStartPick, onCancel, onSaved, onDeleted }) {
+    const floors = airportFloors.filter(item => item.terminal === terminal);
     const [form, setForm] = useState(toForm(location, floor));
     const [error, setError] = useState("");
     const isNew = !location;
 
     // A newly picked point wins, otherwise keep the saved position
-    const position = pickedPoint || (location ? { x: location.x, y: location.y } : null);
+    const position = pickedPoint || location;
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -41,12 +42,15 @@ function AdminLocationForm({ location, floor, pickedPoint, isPicking, onStartPic
 
         const facilities = form.facilities.split(",").map(item => item.trim()).filter(item => item);
         const data = {
+            ...location,
             name: form.name,
             type: form.type,
-            terminal: location?.terminal || "T1",
+            terminal,
             floor: Number(form.floor),
-            x: Number(position.x.toFixed(1)),
-            y: Number(position.y.toFixed(1)),
+            x: position.x ?? null,
+            y: position.y ?? null,
+            lat: position.lat ?? null,
+            lng: position.lng ?? null,
             area: textOrNull(form.area),
             description: textOrNull(form.description),
             openingHours: textOrNull(form.openingHours),
@@ -115,8 +119,8 @@ function AdminLocationForm({ location, floor, pickedPoint, isPicking, onStartPic
             <input name="facilities" className="form-control form-control-sm mb-2" value={form.facilities} onChange={handleChange} placeholder="Wi-Fi, Ổ cắm sạc" />
 
             <div className="d-flex gap-2 small mb-2">
-                <span className="coordinate">X: <b>{position ? position.x.toFixed(1) : "—"}</b></span>
-                <span className="coordinate">Y: <b>{position ? position.y.toFixed(1) : "—"}</b></span>
+                <span className="coordinate">Vĩ độ: <b>{position?.lat?.toFixed(6) ?? "—"}</b></span>
+                <span className="coordinate">Kinh độ: <b>{position?.lng?.toFixed(6) ?? "—"}</b></span>
             </div>
 
             <button type="button" className="btn btn-outline-secondary btn-sm w-100 mb-2" onClick={() => onStartPick(Number(form.floor))} disabled={isPicking}>

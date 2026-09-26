@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import L from "../utils/leaflet";
 import "leaflet-rotate";
-import terminals from "../data/terminals";
 import floors from "../data/floors";
 import { getGroup, getLocationType } from "../data/locationTypes";
 import { mainTerminal, projection } from "../utils/mapProjection";
+import campusUrl from "../../../crawled_data/tan_son_nhat_full/overview_campus/svg_maps/SGN_CAMPUS_Level1_F1.svg?url";
+import campusPois from "../../../crawled_data/tan_son_nhat_full/overview_campus/overview_campus_pois.json";
+import { airportFloors } from "../data/airportCatalog";
 
 const DEFAULT_BEARING = 85;      // rotate the map so T1 lies horizontally, like the drawing
-const DETAIL_ZOOM = 17.4;        // zoom >= 17.4: floor plan + markers. Below: terminal outlines only
-const TERMINAL_ZOOM = 18.8;
-const OVERVIEW_CENTER = [10.8133, 106.6574];
-const OVERVIEW_ZOOM = 16.2;
+const DETAIL_ZOOM = 18.5;        // Keep the terminal overview until the floor plan is readable.
+const TERMINAL_ZOOM = 19.5;
+const OVERVIEW_CENTER = [10.8141, 106.6630];
+const OVERVIEW_ZOOM = 17.1;
 const ROUTE_COLOR = "#1a73e8";
 
 // Only devices with a real mouse get hover previews. On phones a tap opens the detail sheet instead.
@@ -113,11 +115,14 @@ function createTransferIcon(connector, nextFloor, isGoingUp) {
     return L.divIcon({ className: "", html: element, iconSize: null, iconAnchor: [0, 36] });
 }
 
-function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPickPoint, previewPoint, route, onFloorChange }) {
+function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selectedLocation, onSelect, isPicking, onPickPoint, previewPoint, route, onFloorChange }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const layersRef = useRef(null);
     const [isDetailView, setIsDetailView] = useState(false);
+    const [viewRevision, setViewRevision] = useState(0);
+    const terminalChangeRef = useRef(onTerminalChange);
+    terminalChangeRef.current = onTerminalChange;
 
     // 1. Create the Leaflet map once. React only renders the empty <div>, Leaflet draws inside it.
     useEffect(() => {
@@ -127,7 +132,7 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
             rotate: true, bearing: DEFAULT_BEARING, rotateControl: false, touchRotate: false
         });
 
-        L.tileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png", {
+        const baseTiles = L.tileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png", {
             maxZoom: 22, maxNativeZoom: 20,
             attribution: "&copy; Stadia Maps &copy; OpenMapTiles &copy; OpenStreetMap"
         }).addTo(map);
@@ -135,6 +140,12 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         // The floor-plan SVG is its own layer on top of overlayPane, so the route line needs a pane above it.
         // It must live inside leaflet-rotate's "rotatePane" to rotate together with the map.
         map.createPane("routePane", map.getPane("rotatePane")).style.zIndex = 450;
+        map.createPane("campusPane", map.getPane("rotatePane")).style.zIndex = 300;
+        map.createPane("indoorBackdropPane", map.getPane("rotatePane")).style.zIndex = 350;
+        map.createPane("indoorPlanPane", map.getPane("rotatePane")).style.zIndex = 410;
+        ["campusPane", "indoorBackdropPane", "indoorPlanPane"].forEach(name => {
+            map.getPane(name).style.pointerEvents = "none";
+        });
 
         const overview = L.layerGroup().addTo(map);
         const floorPlan = L.layerGroup().addTo(map);
@@ -142,20 +153,53 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         const markers = L.layerGroup().addTo(map);
         const pickLayer = L.layerGroup().addTo(map);
 
-        terminals.forEach(terminal => {
-            const polygon = L.polygon(terminal.outline, {
-                color: "#bd2e39", weight: 2, fillColor: "#dc4f59", fillOpacity: terminal.plan ? 0.8 : 0.6
+        // One georeferenced drawing keeps buildings, shadows and roads aligned.
+        L.imageOverlay(campusUrl, [
+            [10.802859, 106.633215], [10.831274, 106.678459]
+        ], { interactive: false, pane: "campusPane" }).addTo(map);
+
+        // Keep the same campus underneath at every zoom; fade only indoor detail.
+        const updateIndoorOpacity = () => {
+            const opacity = Math.max(0, Math.min(1, (map.getZoom() - (DETAIL_ZOOM - 0.5)) / 0.5));
+            map.getPane("indoorBackdropPane").style.opacity = String(opacity);
+            map.getPane("indoorPlanPane").style.opacity = String(opacity);
+        };
+        updateIndoorOpacity();
+        map.on("zoom", updateIndoorOpacity);
+
+        campusPois.forEach(poi => {
+            const parking = poi.type_name === "poi-self-parking";
+            const terminal = ['T1', 'T2', 'T3'].map(id => ({ id, plan: true })).find(item => poi.name_vi.includes(item.id));
+            const label = document.createElement(terminal?.plan ? "button" : "span");
+            label.className = parking ? "campus-parking" : "campus-terminal";
+            if (terminal?.plan) label.type = "button";
+            const icon = document.createElement("span");
+            icon.className = "campus-symbol";
+            icon.textContent = parking ? "P" : "✈";
+            label.append(icon);
+            if (!parking) {
+                const name = document.createElement("span");
+                name.textContent = poi.name_vi;
+                label.append(name);
+            }
+            label.title = parking ? poi.name_vi : terminal?.plan ? "Mở mặt bằng T1" : poi.name_vi;
+            const marker = L.marker([poi.lat, poi.lng], {
+                icon: L.divIcon({ className: "campus-label-anchor", html: label, iconSize: [0, 0], iconAnchor: [0, 0] }),
+                keyboard: Boolean(terminal?.plan),
+                interactive: Boolean(terminal?.plan)
             });
-            polygon.bindTooltip(`✈ SGN · ${terminal.name}`, { permanent: true, direction: "center", className: "terminal-label" });
-            // Terminals with a floor plan zoom straight into it
-            polygon.on("click", () => map.setView(terminal.center, terminal.plan ? TERMINAL_ZOOM : 17));
-            overview.addLayer(polygon);
+            if (terminal?.plan) marker.on("click", () => {
+                terminalChangeRef.current(terminal.id);
+                map.setView([poi.lat, poi.lng], TERMINAL_ZOOM);
+            });
+            overview.addLayer(marker);
         });
 
         map.on("zoomend", () => setIsDetailView(map.getZoom() >= DETAIL_ZOOM));
+        map.on("moveend", () => setViewRevision(value => value + 1));
 
         mapRef.current = map;
-        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer };
+        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer, baseTiles };
 
         return () => {
             map.remove();
@@ -163,23 +207,49 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         };
     }, []);
 
-    // 2. Show terminal outlines OR the floor plan of the current floor
+    // 2. Keep the indoor layers mounted so zooming never reloads the drawing.
     useEffect(() => {
         const map = mapRef.current;
-        const { overview, floorPlan } = layersRef.current;
+        const { floorPlan, baseTiles } = layersRef.current;
+
+        // Keep roads visible outside the airport drawing instead of hiding all tiles.
+        baseTiles.setOpacity(1);
 
         floorPlan.clearLayers();
-        if (!isDetailView) {
-            overview.addTo(map);
-            return;
+        const catalogFloor = airportFloors.find(item => item.terminal === terminal && item.id === floor);
+        if (!catalogFloor || terminal === 'SGN_CAMPUS') return;
+        const bounds = catalogFloor.bounds;
+        // Geographic bounds: this backdrop moves and scales with the floor plan.
+        // Cover nearby street/building outlines that conflict with the indoor drawing.
+        floorPlan.addLayer(L.rectangle(L.latLngBounds(bounds).pad(0.03), {
+            pane: "indoorBackdropPane",
+            stroke: false, fillColor: "#f1f1f1", fillOpacity: 1, interactive: false
+        }));
+        const overlayUrl = catalogFloor.url;
+        if (overlayUrl) {
+            floorPlan.addLayer(L.imageOverlay(overlayUrl, bounds, {
+                opacity: 1,
+                pane: "indoorPlanPane",
+                interactive: false
+            }));
+        } else {
+            const floorData = floors.find(item => item.id === floor);
+            if (floorData) {
+                floorPlan.addLayer(L.svgOverlay(createFloorSvg(floorData), projection.bounds, { interactive: false, pane: "indoorPlanPane" }));
+            }
         }
+    }, [floor, terminal]);
 
-        overview.remove();
-        const floorData = floors.find(item => item.id === floor);
-        if (floorData) {
-            floorPlan.addLayer(L.svgOverlay(createFloorSvg(floorData), projection.bounds, { interactive: false }));
-        }
-    }, [floor, isDetailView]);
+    useEffect(() => {
+        const target = airportFloors.find(item => item.terminal === terminal);
+        if (target) mapRef.current.setView(target.center, terminal === 'SGN_CAMPUS' ? OVERVIEW_ZOOM : TERMINAL_ZOOM);
+    }, [terminal]);
+
+    useEffect(() => {
+        const { overview } = layersRef.current;
+        if (isDetailView) overview.remove();
+        else overview.addTo(mapRef.current);
+    }, [isDetailView]);
 
     // 3. Draw one marker per location (only when zoomed in)
     useEffect(() => {
@@ -187,9 +257,27 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         markers.clearLayers();
         if (!isDetailView) return;
 
-        locations.forEach(location => {
+        const map = mapRef.current;
+        const occupied = [];
+        // Show the selected place first, then gates; reveal other places as space allows.
+        const priority = location => location.id === selectedLocation?.id ? 0 : location.type === "gate" ? 1 : 2;
+        const ordered = [...locations].sort((a, b) => priority(a) - priority(b));
+        ordered.forEach(location => {
             const isSelected = selectedLocation?.id === location.id;
-            const marker = L.marker(projection.toLatLng(location.x, location.y), {
+            const latlng = (location.lat && location.lng)
+                ? [location.lat, location.lng]
+                : projection.toLatLng(location.x, location.y);
+
+            const point = map.latLngToContainerPoint(latlng);
+            const viewport = map.getSize();
+            if (point.x < -40 || point.y < -40 || point.x > viewport.x + 40 || point.y > viewport.y + 40) return;
+            const halfWidth = location.type === "gate" ? 26 : 20;
+            const halfHeight = 20;
+            const box = { left: point.x - halfWidth, right: point.x + halfWidth, top: point.y - halfHeight, bottom: point.y + halfHeight };
+            if (!isSelected && occupied.some(other => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) return;
+            occupied.push(box);
+
+            const marker = L.marker(latlng, {
                 icon: createMarkerIcon(location, isSelected),
                 alt: location.name,
                 zIndexOffset: isSelected ? 1000 : 0
@@ -205,14 +293,17 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
             });
             markers.addLayer(marker);
         });
-    }, [locations, selectedLocation, isDetailView, onSelect]);
+    }, [locations, selectedLocation, isDetailView, onSelect, viewRevision]);
 
     // 4. Move the map to the selected location
     useEffect(() => {
         if (!selectedLocation) return;
         const map = mapRef.current;
         map.setBearing(DEFAULT_BEARING);
-        map.setView(projection.toLatLng(selectedLocation.x, selectedLocation.y), Math.max(map.getZoom(), 19.5));
+        const latlng = (selectedLocation.lat && selectedLocation.lng)
+            ? [selectedLocation.lat, selectedLocation.lng]
+            : projection.toLatLng(selectedLocation.x, selectedLocation.y);
+        map.setView(latlng, Math.max(map.getZoom(), 19.5));
     }, [selectedLocation]);
 
     // 5. Admin "pick a point" mode: the next click on the map becomes the location's x, y
@@ -222,10 +313,11 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
 
         if (map.getZoom() < DETAIL_ZOOM) {
             map.setBearing(DEFAULT_BEARING);
-            map.setView(mainTerminal.center, TERMINAL_ZOOM);
+            const target = airportFloors.find(item => item.terminal === terminal && item.id === floor);
+            map.setView(target?.center || mainTerminal.center, TERMINAL_ZOOM);
         }
 
-        const handleMapClick = (event) => onPickPoint(projection.toImagePoint(event.latlng));
+        const handleMapClick = (event) => onPickPoint({ lat: event.latlng.lat, lng: event.latlng.lng });
         map.getContainer().classList.add("picking-location");
         map.once("click", handleMapClick);
 
@@ -233,7 +325,7 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
             map.off("click", handleMapClick);
             map.getContainer().classList.remove("picking-location");
         };
-    }, [isPicking, onPickPoint]);
+    }, [isPicking, onPickPoint, terminal, floor]);
 
     // 6. Admin: show where the picked point is before saving
     useEffect(() => {
@@ -242,7 +334,7 @@ function MapView({ floor, locations, selectedLocation, onSelect, isPicking, onPi
         if (!previewPoint || previewPoint.floor !== floor) return;
 
         const icon = L.divIcon({ className: "", html: '<span class="pick-preview"><i class="bi bi-crosshair"></i></span>', iconSize: [30, 30], iconAnchor: [15, 15] });
-        pickLayer.addLayer(L.marker(projection.toLatLng(previewPoint.x, previewPoint.y), { icon, interactive: false, zIndexOffset: 3000 }));
+        pickLayer.addLayer(L.marker([previewPoint.lat, previewPoint.lng], { icon, interactive: false, zIndexOffset: 3000 }));
     }, [previewPoint, floor]);
 
     // 7. Draw the route of the CURRENT floor: dots + walking person + destination / floor change

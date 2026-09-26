@@ -37,8 +37,10 @@ public class LocationJsonDao implements LocationDao {
     public synchronized void load() {
         try {
             if (!dataFile.exists()) {
-                log.warn("Data file not found, creating an empty one: {}", dataFile.getAbsolutePath());
+                locations.addAll(AirportSeed.read(objectMapper));
+                nextId = locations.stream().mapToLong(Location::getId).max().orElse(0) + 1;
                 writeFile();
+                log.info("Imported {} airport locations into {}", locations.size(), dataFile.getAbsolutePath());
                 return;
             }
             locations.addAll(objectMapper.readValue(dataFile, new TypeReference<List<Location>>() {}));
@@ -90,7 +92,13 @@ public class LocationJsonDao implements LocationDao {
             if (folder != null) {
                 folder.mkdirs();
             }
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(dataFile, locations);
+            java.nio.file.Path temporary = java.nio.file.Files.createTempFile(folder.toPath(), "locations-", ".json");
+            try {
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), locations);
+                java.nio.file.Files.move(temporary, dataFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } finally {
+                java.nio.file.Files.deleteIfExists(temporary);
+            }
         } catch (IOException e) {
             throw new RuntimeException("Cannot write " + dataFile.getAbsolutePath(), e);
         }

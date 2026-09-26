@@ -3,6 +3,21 @@
 // they are locations (data) and MapView draws them as markers.
 const floors = [
     {
+        id: 0,
+        terminal: "T1",
+        name: "Tầng Trệt",
+        svg: `
+            <g stroke="#cecece" stroke-width="2" stroke-linejoin="round">
+                <polygon fill="#fff" points="70,192 1177,192 1177,259 1399,259 1399,488 1385,488 1385,522 1177,522 1177,569 1160,569 1160,592 353,592 353,570 163,570 163,272 70,272"/>
+                <polygon fill="#d8dada" points="353,500 1177,500 1177,285 1399,285 1399,488 1385,488 1385,522 1177,522 1177,569 1160,569 1160,592 353,592"/>
+                <path fill="#cce2ef" d="M163 294h200v106h-200zM353 304h350v57H353zM353 448h565v52H353z"/>
+                <path fill="#ece3e3" d="M720 300h250v90H720zM259 322h70v50h-70z"/>
+                <path fill="#e3eadb" d="M164 260h55v34h-55zM1020 380h80v50h-80z"/>
+            </g>
+            <text x="520" y="340" font-size="13" font-weight="700">GA ĐẾN · BĂNG CHUYỀN HÀNH LÝ & CHECK-IN</text>
+        `
+    },
+    {
         id: 1,
         terminal: "T1",
         name: "Tầng 1",

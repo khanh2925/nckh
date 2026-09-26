@@ -1,17 +1,18 @@
+
 // "/api" is forwarded to Spring Boot (localhost:8080) by vite.config.js
 const API_URL = "/api/locations";
 
-// Small helper: send a request, throw an error when the server answers 4xx/5xx
+// Send a request and report an error when the backend answers 4xx/5xx.
 async function request(url, options) {
     const response = await fetch(url, options);
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
     }
-    // DELETE answers "204 No Content" = no JSON body to read
+    // DELETE answers "204 No Content" and has no JSON body.
     return response.status === 204 ? null : response.json();
 }
 
-export function getLocations() {
+export async function getLocations() {
     return request(API_URL);
 }
 
