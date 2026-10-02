@@ -3,14 +3,15 @@
 // - Built website WITH a backend: set VITE_API_URL (e.g. https://aeroproce-api.onrender.com) before building
 // - Built website WITHOUT a backend (Cloudflare Workers now): read the static file /data/locations.json
 //   (a snapshot of PostgreSQL saved by "npm run export-data", see scripts/export-data.mjs)
-const API_BASE = import.meta.env.VITE_API_URL || "";
+// walkwayApi.js reuses API_BASE, isStaticMode and request() from this file.
+export const API_BASE = import.meta.env.VITE_API_URL || "";
 export const isStaticMode = import.meta.env.PROD && !API_BASE;
 
 const API_URL = `${API_BASE}/api/locations`;
 const STATIC_DATA_URL = "/data/locations.json";
 
 // Send a request and report an error when the backend answers 4xx/5xx.
-async function request(url, options) {
+export async function request(url, options) {
     const response = await fetch(url, options);
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);

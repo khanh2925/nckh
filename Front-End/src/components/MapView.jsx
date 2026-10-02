@@ -7,6 +7,8 @@ import { mainTerminal, projection } from "../utils/mapProjection";
 import campusUrl from "../../../crawled_data/tan_son_nhat_full/overview_campus/svg_maps/SGN_CAMPUS_Level1_F1.svg?url";
 import campusPois from "../../../crawled_data/tan_son_nhat_full/overview_campus/overview_campus_pois.json";
 import { airportFloors } from "../data/airportCatalog";
+import { getLatLng } from "../utils/geo";
+import { floorLabel } from "../utils/text";
 
 const DEFAULT_BEARING = 85;      // rotate the map so T1 lies horizontally, like the drawing
 const DETAIL_ZOOM = 18.5;        // Keep the terminal overview until the floor plan is readable.
@@ -14,6 +16,7 @@ const TERMINAL_ZOOM = 19.5;
 const OVERVIEW_CENTER = [10.8141, 106.6630];
 const OVERVIEW_ZOOM = 17.1;
 const ROUTE_COLOR = "#1a73e8";
+const WALKWAY_COLOR = "#e8710a";
 
 // Only devices with a real mouse get hover previews. On phones a tap opens the detail sheet instead.
 const canHover = window.matchMedia("(hover: hover)").matches;
@@ -111,18 +114,48 @@ function createTransferIcon(connector, nextFloor, isGoingUp) {
     element.type = "button";
     element.className = "route-transfer";
     element.innerHTML = `<i class="bi ${isGoingUp ? "bi-arrow-up" : "bi-arrow-down"}"></i>`;
-    element.append(` ${connector} → Tầng ${nextFloor}`);
+    element.append(` ${connector} → ${floorLabel(nextFloor)}`);
     return L.divIcon({ className: "", html: element, iconSize: null, iconAnchor: [0, 36] });
 }
 
-function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selectedLocation, onSelect, isPicking, onPickPoint, previewPoint, route, onFloorChange }) {
+// A start/end of the route that was picked on the map (not a location)
+function createRouteEndIcon(isStart) {
+    const element = document.createElement("span");
+    element.className = `route-end ${isStart ? "is-start" : "is-end"}`;
+    element.innerHTML = `<i class="bi ${isStart ? "bi-person-walking" : "bi-flag-fill"}"></i>`;
+    return L.divIcon({ className: "", html: element, iconSize: [30, 30], iconAnchor: [15, 15] });
+}
+
+// Admin "Lối đi": one dot per walkway point. Elevator/escalator points are squares showing the linked floors.
+function createWalkwayNodeIcon(node, isActive, isSelected, linkedFloors) {
+    const element = document.createElement("span");
+    element.className = `walkway-node${node.connector ? " is-connector" : ""}${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}`;
+    if (node.connector) {
+        const icon = document.createElement("i");
+        icon.className = "bi bi-arrow-down-up";
+        element.append(icon);
+        element.title = `${node.connector}${linkedFloors.length ? ` · nối tầng ${linkedFloors.join(", ")}` : " · chưa nối tầng nào"}`;
+    }
+    const size = node.connector ? 22 : 14;
+    return L.divIcon({ className: "", html: element, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+}
+
+// onMapClick: when set, a click on the floor plan calls it with { terminal, floor, lat, lng }
+// (admin picking a location, choosing a route point, drawing walkways).
+// walkwayEditor: when set, the walkway network of this floor is drawn and can be edited (admin).
+function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selectedLocation, onSelect, onMapClick, previewPoint, routeEnds = [], route, onFloorChange, walkwayEditor }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const layersRef = useRef(null);
     const [isDetailView, setIsDetailView] = useState(false);
     const [viewRevision, setViewRevision] = useState(0);
     const terminalChangeRef = useRef(onTerminalChange);
-    terminalChangeRef.current = onTerminalChange;
+    const isEditingWalkways = Boolean(walkwayEditor) && !walkwayEditor.isLocked;
+
+    // Keep the latest callback for the campus labels created once in effect 1
+    useEffect(() => {
+        terminalChangeRef.current = onTerminalChange;
+    });
 
     // 1. Create the Leaflet map once. React only renders the empty <div>, Leaflet draws inside it.
     useEffect(() => {
@@ -140,6 +173,7 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         // The floor-plan SVG is its own layer on top of overlayPane, so the route line needs a pane above it.
         // It must live inside leaflet-rotate's "rotatePane" to rotate together with the map.
         map.createPane("routePane", map.getPane("rotatePane")).style.zIndex = 450;
+        map.createPane("walkwayPane", map.getPane("rotatePane")).style.zIndex = 440;
         map.createPane("campusPane", map.getPane("rotatePane")).style.zIndex = 300;
         map.createPane("indoorBackdropPane", map.getPane("rotatePane")).style.zIndex = 350;
         map.createPane("indoorPlanPane", map.getPane("rotatePane")).style.zIndex = 410;
@@ -152,6 +186,8 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         const routeLayer = L.layerGroup().addTo(map);
         const markers = L.layerGroup().addTo(map);
         const pickLayer = L.layerGroup().addTo(map);
+        const routeEndLayer = L.layerGroup().addTo(map);
+        const walkwayLayer = L.layerGroup().addTo(map);
 
         // One georeferenced drawing keeps buildings, shadows and roads aligned.
         L.imageOverlay(campusUrl, [
@@ -199,7 +235,7 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         map.on("moveend", () => setViewRevision(value => value + 1));
 
         mapRef.current = map;
-        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer, baseTiles };
+        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer, routeEndLayer, walkwayLayer, baseTiles };
 
         return () => {
             map.remove();
@@ -209,7 +245,6 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
 
     // 2. Keep the indoor layers mounted so zooming never reloads the drawing.
     useEffect(() => {
-        const map = mapRef.current;
         const { floorPlan, baseTiles } = layersRef.current;
 
         // Keep roads visible outside the airport drawing instead of hiding all tiles.
@@ -264,9 +299,7 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         const ordered = [...locations].sort((a, b) => priority(a) - priority(b));
         ordered.forEach(location => {
             const isSelected = selectedLocation?.id === location.id;
-            const latlng = (location.lat && location.lng)
-                ? [location.lat, location.lng]
-                : projection.toLatLng(location.x, location.y);
+            const latlng = getLatLng(location);
 
             const point = map.latLngToContainerPoint(latlng);
             const viewport = map.getSize();
@@ -277,10 +310,14 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
             if (!isSelected && occupied.some(other => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) return;
             occupied.push(box);
 
+            // While the admin draws walkways, clicks must reach the map, not the shops
             const marker = L.marker(latlng, {
                 icon: createMarkerIcon(location, isSelected),
                 alt: location.name,
-                zIndexOffset: isSelected ? 1000 : 0
+                zIndexOffset: isSelected ? 1000 : 0,
+                interactive: !isEditingWalkways,
+                keyboard: !isEditingWalkways,
+                opacity: isEditingWalkways ? 0.45 : 1
             });
 
             if (canHover) {
@@ -293,39 +330,39 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
             });
             markers.addLayer(marker);
         });
-    }, [locations, selectedLocation, isDetailView, onSelect, viewRevision]);
+    }, [locations, selectedLocation, isDetailView, onSelect, viewRevision, isEditingWalkways]);
 
     // 4. Move the map to the selected location
     useEffect(() => {
         if (!selectedLocation) return;
         const map = mapRef.current;
         map.setBearing(DEFAULT_BEARING);
-        const latlng = (selectedLocation.lat && selectedLocation.lng)
-            ? [selectedLocation.lat, selectedLocation.lng]
-            : projection.toLatLng(selectedLocation.x, selectedLocation.y);
-        map.setView(latlng, Math.max(map.getZoom(), 19.5));
+        map.setView(getLatLng(selectedLocation), Math.max(map.getZoom(), 19.5));
     }, [selectedLocation]);
 
-    // 5. Admin "pick a point" mode: the next click on the map becomes the location's x, y
+    // 5. Clicks on the floor plan of the current floor (see onMapClick above)
     useEffect(() => {
-        if (!isPicking) return;
+        if (!onMapClick) return;
         const map = mapRef.current;
 
-        if (map.getZoom() < DETAIL_ZOOM) {
-            map.setBearing(DEFAULT_BEARING);
-            const target = airportFloors.find(item => item.terminal === terminal && item.id === floor);
-            map.setView(target?.center || mainTerminal.center, TERMINAL_ZOOM);
-        }
+        const handleMapClick = (event) => {
+            const catalogFloor = airportFloors.find(item => item.terminal === terminal && item.id === floor);
+            if (!catalogFloor || terminal === "SGN_CAMPUS" || !L.latLngBounds(catalogFloor.bounds).contains(event.latlng)) return;
+            // Too far away to click precisely: the first click only zooms in
+            if (map.getZoom() < DETAIL_ZOOM) {
+                map.setView(event.latlng, TERMINAL_ZOOM);
+                return;
+            }
+            onMapClick({ terminal, floor, lat: event.latlng.lat, lng: event.latlng.lng });
+        };
 
-        const handleMapClick = (event) => onPickPoint({ lat: event.latlng.lat, lng: event.latlng.lng });
         map.getContainer().classList.add("picking-location");
-        map.once("click", handleMapClick);
-
+        map.on("click", handleMapClick);
         return () => {
             map.off("click", handleMapClick);
             map.getContainer().classList.remove("picking-location");
         };
-    }, [isPicking, onPickPoint, terminal, floor]);
+    }, [onMapClick, terminal, floor]);
 
     // 6. Admin: show where the picked point is before saving
     useEffect(() => {
@@ -337,17 +374,28 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         pickLayer.addLayer(L.marker([previewPoint.lat, previewPoint.lng], { icon, interactive: false, zIndexOffset: 3000 }));
     }, [previewPoint, floor]);
 
+    // 6b. Route ends picked on the map get a marker until the route is drawn
+    useEffect(() => {
+        const { routeEndLayer } = layersRef.current;
+        routeEndLayer.clearLayers();
+        if (route?.legs) return;
+        routeEnds.forEach((end, index) => {
+            if (!end?.isPoint || end.terminal !== terminal || end.floor !== floor) return;
+            routeEndLayer.addLayer(L.marker([end.lat, end.lng], { icon: createRouteEndIcon(index === 0), interactive: false, zIndexOffset: 2600 }));
+        });
+    }, [routeEnds, route, terminal, floor]);
+
     // 7. Draw the route of the CURRENT floor: dots + walking person + destination / floor change
     useEffect(() => {
         const map = mapRef.current;
         const { routeLayer } = layersRef.current;
         routeLayer.clearLayers();
-        if (!route || !isDetailView) return;
+        if (!route?.legs || !isDetailView) return;
 
         const walkers = [];
         route.legs.forEach((leg, index) => {
             if (leg.floor !== floor) return;
-            const latlngs = leg.points.map(point => projection.toLatLng(point.x, point.y));
+            const latlngs = leg.points.map(point => [point.lat, point.lng]);
 
             // Dotted line: each dash has length 0 and round ends, so it looks like a row of dots
             routeLayer.addLayer(L.polyline(latlngs, { pane: "routePane", color: ROUTE_COLOR, weight: 7, dashArray: "0 13", lineCap: "round", interactive: false }));
@@ -377,12 +425,12 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
 
     // 8. Zoom to the part of the route on the current floor
     useEffect(() => {
-        if (!route) return;
+        if (!route?.legs) return;
         const leg = route.legs.find(item => item.floor === floor);
         if (!leg) return;
 
         const map = mapRef.current;
-        const bounds = L.latLngBounds(leg.points.map(point => projection.toLatLng(point.x, point.y)));
+        const bounds = L.latLngBounds(leg.points.map(point => [point.lat, point.lng]));
         // Leave room for the panels: left column on desktop, bottom sheet on phones
         const isPhone = window.matchMedia("(max-width: 767.98px)").matches;
         map.setBearing(DEFAULT_BEARING);
@@ -395,6 +443,71 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         // Never stay below DETAIL_ZOOM, otherwise the floor plan disappears
         if (map.getZoom() < DETAIL_ZOOM + 0.2) map.setZoom(DETAIL_ZOOM + 0.2, { animate: false });
     }, [route, floor]);
+
+    // 9. Admin "Lối đi": draw the walkway network of this floor, ready to be edited
+    useEffect(() => {
+        const map = mapRef.current;
+        const { walkwayLayer } = layersRef.current;
+        walkwayLayer.clearLayers();
+        if (!walkwayEditor || !isDetailView) return;
+
+        const { network, tool, activeId, selectedId, isLocked, onNodeClick, onEdgeClick, onNodeMove } = walkwayEditor;
+        const nodeById = new Map(network.nodes.map(node => [node.id, node]));
+        const isOnThisFloor = (node) => node.terminal === terminal && node.floor === floor;
+        const linkedFloors = new Map();   // node id -> other floors it is linked to
+
+        network.edges.forEach(edge => {
+            const a = nodeById.get(edge.from);
+            const b = nodeById.get(edge.to);
+            if (!a || !b) return;
+            if (a.floor !== b.floor) {
+                if (isOnThisFloor(a)) linkedFloors.set(a.id, [...(linkedFloors.get(a.id) || []), b.floor]);
+                if (isOnThisFloor(b)) linkedFloors.set(b.id, [...(linkedFloors.get(b.id) || []), a.floor]);
+                return;
+            }
+            if (!isOnThisFloor(a)) return;
+            const latlngs = [[a.lat, a.lng], [b.lat, b.lng]];
+            walkwayLayer.addLayer(L.polyline(latlngs, { pane: "walkwayPane", color: WALKWAY_COLOR, weight: 4, opacity: isLocked ? 0.5 : 0.9, interactive: false }));
+            if (isLocked) return;
+            // A wide invisible line on top, so the thin line is easy to click
+            const hitArea = L.polyline(latlngs, { pane: "walkwayPane", weight: 16, opacity: 0, bubblingMouseEvents: false, className: `walkway-hit tool-${tool}` });
+            hitArea.on("click", event => onEdgeClick(edge, { lat: event.latlng.lat, lng: event.latlng.lng }));
+            walkwayLayer.addLayer(hitArea);
+        });
+
+        network.nodes.filter(isOnThisFloor).forEach(node => {
+            const marker = L.marker([node.lat, node.lng], {
+                icon: createWalkwayNodeIcon(node, node.id === activeId, node.id === selectedId, linkedFloors.get(node.id) || []),
+                draggable: !isLocked && tool !== "erase",
+                interactive: !isLocked,
+                keyboard: false,
+                zIndexOffset: 500
+            });
+            marker.on("click", () => onNodeClick(node));
+            marker.on("dragend", () => {
+                const point = marker.getLatLng();
+                onNodeMove(node, { lat: point.lat, lng: point.lng });
+            });
+            walkwayLayer.addLayer(marker);
+        });
+
+        // Dashed "rubber band" from the last point to the mouse, so the admin sees the next segment
+        const active = nodeById.get(activeId);
+        if (isLocked || tool !== "draw" || !active || !isOnThisFloor(active)) return;
+        const guide = L.polyline([[active.lat, active.lng], [active.lat, active.lng]], { pane: "walkwayPane", color: WALKWAY_COLOR, weight: 3, dashArray: "6 8", interactive: false });
+        walkwayLayer.addLayer(guide);
+        const handleMouseMove = (event) => guide.setLatLngs([[active.lat, active.lng], event.latlng]);
+        map.on("mousemove", handleMouseMove);
+        return () => map.off("mousemove", handleMouseMove);
+    }, [walkwayEditor, terminal, floor, isDetailView]);
+
+    // Double-click would add 2 points and zoom at the same time, so it is off while drawing
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!isEditingWalkways) return;
+        map.doubleClickZoom.disable();
+        return () => map.doubleClickZoom.enable();
+    }, [isEditingWalkways]);
 
     const handleZoomIn = () => mapRef.current.zoomIn();
     const handleZoomOut = () => mapRef.current.zoomOut();

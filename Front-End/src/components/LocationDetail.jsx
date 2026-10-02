@@ -32,14 +32,14 @@ function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
                 {location.area && <span className="badge text-bg-light border"><i className="bi bi-geo-alt me-1" />{location.area}</span>}
             </div>
 
-            {location.terminal !== 'T1' || location.x == null || location.y == null ? <p className="small text-muted mt-3">Địa điểm đã có tọa độ. Chỉ đường sẽ khả dụng khi bổ sung các đoạn nối lối đi.</p> : <div className="d-flex gap-2 mt-3">
+            <div className="d-flex gap-2 mt-3">
                 <button type="button" className="btn btn-primary btn-sm flex-grow-1" onClick={() => onRouteFrom(location)}>
                     <i className="bi bi-person-walking me-1" />Chỉ đường từ đây
                 </button>
                 <button type="button" className="btn btn-outline-primary btn-sm flex-grow-1" onClick={() => onRouteTo(location)}>
                     <i className="bi bi-flag me-1" />Đến đây
                 </button>
-            </div>}
+            </div>
 
             {hasMoreInfo && (
                 <button type="button" className="btn btn-link btn-sm detail-toggle px-0 mt-2" onClick={() => setIsExpanded(!isExpanded)} aria-expanded={isExpanded}>

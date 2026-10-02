@@ -1,7 +1,7 @@
 # Deploy lên Cloudflare Workers (bản tĩnh)
 
 Bản deploy chỉ gồm frontend, **không có Admin**. Dữ liệu đọc từ file tĩnh
-`Front-End/public/data/locations.json`: đây là **bản xuất (snapshot) từ PostgreSQL**, không sửa tay.
+`Front-End/public/data/locations.json` và `walkways.json` (lối đi): đây là **bản xuất (snapshot) từ PostgreSQL**, không sửa tay.
 
 ## Tự động
 
@@ -19,15 +19,15 @@ npm run deploy        # = npm run build + npx wrangler deploy
 
 ## Cập nhật dữ liệu trên web
 
-1. Chạy PostgreSQL + backend trên máy (xem `Back-End/database/README.md`), sửa bằng Admin.
+1. Chạy PostgreSQL + backend trên máy (xem `Back-End/database/README.md`), sửa địa điểm / vẽ lối đi bằng Admin.
 2. Xuất snapshot:
 
    ```bash
    cd Front-End
-   npm run export-data   # lấy từ http://localhost:8080/api/locations
+   npm run export-data   # lấy /api/locations và /api/walkways từ http://localhost:8080
    ```
 
-3. Commit `Front-End/public/data/locations.json`, merge vào `main` → web tự cập nhật.
+3. Commit `Front-End/public/data/locations.json` và `walkways.json`, merge vào `main` → web tự cập nhật.
 
 ## Khi có backend online
 

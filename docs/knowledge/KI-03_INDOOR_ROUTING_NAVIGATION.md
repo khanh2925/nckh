@@ -1,76 +1,39 @@
-# KI-03: Thuật Toán Chỉ Đường & Đồ Thị Lối Đi (Indoor Routing & Navigation Engine)
+# KI-03: Chỉ Đường & Mạng Lối Đi (Indoor Routing & Walkway Network)
 
-## 1. Mô Hình Đồ Thị Lối Đi (Walkways Graph)
+## 1. Mạng lối đi (walkway network)
 
-Hệ thống dẫn đường trong nhà hoạt động dựa trên đồ thị vô hướng có trọng số (weighted undirected graph) được lưu tại `Front-End/src/data/walkways.js`:
+Đồ thị vô hướng, lưu trong PostgreSQL (bảng `walkway_nodes`, `walkway_edges`, file `Back-End/database/03_walkways_schema.sql`), đọc/ghi qua `GET/PUT /api/walkways`. Bản web tĩnh đọc `Front-End/public/data/walkways.json` (xuất bằng `npm run export-data`).
 
 ```text
-┌────────────────┐      (Edge cùng tầng)       ┌────────────────┐
-│   Node A (F1)  │ ─────────────────────────── │   Node B (F1)  │
-│   {x1, y1}     │  cost = distanceInMeters    │   {x2, y2}     │
-└───────┬────────┘                             └────────────────┘
-        │
-        │ (Edge nối tầng qua Thang máy/cuốn)
-        │ cost = 30 mét phạt (FLOOR_CHANGE_METERS)
-        ▼
-┌────────────────┐
-│   Node C (F0)  │
-│   {x3, y3}     │
-└────────────────┘
+{ "nodes": [ { "id": "T1-1-17", "terminal": "T1", "floor": 1, "lat": 10.8137, "lng": 106.6618, "connector": "Thang máy" } ],
+  "edges": [ { "from": "T1-1-17", "to": "T1-0-42" } ] }
 ```
 
-### Thành phần đồ thị:
-1. **Nodes (`walkways.nodes`)**:
-   - Mỗi node là một điểm ngã rẽ hoặc điểm trung gian trên hành lang, có cấu trúc: `{ id: "1-u239", floor: 1, x: 239, y: 222, connector: "Thang máy" | "Thang cuốn" (optional) }`.
-2. **Edges (`walkways.edges`)**:
-   - Danh sách các cặp đỉnh nối trực tiếp không bị chắn tường `["1-u239", "1-u320"]`.
-   - Cặp đỉnh ở 2 tầng khác nhau (ví dụ `["0-e300", "1-e300"]`) đại diện cho trục thang máy hoặc thang cuốn.
+- **Node**: một điểm trên hành lang, tọa độ lat/lng (WGS84) như địa điểm. `connector` chỉ có ở điểm đổi tầng ("Thang máy", "Thang cuốn", "Thang bộ").
+- **Edge**: đoạn đi thẳng được giữa 2 node, đi được 2 chiều. Hai node khác tầng = trục thang.
+- Dữ liệu ban đầu (`04_walkways_seed.sql`) được **sinh tự động** từ mặt bằng SVG (đường tâm hành lang) và các địa điểm thang máy/thang cuốn/thang bộ. Đây là bản nháp: Admin cần kiểm tra và vẽ lại chỗ sai.
 
----
+## 2. Admin vẽ lối đi (`WalkwayPanel.jsx`, `hooks/useWalkwayEditor.js`)
 
-## 2. Thuật Toán Tìm Đường Dijkstra (`routing.js`)
+Admin → tab **Lối đi**. Bản nháp là cả mạng lối đi; chỉ ghi vào database khi bấm **Lưu lối đi** (PUT thay toàn bộ, trong 1 transaction).
 
-Thuật toán định tuyến tìm đường ngắn nhất được thực thi trực tiếp trên Client Frontend theo 4 giai đoạn:
+| Công cụ | Thao tác |
+|---|---|
+| Vẽ | Bấm mặt bằng = thêm điểm nối với điểm trước; bấm điểm có sẵn = nối tới nó; bấm giữa một đoạn = chèn điểm (rẽ nhánh). Esc / bấm lại điểm cuối = kết thúc nét |
+| Chọn | Đánh dấu điểm là thang, "Nối tới tầng này" (tạo/nối điểm thang cùng vị trí ở tầng khác), xóa điểm |
+| Xóa | Bấm điểm (xóa cả đoạn nối) hoặc bấm đoạn |
 
-### Giai đoạn 1: Ánh xạ điểm bắt đầu & đích đến vào đồ thị (Nearest Node Search)
-- Vì địa điểm người dùng chọn (`from`, `to`) không nhất thiết là một đỉnh trên đồ thị, hàm `findNearestNode(point)` sẽ tìm đỉnh `node` gần nhất **trên cùng tầng** (`node.floor === point.floor`).
+Kéo điểm để dời vị trí. Ctrl+Z hoàn tác. Mở "Chỉ đường" khi đang vẽ để thử ngay trên bản nháp (lúc đó bản đồ khóa chỉnh sửa).
 
-### Giai đoạn 2: Tính trọng số cạnh (Edge Weights)
-- **Cùng tầng**: `cost = meters(nodeA, nodeB)` (khoảng cách thực tế trích xuất qua `projection.toLatLng`).
-- **Khác tầng (Thang máy/cuốn)**: `cost = FLOOR_CHANGE_METERS = 30m` (khoảng cách phạt để ưu tiên đi cùng tầng nếu không bắt buộc phải đổi tầng).
+## 3. Thuật toán (`utils/routing.js`)
 
-### Giai đoạn 3: Tìm đường ngắn nhất Dijkstra
-- Khởi tạo khoảng cách các đỉnh bằng $\infty$, đỉnh xuất phát = 0.
-- Liên tục chọn đỉnh chưa thăm có khoảng cách nhỏ nhất, nới lỏng các đỉnh kề (relaxation).
-- Truy vết ngược (`previous[node]`) từ đỉnh đích về đỉnh bắt đầu.
+1. **Điểm bất kỳ**: điểm đi/đến là một địa điểm hoặc một vị trí bấm trên mặt bằng (`{ isPoint, terminal, floor, lat, lng }`). Chỉ hỗ trợ trong cùng một nhà ga.
+2. **Nhập vào mạng**: tìm điểm gần nhất trên **đoạn** lối đi gần nhất cùng tầng (chiếu vuông góc lên đoạn, tối đa 60 m), không chỉ node gần nhất. Mạng có thể có nhiều "mảnh" chưa nối; hai đầu phải vào cùng một mảnh, chọn mảnh có tổng quãng đi bộ vào mạng ngắn nhất.
+3. **Dijkstra** trên đồ thị + 2 node tạm (điểm vào/ra). Trọng số: cùng tầng = mét thật (lat/lng quy ra mét), đổi tầng = 30 m phạt.
+4. **Chia chặng theo tầng** (`legs`): mỗi chặng có `floor`, `points` (lat/lng), `distance`, `connector` dùng để rời tầng.
 
-### Giai đoạn 4: Phân chia chặng đường theo tầng (`splitByFloor`)
-- Danh sách tọa độ trả về được gom nhóm thành các chặng (**Legs**).
-- Mỗi **Leg** chứa:
-  - `floor`: Tầng đang đi.
-  - `points`: Mảng các điểm tọa độ pixel trên tầng đó.
-  - `distance`: Chiều dài chặng đi tính bằng mét.
-  - `connector`: Loại phương tiện chuyển tầng ở cuối chặng ("Thang máy" hoặc "Thang cuốn").
+Thời gian: `distance / 1.2 m/s + (số chặng - 1) × 45 s`, làm tròn lên phút.
 
----
+## 4. Hiển thị (`MapView.jsx`)
 
-## 3. Tính Toán Thời Gian & Tốc Độ Di Chuyển
-
-```javascript
-const WALK_SPEED = 1.2;            // 1.2 mét / giây (tốc độ đi bộ bình quân mang hành lý)
-const FLOOR_CHANGE_SECONDS = 45;   // 45 giây (thời gian trung bình chờ và đi thang máy/thang cuốn)
-
-// Công thức ước lượng thời gian:
-const totalSeconds = (totalDistance / WALK_SPEED) + (numberOfLegs - 1) * FLOOR_CHANGE_SECONDS;
-const totalMinutes = Math.max(1, Math.ceil(totalSeconds / 60));
-```
-
----
-
-## 4. Render Đường Đi & Animation Trên Bản Đồ (`MapView.jsx`)
-
-1. **Hiển thị chặng theo tầng hiện tại**: Khi người dùng đang ở tầng nào, chỉ chặng đường của tầng đó được vẽ lên bản đồ.
-2. **Hiệu ứng trực quan**:
-   - Đường nét đứt xanh dương (`dashArray: "8, 12"`).
-   - Biểu tượng người đi bộ di chuyển dọc theo chặng đường (`walking-person-icon` có animation CSS).
-   - Điểm đổi tầng có icon thang máy/thang cuốn nhấp nháy chỉ dẫn hành khách chuyển tầng.
+Chỉ vẽ chặng của tầng đang xem: chấm xanh, icon người đi bộ có mũi tên hướng đi, nút đổi tầng ở cuối chặng, ghim ở đích. Điểm đi/đến chọn trên bản đồ có marker riêng khi chưa có đường.

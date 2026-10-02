@@ -11,7 +11,11 @@ createuser --login --pwprompt airport_map
 createdb --owner=airport_map airport_map
 psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/01_schema.sql
 psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/02_seed.sql
+psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/03_walkways_schema.sql
+psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/04_walkways_seed.sql
 ```
+
+**Database đang dùng (đã chạy 01, 02):** chỉ cần chạy thêm `03_walkways_schema.sql` rồi `04_walkways_seed.sql` (một lần). 03 dùng `IF NOT EXISTS`, 04 bỏ qua dòng đã có, không đụng dữ liệu địa điểm. Hai bảng mới: `walkway_nodes`, `walkway_edges` (mạng lối đi cho chỉ đường). Dữ liệu trong 04 được sinh tự động từ mặt bằng SVG, Admin chỉnh lại bằng tab **Lối đi**.
 
 `01_schema.sql` tạo thẳng sáu bảng chuẩn, không tạo bảng tạm rồi chuyển đổi. `02_seed.sql` chứa INSERT SQL cho 705 địa điểm, danh mục, liên kết và giá trị sequence. Hai file tách cấu trúc và dữ liệu, không phải hai phiên bản schema. Chạy mỗi file một lần trên database mới; không chạy seed lên database đang sử dụng vì sẽ trùng khóa. Không cần JSON hoặc chạy backend để import.
 
@@ -32,7 +36,7 @@ npm install
 npm run dev -- --port 5174
 ```
 
-Frontend proxy `/api` về backend 8080. API GET/POST/PUT/DELETE `/api/locations` giữ nguyên. Tọa độ x/y là pixel SVG; lat/lng là WGS84.
+Frontend proxy `/api` về backend 8080. API GET/POST/PUT/DELETE `/api/locations` giữ nguyên. `GET /api/walkways` trả `{ nodes, edges }`; `PUT /api/walkways` thay toàn bộ mạng lối đi (Admin bấm "Lưu lối đi"). Tọa độ x/y là pixel SVG; lat/lng là WGS84.
 
 Database local hiện có đã ở schema chuẩn nên giữ nguyên dữ liệu, không chạy lại script. Các bảng theo dõi Flyway/import của bản triển khai cũ không còn được ứng dụng sử dụng. Máy mới chỉ có sáu bảng nghiệp vụ.
 
