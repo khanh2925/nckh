@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional
 class PostgresPersistenceTest {
     @Autowired LocationDao dao;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
     @Autowired DatabaseLocationImporter importer;
 
@@ -30,6 +31,24 @@ class PostgresPersistenceTest {
         List<Location> source = mapper.readValue(new File("data/airport-locations.json"), new TypeReference<>() {});
         source.sort(Comparator.comparing(Location::getId));
         assertEquals(mapper.valueToTree(source), mapper.valueToTree(dao.findAll()));
+    }
+
+    @Test void foreignKeysAndUniqueConstraintsRejectInvalidRelations() {
+        reject("INSERT INTO floors(terminal_code,level,name) VALUES ('missing-terminal',99,'Invalid')");
+        reject("INSERT INTO floors(terminal_code,level,name) SELECT terminal_code,level,name FROM floors LIMIT 1");
+        reject("UPDATE locations SET floor_id = -1 WHERE id = (SELECT min(id) FROM locations)");
+        reject("UPDATE locations SET type_code = 'missing-type' WHERE id = (SELECT min(id) FROM locations)");
+        reject("INSERT INTO location_facilities(location_id,facility_id,position) VALUES (-1,-1,0)");
+    }
+
+    private void reject(String sql) {
+        jdbc.execute("SAVEPOINT constraint_check");
+        try {
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> jdbc.execute(sql));
+        } finally {
+            jdbc.execute("ROLLBACK TO SAVEPOINT constraint_check");
+            jdbc.execute("RELEASE SAVEPOINT constraint_check");
+        }
     }
 
     @Test void crudAndRepeatedImportPreserveDatabaseChanges() {
@@ -40,15 +59,27 @@ class PostgresPersistenceTest {
         dao.save(location);
         assertTrue(location.getId() > max);
         assertEquals(mapper.valueToTree(location), mapper.valueToTree(dao.findById(location.getId())));
+        assertEquals(2, jdbc.queryForObject("SELECT count(*) FROM location_facilities WHERE location_id = ?", Integer.class, location.getId()));
+        Long firstFloor = jdbc.queryForObject("SELECT floor_id FROM locations WHERE id = ?", Long.class, location.getId());
+        location.setTerminal("T2");
+        dao.save(location);
+        assertNotEquals(firstFloor, jdbc.queryForObject("SELECT floor_id FROM locations WHERE id = ?", Long.class, location.getId()));
+        assertEquals("T2", dao.findById(location.getId()).getTerminal());
         location.setName("Đã cập nhật");
         location.setFacilities(List.of());
         dao.save(location);
         assertEquals(mapper.valueToTree(location), mapper.valueToTree(dao.findById(location.getId())));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM location_facilities WHERE location_id = ?", Integer.class, location.getId()));
+        assertEquals(List.of(), dao.findById(location.getId()).getFacilities());
+        location.setFacilities(null);
+        dao.save(location);
+        assertNull(dao.findById(location.getId()).getFacilities());
         assertTrue(dao.deleteById(original.get(0).getId()));
         importer.run(null);
         assertNull(dao.findById(original.get(0).getId()));
         assertNotNull(dao.findById(location.getId()));
         assertTrue(dao.deleteById(location.getId()));
         assertFalse(dao.deleteById(location.getId()));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM location_facilities WHERE location_id = ?", Integer.class, location.getId()));
     }
 }

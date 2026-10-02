@@ -92,3 +92,8 @@ Sao lưu database:
 ```bash
 pg_dump -h localhost -U airport_map -Fc airport_map > airport_map.dump
 ```
+
+
+## Schema quan hệ chuẩn hóa (V2)
+
+PostgreSQL có sáu bảng nghiệp vụ: `terminals`, `floors`, `location_types`, `locations`, `facilities`, `location_facilities`. Khóa ngoại và unique constraints giữ toàn vẹn dữ liệu. DAO JOIN để giữ hợp đồng API hiện tại; dữ liệu JSON chỉ dùng seed. Xem [schema, ERD và quy tắc migration](DATABASE_SCHEMA.md). V2 nâng cấp dữ liệu cũ trong transaction; không sửa V1.

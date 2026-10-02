@@ -71,6 +71,17 @@ public class LocationController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thiếu tầng hoặc tọa độ");
         }
 
+        if (location.getFacilities() != null) {
+            var seen = new java.util.HashSet<String>();
+            for (String facility : location.getFacilities()) {
+                if (facility == null || facility.isBlank() || !seen.add(facility)) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tiện ích không được trống hoặc trùng lặp");
+                }
+            }
+        }
+        if (location.getTerminal() != null && location.getTerminal().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nhà ga không được để trống");
+        }
         location.setName(location.getName().trim());
         if (location.getType() == null || location.getType().isBlank()) {
             location.setType("other");

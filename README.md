@@ -148,3 +148,10 @@ DB_INTEGRATION_TEST=true ./mvnw test
 
 Test kiểm tra toàn bộ dữ liệu nhập khớp JSON, ID tự tăng, CRUD và việc nhập lặp không ghi đè dữ liệu.
 `./mvnw test` thông thường bỏ qua test cần PostgreSQL.
+
+## Cấu trúc database
+
+Sáu bảng nghiệp vụ liên kết bằng khóa ngoại: `terminals` → `floors` → `locations`,
+`location_types` → `locations`, và `locations` ↔ `facilities` qua `location_facilities`.
+Migration V2 tự chuyển dữ liệu cũ, giữ ID và tọa độ; máy mới tự chạy cả hai migration.
+Xem [ERD và chi tiết schema](docs/knowledge/DATABASE_SCHEMA.md).
