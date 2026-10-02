@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/copy-data.mjs",
     "build": "vite build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

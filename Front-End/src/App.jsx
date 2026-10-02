@@ -6,7 +6,7 @@ import CategoryFilter from "./components/CategoryFilter";
 import LocationDetail from "./components/LocationDetail";
 import RoutePanel from "./components/RoutePanel";
 import AdminPanel from "./components/AdminPanel";
-import { getLocations } from "./api/locationApi";
+import { getLocations, isStaticMode } from "./api/locationApi";
 import { getLocationType } from "./data/locationTypes";
 import { findRoute } from "./utils/routing";
 import { airportFloors } from "./data/airportCatalog";
@@ -41,7 +41,7 @@ function App() {
             })
             .catch(err => {
                 console.error(err);
-                setError("Không kết nối được backend (cổng 8080).");
+                setError(isStaticMode ? "Không tải được dữ liệu địa điểm." : "Không kết nối được backend (cổng 8080).");
             });
     }, [reloadCount]);
 

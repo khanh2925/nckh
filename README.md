@@ -102,3 +102,21 @@ Front-End/src/
 - Thêm tầng: thêm 1 phần tử trong `data/floors.js` và các lối đi của tầng đó trong `data/walkways.js`.
 - Thêm lối đi: thêm điểm (`nodes`, tọa độ pixel giống `location.x/y`) rồi nối chúng trong `edges`.
   Nối 2 điểm ở 2 tầng khác nhau = thang máy / thang cuốn.
+
+## 5. Deploy lên Cloudflare Workers (bản tĩnh, chưa cần backend)
+
+Bản deploy chỉ gồm frontend. Dữ liệu được đọc từ file tĩnh `/data/locations.json`, tự động copy từ
+`Back-End/data/airport-locations.json` mỗi lần `npm run build` (script `prebuild`). Ở bản này không có Admin.
+
+Deploy từ máy (cần tài khoản Cloudflare miễn phí):
+
+```bash
+cd Front-End
+npx wrangler login     # lần đầu: đăng nhập Cloudflare trên trình duyệt
+npm run deploy         # = npm run build + npx wrangler deploy
+```
+
+Cập nhật dữ liệu: chạy backend trên máy → sửa bằng Admin → `npm run deploy` (và commit file JSON).
+
+Khi có backend online: đặt biến `VITE_API_URL=https://<địa-chỉ-backend>` trước khi build, Admin sẽ tự hiện lại.
+Cấu hình Cloudflare nằm trong `Front-End/wrangler.jsonc`.
