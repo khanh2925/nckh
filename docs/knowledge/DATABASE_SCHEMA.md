@@ -48,13 +48,13 @@ erDiagram
 - `location_facilities`: khóa chính ghép ngăn tiện ích trùng; UNIQUE (`location_id`, `position`) giữ thứ tự API. Xóa địa điểm cascade bảng liên kết; xóa tầng/loại/tiện ích đang dùng bị khóa ngoại chặn.
 - `facilities_known` giữ khác biệt giữa danh sách null (chưa cung cấp) và [] (không có tiện ích). Không lưu danh sách tiện ích dưới dạng JSON trong bảng locations.
 - Các cột tọa độ vẫn là DOUBLE PRECISION riêng biệt: x/y pixel SVG, lat/lng WGS84. Không tự chuyển đổi khi migration.
-- `data_imports` và `flyway_schema_history` là bảng vận hành, không phải danh mục nghiệp vụ.
+- Database mới không có bảng data_imports hoặc flyway_schema_history.
 
-## Migration và truy cập
+## Khởi tạo và truy cập
 
-V1 giữ nguyên checksum; V2 tạo danh mục từ dữ liệu đã lưu, chuyển quan hệ rồi bỏ cột văn bản dư thừa trong cùng transaction Flyway. Database mới chạy V1 và V2 trước khi importer nhập JSON qua DAO đã chuẩn hóa.
+`Back-End/database/01_schema.sql` tạo schema chuẩn ngay từ đầu. `02_seed.sql` nạp dữ liệu SQL riêng. Backend không tự tạo bảng hoặc đọc JSON, không dùng Flyway. Chạy mỗi script một lần trên database mới.
 
-API vẫn nhận/trả terminal, floor, type và facilities như trước. DAO JOIN để đọc và ghi địa điểm cùng các liên kết trong một transaction. Để tương thích API CRUD hiện tại, giá trị danh mục mới được đăng ký qua INSERT ON CONFLICT; tên danh mục chưa biết mặc định bằng mã. Danh mục chưa có CRUD API riêng. Dữ liệu mặt bằng SVG và đồ thị định tuyến vẫn ở frontend, chưa chuyển sang database.
+API giữ nguyên DTO; DAO JOIN để đọc và ghi địa điểm cùng liên kết trong transaction. Giá trị danh mục mới được đăng ký qua INSERT ON CONFLICT để tương thích CRUD hiện tại; tên mặc định bằng mã. Danh mục chưa có CRUD API riêng. Mặt bằng SVG và đồ thị định tuyến vẫn ở frontend.
 
 Ví dụ truy vấn:
 

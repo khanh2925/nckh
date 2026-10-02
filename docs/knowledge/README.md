@@ -14,7 +14,7 @@ docs/knowledge/
 ├── KI-01_SYSTEM_ARCHITECTURE.md               # Kiến trúc tổng thể & Luồng dữ liệu
 ├── KI-02_COORDINATE_PROJECTION_SYSTEM.md       # Hệ tọa độ kép (Pixel ↔ Lat/Lng) & Phép chiếu
 ├── KI-03_INDOOR_ROUTING_NAVIGATION.md         # Thuật toán tìm đường Dijkstra & Đồ thị Walkways
-├── KI-04_DATA_PERSISTENCE_BACKEND_API.md      # Backend REST API & PostgreSQL/Flyway và JSON Atomic dự phòng
+├── KI-04_DATA_PERSISTENCE_BACKEND_API.md      # Backend REST API & PostgreSQL quan hệ và SQL schema/seed
 ├── KI-05_FRONTEND_UI_INTERACTION.md           # Giao diện React, MapView, Tìm kiếm & Admin Panel
 ├── KI-06_DATA_INGESTION_CRAWLING.md           # Pipeline thu thập dữ liệu & Nạp Seed Locations
 └── KI-07_DEV_WORKFLOW_DEPLOYMENT.md           # Môi trường chạy, gỡ lỗi & Quy chuẩn mở rộng

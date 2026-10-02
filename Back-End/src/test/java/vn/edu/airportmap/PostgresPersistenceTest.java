@@ -1,36 +1,31 @@
 package vn.edu.airportmap;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import vn.edu.airportmap.dao.LocationDao;
-import vn.edu.airportmap.dao.impl.DatabaseLocationImporter;
 import vn.edu.airportmap.model.Location;
-import java.io.File;
-import java.util.Comparator;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 // Opt in against a local PostgreSQL database; test CRUD rolls back automatically.
 @SpringBootTest
-@ActiveProfiles("postgres")
 @EnabledIfEnvironmentVariable(named="DB_INTEGRATION_TEST", matches="true")
 @Transactional
 class PostgresPersistenceTest {
     @Autowired LocationDao dao;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
-    @Autowired DatabaseLocationImporter importer;
 
-    @Test void initialImportPreservesEveryField() throws Exception {
-        List<Location> source = mapper.readValue(new File("data/airport-locations.json"), new TypeReference<>() {});
-        source.sort(Comparator.comparing(Location::getId));
-        assertEquals(mapper.valueToTree(source), mapper.valueToTree(dao.findAll()));
+    @Test void seedIncludesRelationalData() {
+        assertEquals(705, dao.findAll().size());
+        assertEquals(4, jdbc.queryForObject("SELECT count(*) FROM terminals", Integer.class));
+        assertEquals(11, jdbc.queryForObject("SELECT count(*) FROM floors", Integer.class));
+        assertEquals(18, jdbc.queryForObject("SELECT count(*) FROM location_types", Integer.class));
+        assertEquals(167, jdbc.queryForObject("SELECT count(*) FROM location_facilities", Integer.class));
     }
 
     @Test void foreignKeysAndUniqueConstraintsRejectInvalidRelations() {
@@ -51,7 +46,7 @@ class PostgresPersistenceTest {
         }
     }
 
-    @Test void crudAndRepeatedImportPreserveDatabaseChanges() {
+    @Test void crudPreservesRelations() {
         var original = dao.findAll();
         long max = original.stream().mapToLong(Location::getId).max().orElseThrow();
         var location = Location.builder().name("Kiểm thử PostgreSQL").terminal("T1").floor(0)
@@ -75,7 +70,6 @@ class PostgresPersistenceTest {
         dao.save(location);
         assertNull(dao.findById(location.getId()).getFacilities());
         assertTrue(dao.deleteById(original.get(0).getId()));
-        importer.run(null);
         assertNull(dao.findById(original.get(0).getId()));
         assertNotNull(dao.findById(location.getId()));
         assertTrue(dao.deleteById(location.getId()));
