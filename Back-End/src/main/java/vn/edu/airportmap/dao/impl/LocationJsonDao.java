@@ -19,6 +19,7 @@ import java.util.List;
 // The whole list is kept in memory and the file is rewritten after every change.
 // Later, a JPA/PostgreSQL version can implement LocationDao without touching the service or controller.
 @Repository
+@org.springframework.context.annotation.Profile("json")
 public class LocationJsonDao implements LocationDao {
     private static final Logger log = LoggerFactory.getLogger(LocationJsonDao.class);
 

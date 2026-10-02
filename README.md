@@ -3,12 +3,45 @@
 Prototype bản đồ sân bay gồm hai phần tách biệt:
 
 ```text
-React + Leaflet + Bootstrap  →  Spring Boot REST API  →  JSON file configured in application.properties
+React + Leaflet + Bootstrap  →  Spring Boot REST API  →  PostgreSQL (Flyway + JDBC)
 ```
 
-Chưa sử dụng database, đăng nhập hoặc Spring Security. Toàn bộ địa điểm nằm trong file
-`Back-End/data/airport-locations.json`: backend đọc file khi khởi động và ghi lại file
-sau mỗi lần Admin thêm / sửa / xóa. Có thể sửa file này bằng tay khi backend đang tắt.
+## PostgreSQL (mặc định)
+
+Backend dùng Spring JDBC qua `LocationDao`; Flyway quản lý schema. API và frontend giữ nguyên.
+Cài PostgreSQL 16+ trực tiếp, không cần Docker. Tạo user và database trên máy mới:
+
+```bash
+createuser --login --pwprompt airport_map
+createdb --owner=airport_map airport_map
+cd Back-End
+DB_PASSWORD='mat-khau-da-dat' ./mvnw spring-boot:run
+```
+
+Cấu hình bằng biến môi trường: `DB_URL` (mặc định `jdbc:postgresql://localhost:5432/airport_map`),
+`DB_USERNAME` (mặc định `airport_map`), `DB_PASSWORD` (mặc định rỗng cho local đã cấu hình trust).
+Không commit mật khẩu. Database local trên máy hiện tại đã được tạo với user `airport_map`.
+
+Lần đầu backend nhập `data/airport-locations.json` trong một transaction, giữ nguyên ID,
+hai hệ tọa độ và tất cả trường dữ liệu. Sequence tự tăng bắt đầu sau ID lớn nhất.
+Bảng `data_imports` đánh dấu lần nhập; restart không ghi đè chỉnh sửa hoặc khôi phục điểm đã xóa,
+kể cả khi đã xóa hết địa điểm. JSON gốc được giữ nguyên và không còn là nơi nhận CRUD.
+Không sửa migration đã chạy; thêm `V2__...sql` khi thay đổi schema.
+`DB_IMPORT_JSON=false` bỏ nhập JSON để dùng database có dữ liệu sẵn.
+Nếu nhập thất bại, dữ liệu và marker rollback; sửa lỗi rồi khởi động lại.
+
+Chạy chế độ JSON cũ khi cần:
+
+```bash
+cd Back-End
+./mvnw spring-boot:run -Dspring-boot.run.profiles=json
+```
+
+Sao lưu database:
+
+```bash
+pg_dump -h localhost -U airport_map -Fc airport_map > airport_map.dump
+```
 
 ## 1. Chạy backend Spring Boot
 
@@ -21,8 +54,9 @@ cd Back-End
 ./mvnw spring-boot:run        # Windows: .\mvnw.cmd spring-boot:run
 ```
 
-File lưu hiện có 705 địa điểm thuộc T1, T2, T3 và khuôn viên. Nếu file chưa tồn tại,
-backend nhập một lần từ `crawled_data/tan_son_nhat_full` và giữ các chỉnh sửa T1 cũ.
+File JSON nguồn nhập hiện có 705 địa điểm thuộc T1, T2, T3 và khuôn viên. Nếu file chưa tồn tại,
+ở chế độ PostgreSQL cần cung cấp JSON nguồn qua `AIRPORT_DATA_FILE` (không tự cào lại).
+Chế độ JSON dự phòng mới dùng `crawled_data/tan_son_nhat_full` khi thiếu file.
 
 Backend chạy tại `http://localhost:8080`:
 
@@ -70,7 +104,7 @@ Back-End/
    ├─ controller/LocationController    REST API /api/locations
    ├─ service/LocationService(+impl)   xử lý nghiệp vụ
    ├─ dao/LocationDao                  interface lưu trữ
-   ├─ dao/impl/LocationJsonDao         lưu vào file JSON (sau này thay bằng JPA/PostgreSQL)
+   ├─ dao/impl/LocationJsonDao         JSON dự phòng; LocationPostgresDao lưu PostgreSQL
    └─ model/Location.java              một địa điểm (Lombok)
 
 Front-End/src/
@@ -102,3 +136,15 @@ Front-End/src/
 - Thêm tầng: thêm 1 phần tử trong `data/floors.js` và các lối đi của tầng đó trong `data/walkways.js`.
 - Thêm lối đi: thêm điểm (`nodes`, tọa độ pixel giống `location.x/y`) rồi nối chúng trong `edges`.
   Nối 2 điểm ở 2 tầng khác nhau = thang máy / thang cuốn.
+
+## Kiểm thử persistence PostgreSQL
+
+Chạy trên database phát triển đã nhập JSON nguồn. Các thay đổi CRUD của test được rollback:
+
+```bash
+cd Back-End
+DB_INTEGRATION_TEST=true ./mvnw test
+```
+
+Test kiểm tra toàn bộ dữ liệu nhập khớp JSON, ID tự tăng, CRUD và việc nhập lặp không ghi đè dữ liệu.
+`./mvnw test` thông thường bỏ qua test cần PostgreSQL.
