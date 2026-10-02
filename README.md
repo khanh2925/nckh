@@ -25,3 +25,7 @@ cd Front-End
 npm install
 npm run dev -- --port 5174
 ```
+
+## Deploy Cloudflare Workers + Render + Neon
+
+Frontend dùng VITE_API_BASE_URL trỏ Render; local giữ proxy /api. Backend Docker dùng PORT và CORS_ALLOWED_ORIGINS là danh sách origin phân cách dấu phẩy, kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Blueprint render.yaml chọn main và Free; Cloudflare chọn main trong dashboard. Xem [hướng dẫn](docs/CLOUD_DEPLOYMENT.md). Chưa deploy cloud.

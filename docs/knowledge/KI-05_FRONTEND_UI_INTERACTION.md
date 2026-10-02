@@ -59,3 +59,7 @@
 ### 2.4. Quản Trị Trực Tiếp Cho Admin (`AdminPanel.jsx` & `AdminLocationForm.jsx`)
 - Cho phép Admin xem danh sách theo tầng, tìm kiếm, sửa thông tin, xóa và thêm địa điểm mới.
 - Tính năng **Chọn tọa độ trực quan trên bản đồ (Point Picker)**: Admin chỉ cần nhấn "Chọn trên bản đồ" và click vào vị trí mong muốn, tọa độ pixel `x, y` và `lat, lng` sẽ tự động điền vào form.
+
+## API khi deploy cloud
+
+locationApi.js dùng VITE_API_BASE_URL là origin Render ở production; không đặt biến thì dùng /api qua Vite proxy. Không đặt credentials database trong frontend. Chi tiết tại [hướng dẫn](../CLOUD_DEPLOYMENT.md).

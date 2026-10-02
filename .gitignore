@@ -24,3 +24,9 @@ target
 *.njsproj
 *.sln
 *.sw?
+
+# Cloud project metadata and credentials
+.vercel/
+.env
+.env.*
+!.env.example

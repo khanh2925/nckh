@@ -1,0 +1,11 @@
+// Cloudflare Workers config: serve the built website (the "dist" folder) as static files.
+// No server code ("main") is needed, only static assets.
+{
+  "name": "aeroproce",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Unknown URLs return index.html, so the React app handles them
+    "not_found_handling": "single-page-application"
+  }
+}

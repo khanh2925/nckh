@@ -1,6 +1,7 @@
 
-// "/api" is forwarded to Spring Boot (localhost:8080) by vite.config.js
-const API_URL = "/api/locations";
+// Local requests use Vite's /api proxy. Cloudflare builds use the Render origin.
+const backendOrigin = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+const API_URL = `${backendOrigin}/api/locations`;
 
 // Send a request and report an error when the backend answers 4xx/5xx.
 async function request(url, options) {
