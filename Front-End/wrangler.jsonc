@@ -2,6 +2,9 @@
 // No server code ("main") is needed, only static assets.
 {
   "name": "aeroproce",
+  // Cloudflare account that owns this Worker (Long's account). Not a secret.
+  // Lets anyone invited to the account (e.g. Khánh) run "npm run deploy" without choosing an account.
+  "account_id": "2ec0683ab1d52dae077cc4cf37677e5c",
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "./dist",

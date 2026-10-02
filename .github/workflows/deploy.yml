@@ -1,0 +1,38 @@
+# Build the Front-End and deploy it to Cloudflare Workers.
+# Runs automatically after every push to main (e.g. when a Pull Request is merged).
+# Needs one repository secret: CLOUDFLARE_API_TOKEN (Settings -> Secrets and variables -> Actions).
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches: [main]
+  # Adds a "Run workflow" button in the Actions tab to deploy any branch by hand
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Front-End
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Front-End/package-lock.json
+
+      - run: npm ci
+
+      # "prebuild" copies Back-End/data/airport-locations.json into the website first
+      - run: npm run build
+
+      # Uses Front-End/wrangler.jsonc (worker name + account_id)
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: Front-End
+          command: deploy
