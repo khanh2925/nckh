@@ -8,6 +8,7 @@ import vn.edu.airportmap.service.LocationService;
 import java.util.List;
 
 @Service
+@org.springframework.transaction.annotation.Transactional
 public class LocationServiceImpl implements LocationService {
     private final LocationDao locationDao;
 

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/copy-data.mjs",
     "build": "vite build",
     "lint": "eslint .",
+    "export-data": "node scripts/export-data.mjs",
     "deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {

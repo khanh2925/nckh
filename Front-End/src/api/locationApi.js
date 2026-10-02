@@ -2,7 +2,7 @@
 // - npm run dev: "/api" is forwarded to Spring Boot (localhost:8080) by vite.config.js
 // - Built website WITH a backend: set VITE_API_URL (e.g. https://aeroproce-api.onrender.com) before building
 // - Built website WITHOUT a backend (Cloudflare Workers now): read the static file /data/locations.json
-//   (copied from Back-End/data/airport-locations.json by scripts/copy-data.mjs on every build)
+//   (a snapshot of PostgreSQL saved by "npm run export-data", see scripts/export-data.mjs)
 const API_BASE = import.meta.env.VITE_API_URL || "";
 export const isStaticMode = import.meta.env.PROD && !API_BASE;
 
