@@ -2,7 +2,7 @@
 
 ## 1. Mạng lối đi (walkway network)
 
-Đồ thị vô hướng, lưu trong PostgreSQL (bảng `walkway_nodes`, `walkway_edges`, file `Back-End/database/03_walkways_schema.sql`), đọc/ghi qua `GET/PUT /api/walkways`. Bản web tĩnh đọc `Front-End/public/data/walkways.json` (xuất bằng `npm run export-data`).
+Đồ thị vô hướng, lưu trong PostgreSQL (bảng `walkway_nodes`, `walkway_edges`, file `Back-End/database/03_walkways_schema.sql`), đọc/ghi qua `GET/PUT /api/walkways` (Spring Data JPA: entity `WalkwayNode`, `WalkwayEdge`, xem KI-04). Bản web tĩnh đọc `Front-End/public/data/walkways.json` (xuất bằng `npm run export-data`).
 
 ```text
 { "nodes": [ { "id": "T1-1-17", "terminal": "T1", "floor": 1, "lat": 10.8137, "lng": 106.6618, "connector": "Thang máy" } ],

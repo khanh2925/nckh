@@ -68,7 +68,7 @@ erDiagram
 
 `Back-End/database/01_schema.sql` tạo schema chuẩn ngay từ đầu. `02_seed.sql` nạp dữ liệu SQL riêng. `03_walkways_schema.sql` + `04_walkways_seed.sql` thêm mạng lối đi (chạy được trên database đang dùng). Backend không tự tạo bảng hoặc đọc JSON, không dùng Flyway. Chạy mỗi script một lần trên database mới.
 
-API giữ nguyên DTO; DAO JOIN để đọc và ghi địa điểm cùng liên kết trong transaction. Giá trị danh mục mới được đăng ký qua INSERT ON CONFLICT để tương thích CRUD hiện tại; tên mặc định bằng mã. Danh mục chưa có CRUD API riêng. Mặt bằng SVG vẫn ở frontend; mạng lối đi đọc/ghi qua `/api/walkways`.
+API giữ nguyên DTO; Spring Data JPA (entity + repository) đọc và ghi địa điểm cùng liên kết trong transaction của service. Giá trị danh mục mới được service tìm-hoặc-tạo để tương thích CRUD hiện tại; tên mặc định bằng mã. Danh mục chưa có CRUD API riêng. Mặt bằng SVG vẫn ở frontend; mạng lối đi đọc/ghi qua `/api/walkways`.
 
 Ví dụ truy vấn:
 

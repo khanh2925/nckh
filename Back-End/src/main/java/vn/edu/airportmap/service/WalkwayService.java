@@ -1,8 +1,8 @@
 package vn.edu.airportmap.service;
 
-import vn.edu.airportmap.model.WalkwayNetwork;
+import vn.edu.airportmap.dto.WalkwayNetworkDto;
 
 public interface WalkwayService {
-    WalkwayNetwork getWalkways();
-    WalkwayNetwork saveWalkways(WalkwayNetwork network);
+    WalkwayNetworkDto getWalkways();
+    WalkwayNetworkDto saveWalkways(WalkwayNetworkDto network);
 }

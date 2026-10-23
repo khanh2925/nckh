@@ -1,4 +1,4 @@
-package vn.edu.airportmap.model;
+package vn.edu.airportmap.dto;
 
 import lombok.*;
 
@@ -10,7 +10,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class WalkwayNetwork {
-    private List<WalkwayNode> nodes;
-    private List<WalkwayEdge> edges;
+public class WalkwayNetworkDto {
+    private List<WalkwayNodeDto> nodes;
+    private List<WalkwayEdgeDto> edges;
 }

@@ -5,9 +5,9 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
-import vn.edu.airportmap.model.WalkwayEdge;
-import vn.edu.airportmap.model.WalkwayNetwork;
-import vn.edu.airportmap.model.WalkwayNode;
+import vn.edu.airportmap.dto.WalkwayEdgeDto;
+import vn.edu.airportmap.dto.WalkwayNetworkDto;
+import vn.edu.airportmap.dto.WalkwayNodeDto;
 import vn.edu.airportmap.service.WalkwayService;
 
 import java.util.ArrayList;
@@ -23,11 +23,11 @@ class WalkwayPersistenceTest {
     @Autowired WalkwayService walkwayService;
 
     @Test void saveReplacesTheWholeNetwork() {
-        WalkwayNode a = WalkwayNode.builder().id("test-a").terminal("T1").floor(0).lat(10.813).lng(106.662).build();
-        WalkwayNode b = WalkwayNode.builder().id("test-b").terminal("T1").floor(1).lat(10.813).lng(106.662).connector("Thang máy").build();
-        List<WalkwayEdge> edges = new ArrayList<>(List.of(new WalkwayEdge("test-b", "test-a"), new WalkwayEdge("test-a", "test-b")));
+        WalkwayNodeDto a = WalkwayNodeDto.builder().id("test-a").terminal("T1").floor(0).lat(10.813).lng(106.662).build();
+        WalkwayNodeDto b = WalkwayNodeDto.builder().id("test-b").terminal("T1").floor(1).lat(10.813).lng(106.662).connector("Thang máy").build();
+        List<WalkwayEdgeDto> edges = new ArrayList<>(List.of(new WalkwayEdgeDto("test-b", "test-a"), new WalkwayEdgeDto("test-a", "test-b")));
 
-        WalkwayNetwork saved = walkwayService.saveWalkways(new WalkwayNetwork(new ArrayList<>(List.of(a, b)), edges));
+        WalkwayNetworkDto saved = walkwayService.saveWalkways(new WalkwayNetworkDto(new ArrayList<>(List.of(a, b)), edges));
 
         assertEquals(2, saved.getNodes().size());
         assertEquals(1, saved.getEdges().size());   // A-B and B-A are the same segment
@@ -36,8 +36,8 @@ class WalkwayPersistenceTest {
     }
 
     @Test void unknownFloorIsRejected() {
-        WalkwayNode node = WalkwayNode.builder().id("test-x").terminal("T9").floor(0).lat(10.8).lng(106.6).build();
+        WalkwayNodeDto node = WalkwayNodeDto.builder().id("test-x").terminal("T9").floor(0).lat(10.8).lng(106.6).build();
         assertThrows(IllegalArgumentException.class,
-                () -> walkwayService.saveWalkways(new WalkwayNetwork(new ArrayList<>(List.of(node)), new ArrayList<>())));
+                () -> walkwayService.saveWalkways(new WalkwayNetworkDto(new ArrayList<>(List.of(node)), new ArrayList<>())));
     }
 }

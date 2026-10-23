@@ -1,4 +1,4 @@
-package vn.edu.airportmap.model;
+package vn.edu.airportmap.dto;
 
 import lombok.*;
 
@@ -9,7 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @ToString
-public class WalkwayEdge {
+public class WalkwayEdgeDto {
     private String from;
     private String to;
 }

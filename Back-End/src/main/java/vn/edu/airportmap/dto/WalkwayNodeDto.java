@@ -1,4 +1,4 @@
-package vn.edu.airportmap.model;
+package vn.edu.airportmap.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
@@ -11,7 +11,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @ToString
-public class WalkwayNode {
+public class WalkwayNodeDto {
     // Text id made by the front-end (or by the seed file), e.g. "T1-0-15"
     private String id;
     private String terminal;

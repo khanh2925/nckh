@@ -4,14 +4,16 @@
 
 HTTP → LocationController → LocationServiceImpl → LocationRepository (Spring Data JPA) → Hibernate → PostgreSQL.
 
-Controller validate request và trả 400/404/204. Service thực hiện nghiệp vụ trong transaction Spring, gọi các repository và dùng `LocationMapper` để chuyển entity ↔ `LocationDto`. Không còn tầng DAO/JdbcTemplate, LocationJsonDao, AirportSeed, DatabaseLocationImporter, profile JSON hay cấu hình data-file.
+HTTP → WalkwayController → WalkwayServiceImpl → WalkwayNodeRepository / WalkwayEdgeRepository → Hibernate → PostgreSQL.
+
+Controller validate request và trả 400/404/204. Service thực hiện nghiệp vụ trong transaction Spring, gọi các repository và dùng `LocationMapper` / `WalkwayMapper` để chuyển entity ↔ DTO. Không còn tầng DAO/JdbcTemplate, LocationJsonDao, AirportSeed, DatabaseLocationImporter, profile JSON hay cấu hình data-file.
 
 | Gói | Nội dung |
 | :--- | :--- |
-| `entity/` | `Terminal`, `Floor`, `LocationType`, `Facility`, `Location` (`@Entity`) ánh xạ đúng các bảng trong `01_schema.sql` |
+| `entity/` | `Terminal`, `Floor`, `LocationType`, `Facility`, `Location` (`01_schema.sql`); `WalkwayNode`, `WalkwayEdge` + khóa `WalkwayEdgeId` (`03_walkways_schema.sql`) |
 | `repository/` | Interface `extends JpaRepository`; truy vấn theo tên method như `findByFloor_LevelOrderByIdAsc`, `findByTerminal_CodeAndLevel`, `findByName` |
-| `dto/` | `LocationDto`: hình dạng JSON trả cho front-end, giữ nguyên như trước khi chuyển JPA |
-| `mapper/` | `LocationMapper` viết tay (không dùng MapStruct) |
+| `dto/` | `LocationDto`, `WalkwayNetworkDto`, `WalkwayNodeDto`, `WalkwayEdgeDto`: hình dạng JSON trả cho front-end, giữ nguyên như trước khi chuyển JPA |
+| `mapper/` | `LocationMapper`, `WalkwayMapper` viết tay (không dùng MapStruct) |
 
 ## Ánh xạ quan hệ
 
@@ -20,6 +22,8 @@ Controller validate request và trả 400/404/204. Service thực hiện nghiệ
 - `facilities_known = false` → API trả `facilities: null`; `true` → trả danh sách (có thể rỗng).
 - ID mới lấy từ `location_id_seq` (`@SequenceGenerator`, `allocationSize = 1`); ID seed giữ nguyên.
 - Truy vấn danh sách dùng `@EntityGraph` để nạp floor, terminal, type, facilities trong một câu SQL (tránh N+1).
+- Lối đi: `WalkwayNode` → `Floor` là `@ManyToOne` qua `floor_id`; `WalkwayEdge` dùng `@EmbeddedId` `(from_id, to_id)`, khóa ngoại tới node do database kiểm tra.
+- `PUT /api/walkways` thay toàn bộ mạng trong một transaction: `deleteAllInBatch()` cạnh rồi node, sau đó `saveAll`. Node và cạnh có ID do client đặt nên implement `Persistable` (`isNew`) để Hibernate INSERT thẳng, không SELECT trước từng dòng; insert gửi theo lô (`hibernate.jdbc.batch_size=500`). Tầng không tồn tại → service ném `IllegalArgumentException` → controller trả 400. Kiểm tra này phải nằm ở service: nếu đặt trong bean `@Repository`, Spring đổi exception thành `InvalidDataAccessApiUsageException` và API trả 500.
 - Terminal, tầng, loại và tiện ích chưa có sẽ được tạo khi thêm/sửa địa điểm (find-or-create trong service), giống hành vi API cũ.
 
 ## Schema và dữ liệu
@@ -30,10 +34,10 @@ Tạo schema trực tiếp bằng `Back-End/database/01_schema.sql`, nạp SQL b
 
 ## API giữ nguyên
 
-GET `/api/locations` hỗ trợ `floor` (lọc theo số tầng trên mọi nhà ga); GET `/{id}`; POST thêm; PUT `/{id}` sửa; DELETE `/{id}` xóa. DTO vẫn có terminal, floor, type, facilities. Tiện ích trống hoặc trùng bị trả 400. Xóa địa điểm xóa luôn liên kết tiện ích; các khóa ngoại còn lại chặn xóa danh mục đang dùng.
+GET/PUT `/api/walkways` trả và nhận `{ nodes, edges }`; cạnh A-B và B-A gộp làm một. GET `/api/locations` hỗ trợ `floor` (lọc theo số tầng trên mọi nhà ga); GET `/{id}`; POST thêm; PUT `/{id}` sửa; DELETE `/{id}` xóa. DTO vẫn có terminal, floor, type, facilities. Tiện ích trống hoặc trùng bị trả 400. Xóa địa điểm xóa luôn liên kết tiện ích; các khóa ngoại còn lại chặn xóa danh mục đang dùng.
 
 x/y pixel và lat/lng địa lý lưu riêng, không đổi tọa độ khi seed.
 
 ## Kiểm thử
 
-`PostgresPersistenceTest` (bật bằng `DB_INTEGRATION_TEST=true`) chạy CRUD qua `LocationService`, flush entity rồi kiểm tra bảng bằng `JdbcTemplate`, rollback sau mỗi test.
+`PostgresPersistenceTest` và `WalkwayPersistenceTest` (bật bằng `DB_INTEGRATION_TEST=true`, database cần chạy đủ 01–04) chạy qua service, flush entity rồi kiểm tra bảng bằng `JdbcTemplate`, rollback sau mỗi test.
