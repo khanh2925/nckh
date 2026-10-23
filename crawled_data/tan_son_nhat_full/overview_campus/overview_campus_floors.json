@@ -1,0 +1,52 @@
+{
+  "420322445353": {
+    "id": 420322445353,
+    "venue_id": 420321697474,
+    "name": "F1",
+    "level": 1,
+    "center": {
+      "lat": 10.81356127,
+      "lng": 106.65758895
+    },
+    "bounds": {
+      "ne": {
+        "lat": 10.831274,
+        "lng": 106.678459
+      },
+      "sw": {
+        "lat": 10.802859,
+        "lng": 106.633215
+      }
+    },
+    "default_zoom": 16,
+    "include_background": false,
+    "path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2364/walkingpaths/floor_5367_90691752478989.svg",
+    "path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2364/walkingpaths/floor_5367_12951752545513.pdf",
+    "bg_path_svg": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2364/walkingpaths/floor_5367_94041752478990.svg",
+    "bg_path_pdf": "https://mapper-images-singapore.s3-ap-southeast-1.amazonaws.com/2364/walkingpaths/floor_5367_3981752478991.pdf",
+    "bg_tile_url": null,
+    "tile_url": null,
+    "tile_min_zoom": 14,
+    "tile_max_zoom": 22,
+    "heading": 0,
+    "tilt": 0,
+    "meta": {
+      "default_radius_node": "6"
+    },
+    "multilingual_name": {
+      "en": "F1",
+      "vi": "Tầng 1",
+      "fr": "1er étage",
+      "de": "1. Etage",
+      "ru": "1 этаж",
+      "ja": "1階",
+      "ko": "1층",
+      "cn": "1楼",
+      "tw": "1樓",
+      "km": "",
+      "it": "1º piano",
+      "th": "ชั้น 1",
+      "es": "Piso 1"
+    }
+  }
+}

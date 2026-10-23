@@ -1,98 +1,367 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from "react";
+import Header from "./components/Header";
+import MapView from "./components/MapView";
+import SearchBox from "./components/SearchBox";
+import CategoryFilter from "./components/CategoryFilter";
+import LocationDetail from "./components/LocationDetail";
+import RoutePanel from "./components/RoutePanel";
+import AdminPanel from "./components/AdminPanel";
+import WalkwayPanel from "./components/WalkwayPanel";
+import { API_BASE, getLocations, isStaticMode } from "./api/locationApi";
+import { getWalkways } from "./api/walkwayApi";
+import { getLocationType } from "./data/locationTypes";
+import { findRoute } from "./utils/routing";
+import { airportFloors } from "./data/airportCatalog";
+import { useWalkwayEditor } from "./hooks/useWalkwayEditor";
 
-export default function App() {
-  const initialized = useRef(false);
-  const [role, setRole] = useState('user');
-  const [form, setForm] = useState({ name: '', type: 'gate', typeName: 'Cửa ra máy bay', floor: 1, x: '', y: '' });
-  const [message, setMessage] = useState('');
+const EMPTY_WALKWAYS = { nodes: [], edges: [] };
 
-  useEffect(() => {
-    if (initialized.current) return;
-    initialized.current = true;
-    import('./airport-map.js');
-  }, []);
+function App() {
+    const [locations, setLocations] = useState([]);
+    const [walkways, setWalkways] = useState(EMPTY_WALKWAYS);
+    const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(true);
+    const [reloadCount, setReloadCount] = useState(0);
 
-  useEffect(() => {
-    const receivePoint = (event) => {
-      setForm(current => ({ ...current, x: event.detail.x.toFixed(1), y: event.detail.y.toFixed(1), floor: event.detail.floor }));
-      setMessage('Đã chọn tọa độ. Kiểm tra thông tin rồi bấm Lưu địa điểm.');
+    const [floor, setFloor] = useState(1);
+    const [terminal, setTerminal] = useState("T1");
+    const [activeGroup, setActiveGroup] = useState("all");
+    const [selectedId, setSelectedId] = useState(null);
+
+    // Directions: each end is a location OR a point picked on the map (see handleRoutePoint)
+    const [isRouting, setIsRouting] = useState(false);
+    const [routeFrom, setRouteFrom] = useState(null);
+    const [routeTo, setRouteTo] = useState(null);
+    const [pickTarget, setPickTarget] = useState(null);   // end chosen with the crosshair button: "from" | "to" | null
+
+    // Admin: adminTab = "locations" | "walkways"; editingId = location id, "new" (adding) or null (showing the list)
+    const [role, setRole] = useState("user");
+    const [adminTab, setAdminTab] = useState("locations");
+    const [editingId, setEditingId] = useState(null);
+    const [isPicking, setIsPicking] = useState(false);
+    const [pickedPoint, setPickedPoint] = useState(null);
+
+    const walkwayEditor = useWalkwayEditor({ terminal, floor, onSaved: setWalkways });
+
+    // Runs on first render, and again every time "Thử lại" increases reloadCount.
+    // allSettled: the map still shows the locations even if the walkways fail to load.
+    useEffect(() => {
+        Promise.allSettled([getLocations(), getWalkways()]).then(([locationResult, walkwayResult]) => {
+            setIsLoading(false);
+            if (locationResult.status === "fulfilled") setLocations(locationResult.value);
+            if (walkwayResult.status === "fulfilled") setWalkways(walkwayResult.value);
+
+            if (locationResult.status === "rejected") {
+                console.error(locationResult.reason);
+                setError(isStaticMode || API_BASE ? "Không tải được dữ liệu địa điểm." : "Không kết nối được backend (cổng 8080).");
+            } else if (walkwayResult.status === "rejected") {
+                console.error(walkwayResult.reason);
+                setError("Không tải được lối đi nên chưa thể chỉ đường.");
+            } else {
+                setError("");
+            }
+        });
+    }, [reloadCount]);
+
+    const handleReload = () => {
+        setError("");
+        setIsLoading(true);
+        setReloadCount(reloadCount + 1);
     };
-    window.addEventListener('admin:point-picked', receivePoint);
-    return () => window.removeEventListener('admin:point-picked', receivePoint);
-  }, []);
 
-  const updateForm = (field, value) => setForm(current => ({ ...current, [field]: value }));
-  const choosePoint = () => {
-    setMessage('Hãy bấm vào vị trí cần thêm trên mặt bằng.');
-    window.dispatchEvent(new CustomEvent('admin:start-pick', { detail: { floor: Number(form.floor) } }));
-  };
-  const saveLocation = async (event) => {
-    event.preventDefault();
-    if (form.x === '' || form.y === '') { setMessage('Bạn cần chọn một vị trí trên bản đồ trước.'); return; }
-    const response = await fetch('/api/locations', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, floor: Number(form.floor), x: Number(form.x), y: Number(form.y) })
-    });
-    if (!response.ok) { setMessage('Không lưu được địa điểm. Hãy kiểm tra backend.'); return; }
-    setMessage('Đã thêm địa điểm thành công.');
-    setForm(current => ({ ...current, name: '', x: '', y: '' }));
-    window.dispatchEvent(new Event('locations:refresh'));
-  };
+    const isAdmin = role === "admin";
+    const isEditingWalkways = isAdmin && adminTab === "walkways" && walkwayEditor.isEditing;
+    const findById = (id) => locations.find(location => location.id === id) || null;
+    const isInGroup = (location, groupId) => groupId === "all" || getLocationType(location.type).group === groupId;
 
-  return <main className="app-shell">
-    <header className="topbar">
-      <div className="identity">
-        <span className="terminal-badge">T1</span>
-        <div><h1>Ga nội địa Tân Sơn Nhất</h1><p>Bản đồ mặt bằng · React + Spring Boot</p></div>
-      </div>
-      <div className="header-actions">
-        <label className="role-select">Vai trò
-          <select value={role} onChange={event => setRole(event.target.value)}>
-            <option value="user">Người dùng</option><option value="admin">Admin</option>
-          </select>
-        </label>
-        <nav className="floor-tabs" aria-label="Chọn tầng">
-          <button type="button" className="floor-button active" data-floor="1">Tầng 1</button>
-          <button type="button" className="floor-button" data-floor="2">Tầng 2</button>
-        </nav>
-      </div>
-    </header>
-    <section className="map-shell" aria-label="Bản đồ nhà ga T1">
-      <div className="search-panel">
-        <label htmlFor="location-search" className="sr-only">Tìm địa điểm</label>
-        <input id="location-search" type="search" placeholder="Tìm Gate, WC, quầy thông tin…" autoComplete="off" />
-        <div id="search-results" className="search-results" hidden />
-      </div>
-      <div id="airport-map" />
-      <div className="map-controls" aria-label="Điều khiển bản đồ">
-        <button type="button" id="zoom-in" aria-label="Phóng to">+</button>
-        <button type="button" id="zoom-out" aria-label="Thu nhỏ">−</button>
-        <button type="button" id="reset-bearing" aria-label="Đặt lại hướng">↻</button>
-        <button type="button" id="airport-overview" aria-label="Xem toàn sân bay">⌂</button>
-        <button type="button" id="go-t1" aria-label="Về ga T1">T1</button>
-      </div>
-      <div className="legend" aria-label="Chú giải">
-        <span><i className="room" />Khu dịch vụ</span><span><i className="lounge" />Phòng chờ</span>
-        <span><i className="shop" />Cửa hàng</span><span><i className="security" />Khu kiểm soát</span>
-      </div>
-      <p id="map-status" className="map-footnote">Toàn cảnh sân bay · Phóng to Ga T1 để xem mặt bằng</p>
-      {role === 'admin' && <aside className="admin-card">
-        <div className="admin-heading"><span>ADMIN</span><div><strong>Thêm địa điểm</strong><small>Gán tọa độ trên mặt bằng</small></div></div>
-        <form onSubmit={saveLocation}>
-          <label>Tên địa điểm<input required value={form.name} onChange={event => updateForm('name', event.target.value)} placeholder="Ví dụ: Gate 05" /></label>
-          <div className="form-row">
-            <label>Loại<select value={form.type} onChange={event => {
-              const option = event.target.selectedOptions[0]; updateForm('type', event.target.value); updateForm('typeName', option.dataset.label);
-            }}><option value="gate" data-label="Cửa ra máy bay">Gate</option><option value="restroom" data-label="Nhà vệ sinh">WC</option><option value="information" data-label="Thông tin sân bay">Thông tin</option><option value="lounge" data-label="Phòng chờ hành khách">Phòng chờ</option><option value="elevator" data-label="Thang máy">Thang máy</option><option value="other" data-label="Địa điểm khác">Khác</option></select></label>
-            <label>Tầng<select value={form.floor} onChange={event => updateForm('floor', Number(event.target.value))}><option value="1">Tầng 1</option><option value="2">Tầng 2</option></select></label>
-          </div>
-          <label>Nhãn hiển thị<input value={form.typeName} onChange={event => updateForm('typeName', event.target.value)} /></label>
-          <div className="coordinates"><span>X: <b>{form.x || '—'}</b></span><span>Y: <b>{form.y || '—'}</b></span></div>
-          <button type="button" className="pick-button" onClick={choosePoint}>⌖ Chọn vị trí trên bản đồ</button>
-          <button type="submit" className="save-button">Lưu địa điểm</button>
-          {message && <p className="admin-message" role="status">{message}</p>}
-        </form>
-      </aside>}
-    </section>
-  </main>;
+    // Derived data: calculated from state on every render, not stored in state
+    const selectedLocation = findById(selectedId);
+    const editingLocation = editingId === "new" ? null : findById(editingId);
+    // Which end the next click on the map fills: the one chosen with the crosshair, otherwise the missing one
+    const routePickTarget = !isRouting ? null : pickTarget || (!routeFrom ? "from" : !routeTo ? "to" : null);
+
+    // While the admin is drawing, directions use the unsaved drawing, so it can be tested before saving
+    const routeNetwork = walkwayEditor.draft || walkways;
+    // useMemo: only search for a new path when the ends or the network change
+    const route = useMemo(
+        () => (routeFrom && routeTo && routeFrom.id !== routeTo.id ? findRoute(routeNetwork, routeFrom, routeTo) : null),
+        [routeNetwork, routeFrom, routeTo]
+    );
+
+    // Places that must stay visible even when the filter hides their group
+    const pinnedIds = [selectedId, routeFrom?.id, routeTo?.id, editingId];
+    const visibleLocations = locations.filter(location =>
+        location.terminal === terminal && location.floor === floor && (isInGroup(location, activeGroup) || pinnedIds.includes(location.id))
+    );
+
+    // ---------- Selecting a place (marker click or search result) ----------
+    const handleSelect = (location) => {
+        if (isPicking) return;   // the admin is choosing a point, ignore marker clicks
+        setTerminal(location.terminal);
+        setFloor(location.floor);
+        if (isRouting) {
+            handleRoutePlace(location);
+        } else if (isAdmin && adminTab === "locations") {
+            handleEdit(location.id);
+        } else {
+            setSelectedId(location.id);
+        }
+    };
+
+    const handleFloorChange = (newFloor) => {
+        setFloor(newFloor);
+        if (selectedLocation && selectedLocation.floor !== newFloor) setSelectedId(null);
+    };
+
+    const handleTerminalChange = (value) => {
+        setTerminal(value);
+        setFloor(airportFloors.find(item => item.terminal === value)?.id ?? 0);
+        setSelectedId(null);
+        handleCloseRoute();
+        handleCancelEdit();
+    };
+
+    const handleGroupChange = (groupId) => {
+        setActiveGroup(groupId);
+        if (selectedLocation && !isInGroup(selectedLocation, groupId)) setSelectedId(null);
+    };
+
+    // ---------- Directions ----------
+    const handleOpenRoute = () => {
+        setIsRouting(true);
+        setSelectedId(null);
+    };
+
+    const handleRouteFrom = (location) => {
+        setIsRouting(true);
+        setRouteFrom(location);
+        setRouteTo(null);
+        setPickTarget(null);
+        setSelectedId(null);
+    };
+
+    const handleRouteTo = (location) => {
+        setIsRouting(true);
+        setRouteTo(location);
+        setRouteFrom(null);
+        setPickTarget(null);
+        setSelectedId(null);
+    };
+
+    // While directions are open, a chosen place fills the end that is being picked.
+    // When both ends exist, a new place replaces the destination.
+    const handleRoutePlace = (place) => {
+        const isFrom = routePickTarget === "from";
+        const from = isFrom ? place : routeFrom;
+        if (isFrom) setRouteFrom(place);
+        else setRouteTo(place);
+        setPickTarget(null);
+        // When both ends are known, show the route from its start
+        if (from && (isFrom ? routeTo : place) && from.terminal === place.terminal) setFloor(from.floor);
+    };
+
+    // Any spot on the floor plan can be a start or an end, not only a location
+    const handleRoutePoint = (point) => {
+        handleRoutePlace({
+            id: `point-${point.terminal}-${point.floor}-${point.lat.toFixed(6)}-${point.lng.toFixed(6)}`,
+            isPoint: true,
+            name: "Vị trí đã chọn trên bản đồ",
+            ...point
+        });
+    };
+
+    const handleSwapRoute = () => {
+        setRouteFrom(routeTo);
+        setRouteTo(routeFrom);
+        if (routeTo && routeTo.terminal === terminal) setFloor(routeTo.floor);
+    };
+
+    const handleCloseRoute = () => {
+        setIsRouting(false);
+        setRouteFrom(null);
+        setRouteTo(null);
+        setPickTarget(null);
+    };
+
+    // ---------- Admin ----------
+    const confirmDropWalkways = () => !walkwayEditor.isDirty || window.confirm("Lối đi có thay đổi chưa lưu. Bỏ các thay đổi này?");
+
+    const handleRoleChange = (newRole) => {
+        if (!confirmDropWalkways()) return;
+        walkwayEditor.stop();
+        setAdminTab("locations");
+        setRole(newRole);
+        setSelectedId(null);
+        handleCloseRoute();
+        handleCancelEdit();
+    };
+
+    const handleAdminTabChange = (tab) => {
+        if (tab === adminTab) return;
+        if (tab === "walkways") {
+            handleCancelEdit();
+            walkwayEditor.start(walkways);
+        } else {
+            if (!confirmDropWalkways()) return;
+            walkwayEditor.stop();
+        }
+        setAdminTab(tab);
+    };
+
+    const handleEdit = (id) => {
+        const location = findById(id);
+        setEditingId(id);
+        setPickedPoint(null);
+        setIsPicking(false);
+        if (location) setFloor(location.floor);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setPickedPoint(null);
+        setIsPicking(false);
+    };
+
+    const handleStartPick = (pickFloor) => {
+        setFloor(pickFloor);
+        setIsPicking(true);
+    };
+
+    const handlePickPoint = (point) => {
+        setPickedPoint(point);
+        setIsPicking(false);
+    };
+
+    const handleSaved = (saved, isNew) => {
+        setLocations(isNew
+            ? [...locations, saved]
+            : locations.map(location => (location.id === saved.id ? saved : location)));
+        handleCancelEdit();
+    };
+
+    const handleDeleted = (id) => {
+        setLocations(locations.filter(location => location.id !== id));
+        handleCancelEdit();
+    };
+
+    // What a click on the floor plan does right now (null = nothing special)
+    let handleMapClick = null;
+    if (isPicking) handleMapClick = handlePickPoint;
+    else if (routePickTarget) handleMapClick = handleRoutePoint;
+    else if (isEditingWalkways && !isRouting) handleMapClick = walkwayEditor.handleMapClick;
+
+    // Directions open = the drawing is shown but locked, so clicks pick route ends instead
+    const mapWalkwayEditor = isEditingWalkways
+        ? {
+            network: walkwayEditor.draft,
+            tool: walkwayEditor.tool,
+            activeId: walkwayEditor.activeId,
+            selectedId: walkwayEditor.selectedId,
+            isLocked: isRouting,
+            onNodeClick: walkwayEditor.handleNodeClick,
+            onEdgeClick: walkwayEditor.handleEdgeClick,
+            onNodeMove: walkwayEditor.handleNodeMove
+        }
+        : null;
+
+    return (
+        <main className="app-shell">
+            <Header terminal={terminal} onTerminalChange={handleTerminalChange} floor={floor} onFloorChange={handleFloorChange} role={role} onRoleChange={handleRoleChange} />
+
+            <section className={`map-shell ${isAdmin ? "is-admin" : ""}`} aria-label="Bản đồ nhà ga">
+                <MapView
+                    terminal={terminal}
+                    onTerminalChange={handleTerminalChange}
+                    floor={floor}
+                    locations={visibleLocations}
+                    selectedLocation={isAdmin && adminTab === "locations" ? editingLocation : selectedLocation}
+                    onSelect={handleSelect}
+                    onMapClick={handleMapClick}
+                    previewPoint={pickedPoint}
+                    routeEnds={[routeFrom, routeTo]}
+                    route={route}
+                    onFloorChange={handleFloorChange}
+                    walkwayEditor={mapWalkwayEditor}
+                />
+
+                <div className="map-top">
+                    <div className="search-row">
+                        <SearchBox locations={locations} onSelect={handleSelect} />
+                        {!isRouting && (
+                            <button type="button" className="btn btn-primary route-open" onClick={handleOpenRoute} aria-label="Chỉ đường" title="Chỉ đường">
+                                <i className="bi bi-signpost-2" />
+                            </button>
+                        )}
+                    </div>
+                    <CategoryFilter activeGroup={activeGroup} onChange={handleGroupChange} />
+
+                    {isLoading && (
+                        <div className="alert alert-light d-flex align-items-center gap-2 py-2 mb-0 shadow-sm" role="status">
+                            <span className="spinner-border spinner-border-sm text-primary" aria-hidden="true" />
+                            <span>Đang tải dữ liệu…{API_BASE && " Máy chủ miễn phí có thể mất khoảng 1 phút để khởi động."}</span>
+                        </div>
+                    )}
+
+                    {error && (
+                        <div className="alert alert-danger d-flex align-items-center gap-2 py-2 mb-0" role="alert">
+                            <i className="bi bi-exclamation-triangle" />
+                            <span className="flex-grow-1">{error}</span>
+                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={handleReload}>Thử lại</button>
+                        </div>
+                    )}
+
+                    {isRouting && (
+                        <RoutePanel
+                            fromPlace={routeFrom}
+                            toPlace={routeTo}
+                            route={route}
+                            floor={floor}
+                            pickTarget={routePickTarget}
+                            onPickTargetChange={setPickTarget}
+                            onSwap={handleSwapRoute}
+                            onClearFrom={() => setRouteFrom(null)}
+                            onClearTo={() => setRouteTo(null)}
+                            onClose={handleCloseRoute}
+                            onFloorChange={handleFloorChange}
+                        />
+                    )}
+
+                    {/* key = location id: choosing another place creates a fresh (collapsed) panel */}
+                    {!isRouting && selectedLocation && (
+                        <LocationDetail
+                            key={selectedLocation.id}
+                            location={selectedLocation}
+                            onClose={() => setSelectedId(null)}
+                            onRouteFrom={handleRouteFrom}
+                            onRouteTo={handleRouteTo}
+                        />
+                    )}
+                </div>
+
+                {isAdmin && (
+                    <AdminPanel
+                        tab={adminTab}
+                        onTabChange={handleAdminTabChange}
+                        terminal={terminal}
+                        locations={locations.filter(item => item.terminal === terminal)}
+                        floor={floor}
+                        editingLocation={editingLocation}
+                        isCreating={editingId === "new"}
+                        pickedPoint={pickedPoint}
+                        isPicking={isPicking}
+                        onEdit={handleEdit}
+                        onCreate={() => handleEdit("new")}
+                        onCancel={handleCancelEdit}
+                        onStartPick={handleStartPick}
+                        onSaved={handleSaved}
+                        onDeleted={handleDeleted}
+                    >
+                        {walkwayEditor.isEditing && <WalkwayPanel editor={walkwayEditor} terminal={terminal} floor={floor} />}
+                    </AdminPanel>
+                )}
+            </section>
+        </main>
+    );
 }
+
+export default App;

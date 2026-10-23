@@ -24,3 +24,12 @@ target
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare Wrangler local files
+.wrangler
+
+# Cloud project metadata and credentials (database password...). Copy Back-End/.env.example to Back-End/.env
+.vercel/
+.env
+.env.*
+!.env.example

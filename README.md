@@ -1,48 +1,32 @@
 # Airport Indoor Map
 
-Prototype bản đồ sân bay gồm hai phần tách biệt:
+React + Leaflet → Spring Boot REST API → PostgreSQL.
 
-```text
-React + Leaflet  →  Spring Boot REST API
-```
+Database gồm sáu bảng quan hệ: `terminals`, `floors`, `location_types`, `locations`, `facilities`, `location_facilities`, cùng hai bảng mạng lối đi cho chỉ đường: `walkway_nodes`, `walkway_edges`.
 
-Chưa sử dụng database, đăng nhập hoặc Spring Security. Dữ liệu địa điểm mẫu nằm trong backend để dễ học luồng Controller → JSON → React.
+Xem [hướng dẫn tạo schema, nạp SQL và chạy project](Back-End/database/README.md) và [ERD](docs/knowledge/DATABASE_SCHEMA.md).
 
-## 1. Chạy backend Spring Boot
+- `Back-End/database/01_schema.sql`: tạo trực tiếp schema hoàn chỉnh.
+- `Back-End/database/02_seed.sql`: nạp 705 địa điểm và dữ liệu quan hệ bằng SQL.
+- `Back-End/database/03_walkways_schema.sql`, `04_walkways_seed.sql`: bảng và dữ liệu lối đi ban đầu (database cũ chỉ cần chạy thêm 2 file này).
+- Backend: Controller → Service → DAO → PostgreSQL; không đọc/ghi JSON để lưu địa điểm.
+- Frontend: bản đồ, tìm kiếm, chỉ đường đa tầng giữa 2 vị trí bất kỳ trên mặt bằng, admin CRUD địa điểm và vẽ lối đi (Admin → tab Lối đi). Xem [KI-03](docs/knowledge/KI-03_INDOOR_ROUTING_NAVIGATION.md).
 
-Yêu cầu Java 17. Không cần cài Maven vì project có Maven Wrapper.
+Khởi tạo database theo hướng dẫn trước, sau đó chạy:
 
 ```bash
 cd Back-End
 ./mvnw spring-boot:run
 ```
 
-Backend chạy tại `http://localhost:8080`. API kiểm tra:
-
-```text
-http://localhost:8080/api/locations
-http://localhost:8080/api/locations?floor=1
-```
-
-## 2. Chạy frontend React
-
-Mở Terminal thứ hai:
+Terminal khác:
 
 ```bash
 cd Front-End
 npm install
-npm run dev
+npm run dev -- --port 5174
 ```
 
-Mở URL Vite in ra, mặc định là `http://localhost:5173`.
+## Deploy Cloudflare Workers + Render + Neon
 
-## Cấu trúc cần học trước
-
-- `Back-End/.../AirportMapApplication.java`: điểm khởi động Spring Boot.
-- `Back-End/.../LocationController.java`: REST API trả dữ liệu địa điểm.
-- `Back-End/.../Location.java`: cấu trúc một địa điểm.
-- `Front-End/src/App.jsx`: giao diện React.
-- `Front-End/src/airport-map.js`: Leaflet, tọa độ và cách vẽ mặt bằng.
-- `Front-End/vite.config.js`: chuyển tiếp `/api` từ frontend sang backend.
-
-Sau này có thể bổ sung Entity, Repository và MySQL mà không phải viết lại phần bản đồ.
+Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render chỉ cho đọc (READ_ONLY=true), kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Sửa dữ liệu trên Neon Console hoặc Admin chạy ở máy. Xem [hướng dẫn](docs/CLOUD_DEPLOYMENT.md).
