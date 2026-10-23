@@ -85,11 +85,11 @@ Trang công khai (`App.jsx`) chỉ có bản đồ, tìm kiếm, chỉ đường
 | Đường dẫn | Trang | Nội dung |
 |---|---|---|
 | `/admin` | `OverviewPage` | Bảng theo nhà ga/tầng (số địa điểm, điểm lối đi, % chỉ đường tới được, mảnh rời), "Việc cần làm", số địa điểm theo nhóm |
-| `/admin/locations` | `LocationsPage` + `LocationEditor` | Bảng tất cả địa điểm: tìm không dấu, lọc ga/tầng/loại (cả nhóm), sắp xếp cột, 50 dòng/trang. Bấm dòng → ngăn sửa bên phải có bản đồ nhỏ (bấm mặt bằng để đặt/dời vị trí), xóa bấm 2 lần. `?edit=<id>`, `?terminal=T2&floor=0` mở sẵn |
+| `/admin/locations` | `LocationsPage` + `LocationEditor` (+ `LocationsTable`) | **Bản đồ là trung tâm**: trái = danh sách địa điểm của tầng đang xem (tìm kiếm thì tìm mọi nhà ga, lọc nhóm), giữa = bản đồ (chọn ga/tầng ở góc; bấm marker để sửa), phải = ngăn sửa khi đang sửa. "Thêm địa điểm"/"Dời vị trí" → chế độ đặt (con trỏ ngắm, thông báo dưới bản đồ, Esc hủy) → bấm mặt bằng; ga/tầng lấy theo chỗ đặt, không chọn tay. Chế độ "Bảng": tìm/lọc/sắp xếp mọi địa điểm, bấm dòng → mở trên bản đồ. Xóa bấm 2 lần. URL `?edit=<id>`, `?view=table`, `?terminal=T2&floor=0` |
 | `/admin/walkways` | `WalkwaysPage` | Trình vẽ lối đi toàn màn hình (`useWalkwayEditor` với `initialNetwork`) + `WalkwayPanel` và kiểm tra lối đi. `?terminal=T2`. Rời trang khi chưa lưu → hỏi lại (cả khi đóng tab) |
 | `/admin/quality` | `QualityPage` | Lối đi: % tới được, mảnh rời, thang chưa nối. Dữ liệu (`admin/dataChecks.js`): loại cửa ra máy bay nhưng tên không phải số cửa, tên "vệ sinh" sai loại, "Của" gõ nhầm "Cửa", chưa phân loại, thiếu lat/lng, nghi trùng (cùng tên, cùng tầng, < 3 m), cách lối đi > 20 m. Mỗi dòng có "Sửa"/"Vẽ lối đi" |
 
-Giao diện: `admin/admin.css`, font Be Vietnam Pro (Google Fonts trong `index.html`). Sidebar màu than chì, trang hiện tại đánh dấu bằng ô vàng `#F2B705` (kiểu biển chỉ dẫn sân bay); màu đỏ thương hiệu chỉ cho logo và xóa. Dưới 992px sidebar thành thanh biểu tượng phía trên, ngăn sửa chiếm toàn chiều ngang.
+Giao diện: `admin/admin.css`, font Be Vietnam Pro (Google Fonts trong `index.html`). Sidebar màu than chì, trang hiện tại đánh dấu bằng ô vàng `#F2B705` (kiểu biển chỉ dẫn sân bay); màu đỏ thương hiệu chỉ cho logo và xóa. Dưới 992px sidebar thành thanh biểu tượng phía trên; trang Địa điểm xếp bản đồ trên, danh sách dưới, ngăn sửa phủ toàn màn hình. `MapView` theo dõi kích thước khung (ResizeObserver → `invalidateSize`) vì panel bên cạnh mở/đóng làm đổi kích thước bản đồ.
 
 Đăng nhập: `api/auth.js` (`login`, `logout`, `getSession`, token trong `sessionStorage` + bộ nhớ). `request()` trong `locationApi.js` gắn `Authorization: Bearer` cho POST/PUT/DELETE; bị 401/403 → xóa phiên, sự kiện `admin-session-expired` → `AdminApp` hiện hộp đăng nhập, dữ liệu đang sửa vẫn giữ.
 

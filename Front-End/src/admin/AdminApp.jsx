@@ -141,7 +141,8 @@ function AdminApp({ session, onSessionChange, onLogout }) {
                 </div>
             </nav>
 
-            <main className={`admin-main ${page.path === "/admin/walkways" ? "is-full" : ""}`}>
+            {/* Map pages fill the screen and scroll inside their own panels */}
+            <main className={`admin-main ${page.path === "/admin/walkways" || page.path === "/admin/locations" ? "is-full" : ""}`}>
                 {content}
             </main>
 
