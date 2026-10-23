@@ -4,11 +4,13 @@ import "leaflet-rotate";
 import floors from "../data/floors";
 import { getGroup, getLocationType } from "../data/locationTypes";
 import { projection } from "../utils/mapProjection";
-import campusUrl from "../../../crawled_data/tan_son_nhat_full/overview_campus/svg_maps/SGN_CAMPUS_Level1_F1.svg?url";
+import campusSvg from "../../../crawled_data/tan_son_nhat_full/overview_campus/svg_maps/SGN_CAMPUS_Level1_F1.svg?raw";
 import campusPois from "../../../crawled_data/tan_son_nhat_full/overview_campus/overview_campus_pois.json";
 import { airportFloors } from "../data/airportCatalog";
 import { getLatLng } from "../utils/geo";
 import { floorLabel } from "../utils/text";
+import { inlineSvg } from "../utils/inlineSvg";
+import { enableSmoothWheelZoom } from "../utils/smoothWheelZoom";
 
 const DEFAULT_BEARING = 85;      // rotate the map so T1 lies horizontally, like the drawing
 const DETAIL_ZOOM = 18.5;        // Keep the terminal overview until the floor plan is readable.
@@ -17,6 +19,7 @@ const OVERVIEW_CENTER = [10.8141, 106.6630];
 const OVERVIEW_ZOOM = 17.1;
 const ROUTE_COLOR = "#1a73e8";
 const WALKWAY_COLOR = "#e8710a";
+const CUT_OFF_COLOR = "#dc3545";   // walkways not joined to the main network (Admin → Kiểm tra)
 
 // Only devices with a real mouse get hover previews. On phones a tap opens the detail sheet instead.
 const canHover = window.matchMedia("(hover: hover)").matches;
@@ -25,22 +28,25 @@ const canHover = window.matchMedia("(hover: hover)").matches;
 // so a location name coming from the API can never inject HTML into the page.
 function createMarkerIcon(location, isSelected) {
     const type = getLocationType(location.type);
-    const isGate = location.type === "gate";
+    // Passengers look for the gate NUMBER ("09", "01-05"), so gates show it instead of an icon.
+    // A "gate" whose name is not a number (data mistakes like "Cửa Hàng Sasco") keeps the normal icon.
+    const gateNumber = location.type === "gate" ? location.name.match(/^C[ửủ]a\s*([\d][\d\s-]*[A-Z]?)$/i)?.[1].trim() : null;
+    const isGate = Boolean(gateNumber);
 
     const element = document.createElement("span");
     element.className = `location-marker${isGate ? " is-gate" : ""}${isSelected ? " is-selected" : ""}`;
     element.style.background = getGroup(type.group).color;
 
     if (isGate) {
-        // Passengers look for the gate NUMBER, so show "09" instead of an icon
-        element.textContent = location.name.replace(/^Cửa\s*/i, "");
+        element.textContent = gateNumber;
     } else {
         const icon = document.createElement("i");
         icon.className = `bi ${type.icon}`;
         element.appendChild(icon);
     }
 
-    const size = isGate ? [42, 26] : [32, 32];
+    // Wide enough for "01-05", so the label is never cut
+    const size = isGate ? [Math.max(42, gateNumber.length * 8 + 14), 26] : [32, 32];
     return L.divIcon({ className: "", html: element, iconSize: size, iconAnchor: [size[0] / 2, size[1] / 2] });
 }
 
@@ -127,9 +133,10 @@ function createRouteEndIcon(isStart) {
 }
 
 // Admin "Lối đi": one dot per walkway point. Elevator/escalator points are squares showing the linked floors.
-function createWalkwayNodeIcon(node, isActive, isSelected, linkedFloors) {
+// isProblem: the walkway check flagged this point (cut off from the network, or a connector linked to no floor)
+function createWalkwayNodeIcon(node, isActive, isSelected, linkedFloors, isProblem) {
     const element = document.createElement("span");
-    element.className = `walkway-node${node.connector ? " is-connector" : ""}${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}`;
+    element.className = `walkway-node${node.connector ? " is-connector" : ""}${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}${isProblem ? " is-problem" : ""}`;
     if (node.connector) {
         const icon = document.createElement("i");
         icon.className = "bi bi-arrow-down-up";
@@ -143,25 +150,32 @@ function createWalkwayNodeIcon(node, isActive, isSelected, linkedFloors) {
 // onMapClick: when set, a click on the floor plan calls it with { terminal, floor, lat, lng }
 // (admin picking a location, choosing a route point, drawing walkways).
 // walkwayEditor: when set, the walkway network of this floor is drawn and can be edited (admin).
-function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selectedLocation, onSelect, onMapClick, previewPoint, routeEnds = [], route, onFloorChange, walkwayEditor }) {
+// focusPoint: { floor, lat, lng } to jump to and ring (admin clicked a problem in the walkway check)
+function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selectedLocation, onSelect, onMapClick, previewPoint, routeEnds = [], route, onFloorChange, walkwayEditor, focusPoint }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const layersRef = useRef(null);
     const [isDetailView, setIsDetailView] = useState(false);
-    const [viewRevision, setViewRevision] = useState(0);
     const terminalChangeRef = useRef(onTerminalChange);
+    const onSelectRef = useRef(onSelect);
+    const markerCacheRef = useRef(new Map());   // location id -> { location, isSelected, isEditing, marker }
     const isEditingWalkways = Boolean(walkwayEditor) && !walkwayEditor.isLocked;
 
-    // Keep the latest callback for the campus labels created once in effect 1
+    // Keep the latest callbacks for Leaflet handlers that are created once (campus labels, markers)
     useEffect(() => {
         terminalChangeRef.current = onTerminalChange;
+        onSelectRef.current = onSelect;
     });
 
     // 1. Create the Leaflet map once. React only renders the empty <div>, Leaflet draws inside it.
     useEffect(() => {
         const map = L.map(containerRef.current, {
             center: OVERVIEW_CENTER, zoom: OVERVIEW_ZOOM, minZoom: 14, maxZoom: 22,
-            zoomSnap: 0.1, zoomDelta: 0.5, zoomControl: false,
+            // zoomDelta: one full level per +/− click or key press (0.5 needed twice as many clicks)
+            zoomSnap: 0.1, zoomDelta: 1, zoomControl: false,
+            // Wheel and touchpad pinch use enableSmoothWheelZoom below instead of Leaflet's laggy handler.
+            // shiftKeyRotate (leaflet-rotate) must be off too: it turns scrollWheelZoom back on at every wheel event.
+            scrollWheelZoom: false, shiftKeyRotate: false,
             rotate: true, bearing: DEFAULT_BEARING, rotateControl: false, touchRotate: false
         });
 
@@ -188,17 +202,23 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         const pickLayer = L.layerGroup().addTo(map);
         const routeEndLayer = L.layerGroup().addTo(map);
         const walkwayLayer = L.layerGroup().addTo(map);
+        const focusLayer = L.layerGroup().addTo(map);
 
         // One georeferenced drawing keeps buildings, shadows and roads aligned.
-        L.imageOverlay(campusUrl, [
+        // Inline SVG, not an image: see utils/inlineSvg.js
+        L.svgOverlay(inlineSvg(campusSvg), [
             [10.802859, 106.633215], [10.831274, 106.678459]
         ], { interactive: false, pane: "campusPane" }).addTo(map);
 
         // Keep the same campus underneath at every zoom; fade only indoor detail.
+        // Runs on every zoom frame, so the panes are only touched when the value changes
+        let indoorOpacity = null;
         const updateIndoorOpacity = () => {
-            const opacity = Math.max(0, Math.min(1, (map.getZoom() - (DETAIL_ZOOM - 0.5)) / 0.5));
-            map.getPane("indoorBackdropPane").style.opacity = String(opacity);
-            map.getPane("indoorPlanPane").style.opacity = String(opacity);
+            const opacity = String(Math.max(0, Math.min(1, (map.getZoom() - (DETAIL_ZOOM - 0.5)) / 0.5)));
+            if (opacity === indoorOpacity) return;
+            indoorOpacity = opacity;
+            map.getPane("indoorBackdropPane").style.opacity = opacity;
+            map.getPane("indoorPlanPane").style.opacity = opacity;
         };
         updateIndoorOpacity();
         map.on("zoom", updateIndoorOpacity);
@@ -232,12 +252,14 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         });
 
         map.on("zoomend", () => setIsDetailView(map.getZoom() >= DETAIL_ZOOM));
-        map.on("moveend", () => setViewRevision(value => value + 1));
 
         mapRef.current = map;
-        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer, routeEndLayer, walkwayLayer, baseTiles };
+        layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer, routeEndLayer, walkwayLayer, focusLayer, baseTiles };
+
+        const disableSmoothWheelZoom = enableSmoothWheelZoom(map);
 
         return () => {
+            disableSmoothWheelZoom();
             map.remove();
             mapRef.current = null;
         };
@@ -262,11 +284,15 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         }));
         const overlayUrl = catalogFloor.url;
         if (overlayUrl) {
-            floorPlan.addLayer(L.imageOverlay(overlayUrl, bounds, {
-                opacity: 1,
-                pane: "indoorPlanPane",
-                interactive: false
-            }));
+            // Inline SVG, not an image: see utils/inlineSvg.js. The file is fetched once, then cached by the browser.
+            let isCurrent = true;
+            fetch(overlayUrl)
+                .then(response => response.text())
+                .then(text => {
+                    if (isCurrent) floorPlan.addLayer(L.svgOverlay(inlineSvg(text), bounds, { pane: "indoorPlanPane", interactive: false }));
+                })
+                .catch(err => console.error(err));
+            return () => { isCurrent = false; };
         } else {
             const floorData = floors.find(item => item.id === floor);
             if (floorData) {
@@ -286,32 +312,27 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         else overview.addTo(mapRef.current);
     }, [isDetailView]);
 
-    // 3. Draw one marker per location (only when zoomed in)
+    // 3. Draw one marker per location (only when zoomed in).
+    // Markers are created once and kept in markerCacheRef; zooming only shows/hides them.
+    // Rebuilding every marker after each zoom made zooming stutter.
     useEffect(() => {
-        const { markers } = layersRef.current;
-        markers.clearLayers();
-        if (!isDetailView) return;
-
         const map = mapRef.current;
-        const occupied = [];
-        // Show the selected place first, then gates; reveal other places as space allows.
-        const priority = location => location.id === selectedLocation?.id ? 0 : location.type === "gate" ? 1 : 2;
-        const ordered = [...locations].sort((a, b) => priority(a) - priority(b));
-        ordered.forEach(location => {
+        const { markers } = layersRef.current;
+        const cache = markerCacheRef.current;
+        if (!isDetailView) {
+            markers.clearLayers();
+            return;
+        }
+
+        // Reuse a marker while its location, selection and mode are unchanged
+        const isCurrent = (entry, location) => entry && entry.location === location && entry.isSelected === (selectedLocation?.id === location.id) && entry.isEditing === isEditingWalkways;
+        const list = locations.map(location => {
+            const entry = cache.get(location.id);
+            if (isCurrent(entry, location)) return entry;
+            if (entry) markers.removeLayer(entry.marker);
             const isSelected = selectedLocation?.id === location.id;
-            const latlng = getLatLng(location);
-
-            const point = map.latLngToContainerPoint(latlng);
-            const viewport = map.getSize();
-            if (point.x < -40 || point.y < -40 || point.x > viewport.x + 40 || point.y > viewport.y + 40) return;
-            const halfWidth = location.type === "gate" ? 26 : 20;
-            const halfHeight = 20;
-            const box = { left: point.x - halfWidth, right: point.x + halfWidth, top: point.y - halfHeight, bottom: point.y + halfHeight };
-            if (!isSelected && occupied.some(other => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) return;
-            occupied.push(box);
-
             // While the admin draws walkways, clicks must reach the map, not the shops
-            const marker = L.marker(latlng, {
+            const marker = L.marker(getLatLng(location), {
                 icon: createMarkerIcon(location, isSelected),
                 alt: location.name,
                 zIndexOffset: isSelected ? 1000 : 0,
@@ -319,25 +340,69 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
                 keyboard: !isEditingWalkways,
                 opacity: isEditingWalkways ? 0.45 : 1
             });
-
             if (canHover) {
                 marker.bindTooltip(createPreview(location), { direction: "top", offset: [0, -16], className: "location-preview" });
             }
-            marker.on("click", () => onSelect(location));
+            marker.on("click", () => onSelectRef.current(location));
             // Keyboard users: Tab to a marker, press Enter (Leaflet only does this for popups)
             marker.on("keypress", (event) => {
-                if (event.originalEvent.key === "Enter") onSelect(location);
+                if (event.originalEvent.key === "Enter") onSelectRef.current(location);
             });
-            markers.addLayer(marker);
+            const created = { location, isSelected, isEditing: isEditingWalkways, marker };
+            cache.set(location.id, created);
+            return created;
         });
-    }, [locations, selectedLocation, isDetailView, onSelect, viewRevision, isEditingWalkways]);
+        const ids = new Set(locations.map(location => location.id));
+        cache.forEach((entry, id) => {
+            if (!ids.has(id)) {
+                markers.removeLayer(entry.marker);
+                cache.delete(id);
+            }
+        });
+
+        // Which markers fit without overlapping depends only on zoom and rotation, not on panning.
+        // Show the selected place first, then gates; reveal other places as space allows.
+        let layoutKey = null;
+        const layout = () => {
+            const key = `${map.getZoom()}|${map.getBearing()}`;
+            if (key === layoutKey) return;
+            layoutKey = key;
+            const priority = entry => entry.isSelected ? 0 : entry.location.type === "gate" ? 1 : 2;
+            const occupied = [];
+            [...list].sort((a, b) => priority(a) - priority(b)).forEach(entry => {
+                const point = map.latLngToContainerPoint(entry.marker.getLatLng());
+                const halfWidth = entry.location.type === "gate" ? 26 : 20;
+                const halfHeight = 20;
+                const box = { left: point.x - halfWidth, right: point.x + halfWidth, top: point.y - halfHeight, bottom: point.y + halfHeight };
+                const fits = entry.isSelected || !occupied.some(other => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top);
+                if (fits) {
+                    occupied.push(box);
+                    if (!markers.hasLayer(entry.marker)) markers.addLayer(entry.marker);
+                } else if (markers.hasLayer(entry.marker)) {
+                    markers.removeLayer(entry.marker);
+                }
+            });
+        };
+        layout();
+        map.on("zoomend rotate", layout);
+        return () => map.off("zoomend rotate", layout);
+    }, [locations, selectedLocation, isDetailView, isEditingWalkways]);
 
     // 4. Move the map to the selected location
     useEffect(() => {
         if (!selectedLocation) return;
         const map = mapRef.current;
         map.setBearing(DEFAULT_BEARING);
-        map.setView(getLatLng(selectedLocation), Math.max(map.getZoom(), 19.5));
+        const zoom = Math.max(map.getZoom(), 19.5);
+        if (!window.matchMedia("(max-width: 767.98px)").matches) {
+            map.setView(getLatLng(selectedLocation), zoom);
+            return;
+        }
+        // Phones: the detail sheet covers the lower half, so put the place in the upper part of the screen
+        // (screen points, not panBy: the map is rotated, so panBy would move it sideways)
+        map.setView(getLatLng(selectedLocation), zoom, { animate: false });
+        const size = map.getSize();
+        map.setView(map.containerPointToLatLng([size.x / 2, size.y * 0.7]), zoom, { animate: false });
     }, [selectedLocation]);
 
     // 5. Clicks on the floor plan of the current floor (see onMapClick above)
@@ -451,7 +516,7 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         walkwayLayer.clearLayers();
         if (!walkwayEditor || !isDetailView) return;
 
-        const { network, tool, activeId, selectedId, isLocked, onNodeClick, onEdgeClick, onNodeMove } = walkwayEditor;
+        const { network, tool, activeId, selectedId, isLocked, problemIds, onNodeClick, onEdgeClick, onNodeMove } = walkwayEditor;
         const nodeById = new Map(network.nodes.map(node => [node.id, node]));
         const isOnThisFloor = (node) => node.terminal === terminal && node.floor === floor;
         const linkedFloors = new Map();   // node id -> other floors it is linked to
@@ -467,7 +532,8 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
             }
             if (!isOnThisFloor(a)) return;
             const latlngs = [[a.lat, a.lng], [b.lat, b.lng]];
-            walkwayLayer.addLayer(L.polyline(latlngs, { pane: "walkwayPane", color: WALKWAY_COLOR, weight: 4, opacity: isLocked ? 0.5 : 0.9, interactive: false }));
+            const color = problemIds.has(a.id) && problemIds.has(b.id) ? CUT_OFF_COLOR : WALKWAY_COLOR;
+            walkwayLayer.addLayer(L.polyline(latlngs, { pane: "walkwayPane", color, weight: 4, opacity: isLocked ? 0.5 : 0.9, interactive: false }));
             if (isLocked) return;
             // A wide invisible line on top, so the thin line is easy to click
             const hitArea = L.polyline(latlngs, { pane: "walkwayPane", weight: 16, opacity: 0, bubblingMouseEvents: false, className: `walkway-hit tool-${tool}` });
@@ -477,7 +543,7 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
 
         network.nodes.filter(isOnThisFloor).forEach(node => {
             const marker = L.marker([node.lat, node.lng], {
-                icon: createWalkwayNodeIcon(node, node.id === activeId, node.id === selectedId, linkedFloors.get(node.id) || []),
+                icon: createWalkwayNodeIcon(node, node.id === activeId, node.id === selectedId, linkedFloors.get(node.id) || [], problemIds.has(node.id)),
                 draggable: !isLocked && tool !== "erase",
                 interactive: !isLocked,
                 keyboard: false,
@@ -500,6 +566,17 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         map.on("mousemove", handleMouseMove);
         return () => map.off("mousemove", handleMouseMove);
     }, [walkwayEditor, terminal, floor, isDetailView]);
+
+    // 10. Admin "Kiểm tra lối đi": jump to the problem the admin clicked and ring it
+    useEffect(() => {
+        const { focusLayer } = layersRef.current;
+        focusLayer.clearLayers();
+        if (!focusPoint || focusPoint.floor !== floor) return;
+        const map = mapRef.current;
+        map.setView([focusPoint.lat, focusPoint.lng], Math.max(map.getZoom(), 20));
+        const icon = L.divIcon({ className: "", html: '<span class="walkway-focus"></span>', iconSize: [44, 44], iconAnchor: [22, 22] });
+        focusLayer.addLayer(L.marker([focusPoint.lat, focusPoint.lng], { icon, interactive: false, zIndexOffset: 3500 }));
+    }, [focusPoint, floor]);
 
     // Double-click would add 2 points and zoom at the same time, so it is off while drawing
     useEffect(() => {

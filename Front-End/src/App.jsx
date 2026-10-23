@@ -11,6 +11,7 @@ import { API_BASE, getLocations, isStaticMode } from "./api/locationApi";
 import { getWalkways } from "./api/walkwayApi";
 import { getLocationType } from "./data/locationTypes";
 import { findRoute } from "./utils/routing";
+import { checkWalkways } from "./utils/walkwayCheck";
 import { airportFloors } from "./data/airportCatalog";
 import { useWalkwayEditor } from "./hooks/useWalkwayEditor";
 
@@ -40,6 +41,8 @@ function App() {
     const [editingId, setEditingId] = useState(null);
     const [isPicking, setIsPicking] = useState(false);
     const [pickedPoint, setPickedPoint] = useState(null);
+    // Admin "Kiểm tra lối đi": the problem the admin clicked, the map jumps to it
+    const [focusPoint, setFocusPoint] = useState(null);
 
     const walkwayEditor = useWalkwayEditor({ terminal, floor, onSaved: setWalkways });
 
@@ -88,6 +91,22 @@ function App() {
         [routeNetwork, routeFrom, routeTo]
     );
 
+    // Admin "Lối đi": re-check the drawing after every change (a few ms), so problems disappear as they get fixed
+    const walkwayCheck = useMemo(
+        () => (isEditingWalkways ? checkWalkways(walkwayEditor.draft, locations, terminal) : null),
+        [isEditingWalkways, walkwayEditor.draft, locations, terminal]
+    );
+    // Map highlight: points of cut-off pieces and connectors linked to no floor
+    const problemIds = useMemo(() => {
+        if (!walkwayCheck) return new Set();
+        const ids = new Set(walkwayCheck.connectors.map(node => node.id));
+        const cutOff = new Set(walkwayCheck.pieces.map(piece => piece.id));
+        walkwayCheck.pieceOf.forEach((piece, id) => {
+            if (cutOff.has(piece)) ids.add(id);
+        });
+        return ids;
+    }, [walkwayCheck]);
+
     // Places that must stay visible even when the filter hides their group
     const pinnedIds = [selectedId, routeFrom?.id, routeTo?.id, editingId];
     const visibleLocations = locations.filter(location =>
@@ -110,6 +129,7 @@ function App() {
 
     const handleFloorChange = (newFloor) => {
         setFloor(newFloor);
+        setFocusPoint(null);
         if (selectedLocation && selectedLocation.floor !== newFloor) setSelectedId(null);
     };
 
@@ -184,6 +204,12 @@ function App() {
     };
 
     // ---------- Admin ----------
+    // A problem in the walkway check was clicked: show its floor and jump to it
+    const handleFocus = (point) => {
+        setFloor(point.floor);
+        setFocusPoint(point);
+    };
+
     const confirmDropWalkways = () => !walkwayEditor.isDirty || window.confirm("Lối đi có thay đổi chưa lưu. Bỏ các thay đổi này?");
 
     const handleRoleChange = (newRole) => {
@@ -258,6 +284,7 @@ function App() {
             activeId: walkwayEditor.activeId,
             selectedId: walkwayEditor.selectedId,
             isLocked: isRouting,
+            problemIds,
             onNodeClick: walkwayEditor.handleNodeClick,
             onEdgeClick: walkwayEditor.handleEdgeClick,
             onNodeMove: walkwayEditor.handleNodeMove
@@ -282,11 +309,12 @@ function App() {
                     route={route}
                     onFloorChange={handleFloorChange}
                     walkwayEditor={mapWalkwayEditor}
+                    focusPoint={isEditingWalkways ? focusPoint : null}
                 />
 
                 <div className="map-top">
                     <div className="search-row">
-                        <SearchBox locations={locations} onSelect={handleSelect} />
+                        <SearchBox locations={locations} onSelect={handleSelect} terminal={terminal} floor={floor} />
                         {!isRouting && (
                             <button type="button" className="btn btn-primary route-open" onClick={handleOpenRoute} aria-label="Chỉ đường" title="Chỉ đường">
                                 <i className="bi bi-signpost-2" />
@@ -356,7 +384,7 @@ function App() {
                         onSaved={handleSaved}
                         onDeleted={handleDeleted}
                     >
-                        {walkwayEditor.isEditing && <WalkwayPanel editor={walkwayEditor} terminal={terminal} floor={floor} />}
+                        {walkwayEditor.isEditing && <WalkwayPanel editor={walkwayEditor} terminal={terminal} floor={floor} check={walkwayCheck} onFocus={handleFocus} />}
                     </AdminPanel>
                 )}
             </section>
