@@ -1,8 +1,7 @@
 import { airportFloors, airportTerminals } from "../data/airportCatalog";
 import { floorLabel } from "../utils/text";
 
-// onLogout: set on the admin page (/admin), which then shows who is logged in and a logout button
-function Header({ terminal, onTerminalChange, floor, onFloorChange, username, onLogout }) {
+function Header({ terminal, onTerminalChange, floor, onFloorChange }) {
     const floors = airportFloors.filter(item => item.terminal === terminal);
     return (
         <header className="topbar">
@@ -10,7 +9,7 @@ function Header({ terminal, onTerminalChange, floor, onFloorChange, username, on
                 <span className="terminal-badge">SGN</span>
                 <div className="d-none d-md-block">
                     <h1>{airportTerminals.find(item => item.id === terminal)?.name}</h1>
-                    <p>{onLogout ? "Trang quản trị · Thay đổi lưu thẳng vào dữ liệu thật" : "Sân bay Tân Sơn Nhất · Bản đồ mặt bằng"}</p>
+                    <p>Sân bay Tân Sơn Nhất · Bản đồ mặt bằng</p>
                 </div>
             </div>
 
@@ -36,16 +35,6 @@ function Header({ terminal, onTerminalChange, floor, onFloorChange, username, on
                     ))}
                 </nav>
 
-                {onLogout && (
-                    <div className="admin-user">
-                        <span className="badge text-bg-danger">QUẢN TRỊ</span>
-                        <span className="d-none d-lg-inline text-muted small text-truncate"><i className="bi bi-person-circle me-1" />{username}</span>
-                        <a className="btn btn-light btn-sm" href="/" title="Xem trang công khai" aria-label="Xem trang công khai"><i className="bi bi-box-arrow-up-right" /></a>
-                        <button type="button" className="btn btn-outline-danger btn-sm" onClick={onLogout} title="Đăng xuất" aria-label="Đăng xuất">
-                            <i className="bi bi-box-arrow-right" /><span className="d-none d-lg-inline ms-1">Đăng xuất</span>
-                        </button>
-                    </div>
-                )}
             </div>
         </header>
     );

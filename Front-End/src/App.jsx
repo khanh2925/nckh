@@ -5,22 +5,16 @@ import SearchBox from "./components/SearchBox";
 import CategoryFilter from "./components/CategoryFilter";
 import LocationDetail from "./components/LocationDetail";
 import RoutePanel from "./components/RoutePanel";
-import AdminPanel from "./components/AdminPanel";
-import WalkwayPanel from "./components/WalkwayPanel";
-import LoginDialog from "./components/LoginDialog";
 import { API_BASE, getLocations, isStaticMode } from "./api/locationApi";
 import { getWalkways } from "./api/walkwayApi";
 import { getLocationType } from "./data/locationTypes";
 import { findRoute } from "./utils/routing";
-import { checkWalkways } from "./utils/walkwayCheck";
 import { airportFloors } from "./data/airportCatalog";
-import { useWalkwayEditor } from "./hooks/useWalkwayEditor";
 
 const EMPTY_WALKWAYS = { nodes: [], edges: [] };
 
-// admin: null on the public website. On /admin (see Root.jsx), once logged in:
-// { session, onSessionChange, onLogout } and the map opens with the Admin panel.
-function App({ admin = null }) {
+// Public map: search, details and directions. Editing lives in the admin app (src/admin, /admin).
+function App() {
     const [locations, setLocations] = useState([]);
     const [walkways, setWalkways] = useState(EMPTY_WALKWAYS);
     const [error, setError] = useState("");
@@ -37,18 +31,6 @@ function App({ admin = null }) {
     const [routeFrom, setRouteFrom] = useState(null);
     const [routeTo, setRouteTo] = useState(null);
     const [pickTarget, setPickTarget] = useState(null);   // end chosen with the crosshair button: "from" | "to" | null
-
-    // Admin: adminTab = "locations" | "walkways"; editingId = location id, "new" (adding) or null (showing the list)
-    // Message of the login box shown when a save is refused because the login expired (null = closed)
-    const [loginNotice, setLoginNotice] = useState(null);
-    const [adminTab, setAdminTab] = useState("locations");
-    const [editingId, setEditingId] = useState(null);
-    const [isPicking, setIsPicking] = useState(false);
-    const [pickedPoint, setPickedPoint] = useState(null);
-    // Admin "Kiểm tra lối đi": the problem the admin clicked, the map jumps to it
-    const [focusPoint, setFocusPoint] = useState(null);
-
-    const walkwayEditor = useWalkwayEditor({ terminal, floor, onSaved: setWalkways });
 
     // Runs on first render, and again every time "Thử lại" increases reloadCount.
     // allSettled: the map still shows the locations even if the walkways fail to load.
@@ -76,56 +58,32 @@ function App({ admin = null }) {
         setReloadCount(reloadCount + 1);
     };
 
-    const isAdmin = Boolean(admin);
-    const isEditingWalkways = isAdmin && adminTab === "walkways" && walkwayEditor.isEditing;
     const findById = (id) => locations.find(location => location.id === id) || null;
     const isInGroup = (location, groupId) => groupId === "all" || getLocationType(location.type).group === groupId;
 
     // Derived data: calculated from state on every render, not stored in state
     const selectedLocation = findById(selectedId);
-    const editingLocation = editingId === "new" ? null : findById(editingId);
     // Which end the next click on the map fills: the one chosen with the crosshair, otherwise the missing one
     const routePickTarget = !isRouting ? null : pickTarget || (!routeFrom ? "from" : !routeTo ? "to" : null);
 
-    // While the admin is drawing, directions use the unsaved drawing, so it can be tested before saving
-    const routeNetwork = walkwayEditor.draft || walkways;
     // useMemo: only search for a new path when the ends or the network change
     const route = useMemo(
-        () => (routeFrom && routeTo && routeFrom.id !== routeTo.id ? findRoute(routeNetwork, routeFrom, routeTo) : null),
-        [routeNetwork, routeFrom, routeTo]
+        () => (routeFrom && routeTo && routeFrom.id !== routeTo.id ? findRoute(walkways, routeFrom, routeTo) : null),
+        [walkways, routeFrom, routeTo]
     );
-
-    // Admin "Lối đi": re-check the drawing after every change (a few ms), so problems disappear as they get fixed
-    const walkwayCheck = useMemo(
-        () => (isEditingWalkways ? checkWalkways(walkwayEditor.draft, locations, terminal) : null),
-        [isEditingWalkways, walkwayEditor.draft, locations, terminal]
-    );
-    // Map highlight: points of cut-off pieces and connectors linked to no floor
-    const problemIds = useMemo(() => {
-        if (!walkwayCheck) return new Set();
-        const ids = new Set(walkwayCheck.connectors.map(node => node.id));
-        const cutOff = new Set(walkwayCheck.pieces.map(piece => piece.id));
-        walkwayCheck.pieceOf.forEach((piece, id) => {
-            if (cutOff.has(piece)) ids.add(id);
-        });
-        return ids;
-    }, [walkwayCheck]);
 
     // Places that must stay visible even when the filter hides their group
-    const pinnedIds = [selectedId, routeFrom?.id, routeTo?.id, editingId];
+    const pinnedIds = [selectedId, routeFrom?.id, routeTo?.id];
     const visibleLocations = locations.filter(location =>
         location.terminal === terminal && location.floor === floor && (isInGroup(location, activeGroup) || pinnedIds.includes(location.id))
     );
 
     // ---------- Selecting a place (marker click or search result) ----------
     const handleSelect = (location) => {
-        if (isPicking) return;   // the admin is choosing a point, ignore marker clicks
         setTerminal(location.terminal);
         setFloor(location.floor);
         if (isRouting) {
             handleRoutePlace(location);
-        } else if (isAdmin && adminTab === "locations") {
-            handleEdit(location.id);
         } else {
             setSelectedId(location.id);
         }
@@ -133,7 +91,6 @@ function App({ admin = null }) {
 
     const handleFloorChange = (newFloor) => {
         setFloor(newFloor);
-        setFocusPoint(null);
         if (selectedLocation && selectedLocation.floor !== newFloor) setSelectedId(null);
     };
 
@@ -142,7 +99,6 @@ function App({ admin = null }) {
         setFloor(airportFloors.find(item => item.terminal === value)?.id ?? 0);
         setSelectedId(null);
         handleCloseRoute();
-        handleCancelEdit();
     };
 
     const handleGroupChange = (groupId) => {
@@ -207,122 +163,25 @@ function App({ admin = null }) {
         setPickTarget(null);
     };
 
-    // ---------- Admin ----------
-    // A problem in the walkway check was clicked: show its floor and jump to it
-    const handleFocus = (point) => {
-        setFloor(point.floor);
-        setFocusPoint(point);
-    };
-
-    const confirmDropWalkways = () => !walkwayEditor.isDirty || window.confirm("Lối đi có thay đổi chưa lưu. Bỏ các thay đổi này?");
-
-    const handleLogout = () => {
-        if (!confirmDropWalkways()) return;
-        walkwayEditor.stop();
-        admin.onLogout();
-    };
-
-    // A save was refused (login expired): ask for the password again on top of the map,
-    // so the admin keeps the form or the unsaved walkways and just presses save again
-    useEffect(() => {
-        const handleExpired = () => setLoginNotice("Phiên đăng nhập đã hết hạn. Đăng nhập lại rồi bấm lưu lần nữa, thay đổi chưa lưu vẫn còn.");
-        window.addEventListener("admin-session-expired", handleExpired);
-        return () => window.removeEventListener("admin-session-expired", handleExpired);
-    }, []);
-
-    const handleLoggedInAgain = (session) => {
-        setLoginNotice(null);
-        admin.onSessionChange(session);
-    };
-
-    const handleAdminTabChange = (tab) => {
-        if (tab === adminTab) return;
-        if (tab === "walkways") {
-            handleCancelEdit();
-            walkwayEditor.start(walkways);
-        } else {
-            if (!confirmDropWalkways()) return;
-            walkwayEditor.stop();
-        }
-        setAdminTab(tab);
-    };
-
-    const handleEdit = (id) => {
-        const location = findById(id);
-        setEditingId(id);
-        setPickedPoint(null);
-        setIsPicking(false);
-        if (location) setFloor(location.floor);
-    };
-
-    const handleCancelEdit = () => {
-        setEditingId(null);
-        setPickedPoint(null);
-        setIsPicking(false);
-    };
-
-    const handleStartPick = (pickFloor) => {
-        setFloor(pickFloor);
-        setIsPicking(true);
-    };
-
-    const handlePickPoint = (point) => {
-        setPickedPoint(point);
-        setIsPicking(false);
-    };
-
-    const handleSaved = (saved, isNew) => {
-        setLocations(isNew
-            ? [...locations, saved]
-            : locations.map(location => (location.id === saved.id ? saved : location)));
-        handleCancelEdit();
-    };
-
-    const handleDeleted = (id) => {
-        setLocations(locations.filter(location => location.id !== id));
-        handleCancelEdit();
-    };
-
-    // What a click on the floor plan does right now (null = nothing special)
-    let handleMapClick = null;
-    if (isPicking) handleMapClick = handlePickPoint;
-    else if (routePickTarget) handleMapClick = handleRoutePoint;
-    else if (isEditingWalkways && !isRouting) handleMapClick = walkwayEditor.handleMapClick;
-
-    // Directions open = the drawing is shown but locked, so clicks pick route ends instead
-    const mapWalkwayEditor = isEditingWalkways
-        ? {
-            network: walkwayEditor.draft,
-            tool: walkwayEditor.tool,
-            activeId: walkwayEditor.activeId,
-            selectedId: walkwayEditor.selectedId,
-            isLocked: isRouting,
-            problemIds,
-            onNodeClick: walkwayEditor.handleNodeClick,
-            onEdgeClick: walkwayEditor.handleEdgeClick,
-            onNodeMove: walkwayEditor.handleNodeMove
-        }
-        : null;
+    // While directions wait for an end, a click on the floor plan picks that spot
+    const handleMapClick = routePickTarget ? handleRoutePoint : null;
 
     return (
         <main className="app-shell">
-            <Header terminal={terminal} onTerminalChange={handleTerminalChange} floor={floor} onFloorChange={handleFloorChange} username={admin?.session.username} onLogout={isAdmin ? handleLogout : null} />
+            <Header terminal={terminal} onTerminalChange={handleTerminalChange} floor={floor} onFloorChange={handleFloorChange} />
 
-            <section className={`map-shell ${isAdmin ? "is-admin" : ""}`} aria-label="Bản đồ nhà ga">
+            <section className="map-shell" aria-label="Bản đồ nhà ga">
                 <MapView
                     terminal={terminal}
                     onTerminalChange={handleTerminalChange}
                     floor={floor}
                     locations={visibleLocations}
-                    selectedLocation={isAdmin && adminTab === "locations" ? editingLocation : selectedLocation}
+                    selectedLocation={selectedLocation}
                     onSelect={handleSelect}
                     onMapClick={handleMapClick}
-                    previewPoint={pickedPoint}
                     routeEnds={[routeFrom, routeTo]}
                     route={route}
                     onFloorChange={handleFloorChange}
-                    walkwayEditor={mapWalkwayEditor}
-                    focusPoint={isEditingWalkways ? focusPoint : null}
                 />
 
                 <div className="map-top">
@@ -379,30 +238,7 @@ function App({ admin = null }) {
                     )}
                 </div>
 
-                {isAdmin && (
-                    <AdminPanel
-                        tab={adminTab}
-                        onTabChange={handleAdminTabChange}
-                        terminal={terminal}
-                        locations={locations.filter(item => item.terminal === terminal)}
-                        floor={floor}
-                        editingLocation={editingLocation}
-                        isCreating={editingId === "new"}
-                        pickedPoint={pickedPoint}
-                        isPicking={isPicking}
-                        onEdit={handleEdit}
-                        onCreate={() => handleEdit("new")}
-                        onCancel={handleCancelEdit}
-                        onStartPick={handleStartPick}
-                        onSaved={handleSaved}
-                        onDeleted={handleDeleted}
-                    >
-                        {walkwayEditor.isEditing && <WalkwayPanel editor={walkwayEditor} terminal={terminal} floor={floor} check={walkwayCheck} onFocus={handleFocus} />}
-                    </AdminPanel>
-                )}
             </section>
-
-            {isAdmin && loginNotice && <LoginDialog notice={loginNotice} onLoggedIn={handleLoggedInAgain} onCancel={() => setLoginNotice(null)} />}
         </main>
     );
 }

@@ -50,8 +50,9 @@ function splitEdge(network, edge, node) {
 // - select: click a point to make it an elevator/escalator/stairs and link it to other floors.
 // - erase:  click a point or a line to delete it.
 // Points can be dragged with the mouse in "draw" and "select".
-export function useWalkwayEditor({ terminal, floor, onSaved }) {
-    const [draft, setDraft] = useState(null);       // the network being edited, null = not editing
+// initialNetwork: start editing right away with this network (the admin "Lối đi" page)
+export function useWalkwayEditor({ terminal, floor, onSaved, initialNetwork = null }) {
+    const [draft, setDraft] = useState(initialNetwork);   // the network being edited, null = not editing
     const [history, setHistory] = useState([]);     // older drafts, for "undo"
     const [tool, setTool] = useState("draw");
     const [activeId, setActiveId] = useState(null); // end of the line being drawn
