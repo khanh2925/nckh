@@ -3,7 +3,7 @@ package vn.edu.airportmap.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import vn.edu.airportmap.model.Location;
+import vn.edu.airportmap.dto.LocationDto;
 import vn.edu.airportmap.service.LocationService;
 
 import java.util.List;
@@ -20,14 +20,14 @@ public class LocationController {
 
     // GET /api/locations  or  /api/locations?floor=1
     @GetMapping
-    public List<Location> getLocations(@RequestParam(required = false) Integer floor) {
+    public List<LocationDto> getLocations(@RequestParam(required = false) Integer floor) {
         return locationService.getLocations(floor);
     }
 
     // GET /api/locations/5
     @GetMapping("/{id}")
-    public Location getLocationById(@PathVariable Long id) {
-        Location location = locationService.getLocationById(id);
+    public LocationDto getLocationById(@PathVariable Long id) {
+        LocationDto location = locationService.getLocationById(id);
         if (location == null) {
             throw notFound(id);
         }
@@ -36,16 +36,16 @@ public class LocationController {
 
     // POST /api/locations
     @PostMapping
-    public Location addLocation(@RequestBody Location location) {
+    public LocationDto addLocation(@RequestBody LocationDto location) {
         validate(location);
         return locationService.addLocation(location);
     }
 
     // PUT /api/locations/5
     @PutMapping("/{id}")
-    public Location updateLocation(@PathVariable Long id, @RequestBody Location location) {
+    public LocationDto updateLocation(@PathVariable Long id, @RequestBody LocationDto location) {
         validate(location);
-        Location updated = locationService.updateLocation(id, location);
+        LocationDto updated = locationService.updateLocation(id, location);
         if (updated == null) {
             throw notFound(id);
         }
@@ -62,7 +62,7 @@ public class LocationController {
     }
 
     // Checks required fields and fills default values
-    private void validate(Location location) {
+    private void validate(LocationDto location) {
         if (location.getName() == null || location.getName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tên địa điểm không được để trống");
         }

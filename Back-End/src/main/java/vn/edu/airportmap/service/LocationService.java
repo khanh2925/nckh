@@ -1,13 +1,13 @@
 package vn.edu.airportmap.service;
 
-import vn.edu.airportmap.model.Location;
+import vn.edu.airportmap.dto.LocationDto;
 
 import java.util.List;
 
 public interface LocationService {
-    List<Location> getLocations(Integer floor);
-    Location getLocationById(Long id);
-    Location addLocation(Location location);
-    Location updateLocation(Long id, Location location);
+    List<LocationDto> getLocations(Integer floor);
+    LocationDto getLocationById(Long id);
+    LocationDto addLocation(LocationDto location);
+    LocationDto updateLocation(Long id, LocationDto location);
     boolean deleteLocation(Long id);
 }

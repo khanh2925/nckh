@@ -1,11 +1,11 @@
-package vn.edu.airportmap.model;
+package vn.edu.airportmap.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
 import java.util.List;
 
-// NON_NULL: empty fields are not written to the JSON file, keeping it short and readable
+// API shape sent to the front-end. NON_NULL keeps empty fields out of the JSON response
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Setter
 @Getter
@@ -13,7 +13,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @ToString
-public class Location {
+public class LocationDto {
     private Long id;
     private String name;
 

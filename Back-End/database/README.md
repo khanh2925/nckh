@@ -1,6 +1,6 @@
 # PostgreSQL: khởi tạo và chạy
 
-Ứng dụng chỉ lưu trữ PostgreSQL qua Controller → Service → LocationDao → LocationPostgresDao → JdbcTemplate → PostgreSQL. Không có DAO JSON, importer JSON, chế độ fallback hay tự seed khi khởi động.
+Ứng dụng chỉ lưu trữ PostgreSQL qua Controller → Service → Spring Data JPA Repository → Hibernate → PostgreSQL. Không có DAO JSON, importer JSON, chế độ fallback hay tự seed khi khởi động.
 
 ## Khởi tạo database mới
 
@@ -24,7 +24,7 @@ cd Back-End
 DB_PASSWORD='mat-khau-da-dat' ./mvnw spring-boot:run
 ```
 
-`DB_URL` mặc định `jdbc:postgresql://localhost:5432/airport_map`, `DB_USERNAME` mặc định `airport_map`, `DB_PASSWORD` mặc định rỗng cho local trust. Không commit mật khẩu. Backend không tạo/sửa schema hoặc seed tự động. Database chưa có bảng sẽ cần chạy script trước khi dùng API.
+`DB_URL` mặc định `jdbc:postgresql://localhost:5432/airport_map`, `DB_USERNAME` mặc định `airport_map`, `DB_PASSWORD` mặc định rỗng cho local trust. Không commit mật khẩu. Backend không tạo/sửa schema hoặc seed tự động (`spring.jpa.hibernate.ddl-auto=none`). Database chưa có bảng sẽ cần chạy script trước khi dùng API.
 
 ```bash
 cd Front-End
