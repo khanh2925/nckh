@@ -9,3 +9,7 @@ Frontend 5174 proxy `/api` về backend 8080. Có thể đổi backend bằng se
 DB_INTEGRATION_TEST=true ./mvnw test chạy kiểm thử PostgreSQL trên database có seed; CRUD rollback. Database chưa có schema phải khởi tạo bằng SQL trước. Không tự import file hoặc fallback khi mất kết nối.
 
 Mở rộng tầng/nhà ga cần đồng bộ cấu hình frontend và danh mục database. Mở rộng đồ thị vẫn theo KI-03; tọa độ theo KI-02. Sao lưu PostgreSQL trước thay đổi schema đang dùng; script 01_schema chỉ dành database trống.
+
+## Deploy Cloudflare Workers + Render + Neon
+
+Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render chỉ cho đọc (READ_ONLY=true), kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Sửa dữ liệu trên Neon Console hoặc Admin chạy ở máy. Xem [hướng dẫn](../CLOUD_DEPLOYMENT.md).

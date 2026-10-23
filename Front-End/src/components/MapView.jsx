@@ -3,7 +3,7 @@ import L from "../utils/leaflet";
 import "leaflet-rotate";
 import floors from "../data/floors";
 import { getGroup, getLocationType } from "../data/locationTypes";
-import { mainTerminal, projection } from "../utils/mapProjection";
+import { projection } from "../utils/mapProjection";
 import campusUrl from "../../../crawled_data/tan_son_nhat_full/overview_campus/svg_maps/SGN_CAMPUS_Level1_F1.svg?url";
 import campusPois from "../../../crawled_data/tan_son_nhat_full/overview_campus/overview_campus_pois.json";
 import { airportFloors } from "../data/airportCatalog";
@@ -520,12 +520,13 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
 
     const handleShowTerminal = () => {
         mapRef.current.setBearing(DEFAULT_BEARING);
-        mapRef.current.setView(mainTerminal.center, TERMINAL_ZOOM);
+        const target = airportFloors.find(item => item.terminal === terminal && item.id === floor) || airportFloors.find(item => item.terminal === terminal);
+        if (target) mapRef.current.setView(target.center, TERMINAL_ZOOM);
     };
 
     const statusText = isDetailView
-        ? `Mặt bằng Tầng ${floor} · Phân vùng gần đúng, không dùng để chỉ đường thực tế`
-        : "Toàn cảnh sân bay · Chạm vào Ga T1 để xem mặt bằng";
+        ? `Mặt bằng ${floorLabel(floor)} · Vị trí và đường đi gần đúng, chỉ để tham khảo`
+        : "Toàn cảnh sân bay · Chạm vào một nhà ga để xem mặt bằng";
 
     return (
         <div className="map-view">
@@ -536,7 +537,7 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
                 <button type="button" onClick={handleZoomOut} aria-label="Thu nhỏ" title="Thu nhỏ"><i className="bi bi-dash-lg" /></button>
                 <button type="button" onClick={handleResetBearing} aria-label="Đặt lại hướng" title="Đặt lại hướng"><i className="bi bi-compass" /></button>
                 <button type="button" onClick={handleShowOverview} aria-label="Xem toàn sân bay" title="Xem toàn sân bay"><i className="bi bi-house" /></button>
-                <button type="button" onClick={handleShowTerminal} aria-label="Về Ga T1" title="Về Ga T1" className="fw-bold">T1</button>
+                {terminal !== "SGN_CAMPUS" && <button type="button" onClick={handleShowTerminal} aria-label={`Về Ga ${terminal}`} title={`Về Ga ${terminal}`} className="fw-bold">{terminal}</button>}
             </div>
 
             {isDetailView && (

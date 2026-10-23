@@ -1,11 +1,16 @@
 // Where the data comes from:
 // - npm run dev: "/api" is forwarded to Spring Boot (localhost:8080) by vite.config.js
-// - Built website WITH a backend: set VITE_API_URL (e.g. https://aeroproce-api.onrender.com) before building
-// - Built website WITHOUT a backend (Cloudflare Workers now): read the static file /data/locations.json
-//   (a snapshot of PostgreSQL saved by "npm run export-data", see scripts/export-data.mjs)
+// - Online website: VITE_API_BASE_URL = the backend on Render (e.g. https://airport-map-api.onrender.com),
+//   which reads the real data from Neon. It is set before building (GitHub Actions variable, see DEPLOY.md).
+// - Online website without VITE_API_BASE_URL: read the static snapshot /data/locations.json
+//   (saved by "npm run export-data", see scripts/export-data.mjs)
 // walkwayApi.js reuses API_BASE, isStaticMode and request() from this file.
-export const API_BASE = import.meta.env.VITE_API_URL || "";
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 export const isStaticMode = import.meta.env.PROD && !API_BASE;
+
+// Admin changes data, so it only exists when running on your own computer (npm run dev).
+// The online website is read-only: edit the data in the Neon console or with the local Admin.
+export const canEdit = !import.meta.env.PROD;
 
 const API_URL = `${API_BASE}/api/locations`;
 const STATIC_DATA_URL = "/data/locations.json";
@@ -24,7 +29,7 @@ export async function getLocations() {
     return request(isStaticMode ? STATIC_DATA_URL : API_URL);
 }
 
-// Add / edit / delete only work with a backend (the Admin role is hidden in static mode)
+// Add / edit / delete: only used by the Admin page on your own computer
 export function addLocation(location) {
     return request(API_URL, {
         method: "POST",

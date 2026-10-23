@@ -1,5 +1,7 @@
 -- Walkway network used for directions (admin draws it on the map).
 -- Run once, after 01_schema.sql. Safe on a database that already has data.
+-- 02_seed.sql empties search_path for the session (pgAdmin keeps it), so set it back first
+SET search_path TO public;
 BEGIN;
 -- A point on a walkway. connector = 'Thang máy', 'Thang cuốn'... when passengers change floor here.
 CREATE TABLE IF NOT EXISTS walkway_nodes (

@@ -7,7 +7,7 @@ import LocationDetail from "./components/LocationDetail";
 import RoutePanel from "./components/RoutePanel";
 import AdminPanel from "./components/AdminPanel";
 import WalkwayPanel from "./components/WalkwayPanel";
-import { getLocations, isStaticMode } from "./api/locationApi";
+import { API_BASE, getLocations, isStaticMode } from "./api/locationApi";
 import { getWalkways } from "./api/walkwayApi";
 import { getLocationType } from "./data/locationTypes";
 import { findRoute } from "./utils/routing";
@@ -20,6 +20,7 @@ function App() {
     const [locations, setLocations] = useState([]);
     const [walkways, setWalkways] = useState(EMPTY_WALKWAYS);
     const [error, setError] = useState("");
+    const [isLoading, setIsLoading] = useState(true);
     const [reloadCount, setReloadCount] = useState(0);
 
     const [floor, setFloor] = useState(1);
@@ -46,12 +47,13 @@ function App() {
     // allSettled: the map still shows the locations even if the walkways fail to load.
     useEffect(() => {
         Promise.allSettled([getLocations(), getWalkways()]).then(([locationResult, walkwayResult]) => {
+            setIsLoading(false);
             if (locationResult.status === "fulfilled") setLocations(locationResult.value);
             if (walkwayResult.status === "fulfilled") setWalkways(walkwayResult.value);
 
             if (locationResult.status === "rejected") {
                 console.error(locationResult.reason);
-                setError(isStaticMode ? "Không tải được dữ liệu địa điểm." : "Không kết nối được backend (cổng 8080).");
+                setError(isStaticMode || API_BASE ? "Không tải được dữ liệu địa điểm." : "Không kết nối được backend (cổng 8080).");
             } else if (walkwayResult.status === "rejected") {
                 console.error(walkwayResult.reason);
                 setError("Không tải được lối đi nên chưa thể chỉ đường.");
@@ -60,6 +62,12 @@ function App() {
             }
         });
     }, [reloadCount]);
+
+    const handleReload = () => {
+        setError("");
+        setIsLoading(true);
+        setReloadCount(reloadCount + 1);
+    };
 
     const isAdmin = role === "admin";
     const isEditingWalkways = isAdmin && adminTab === "walkways" && walkwayEditor.isEditing;
@@ -93,9 +101,6 @@ function App() {
         setFloor(location.floor);
         if (isRouting) {
             handleRoutePlace(location);
-        } else if (location.catalogOnly && isAdmin) {
-            setSelectedId(location.id);
-            setRole("user");
         } else if (isAdmin && adminTab === "locations") {
             handleEdit(location.id);
         } else {
@@ -290,11 +295,18 @@ function App() {
                     </div>
                     <CategoryFilter activeGroup={activeGroup} onChange={handleGroupChange} />
 
+                    {isLoading && (
+                        <div className="alert alert-light d-flex align-items-center gap-2 py-2 mb-0 shadow-sm" role="status">
+                            <span className="spinner-border spinner-border-sm text-primary" aria-hidden="true" />
+                            <span>Đang tải dữ liệu…{API_BASE && " Máy chủ miễn phí có thể mất khoảng 1 phút để khởi động."}</span>
+                        </div>
+                    )}
+
                     {error && (
                         <div className="alert alert-danger d-flex align-items-center gap-2 py-2 mb-0" role="alert">
                             <i className="bi bi-exclamation-triangle" />
                             <span className="flex-grow-1">{error}</span>
-                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => setReloadCount(reloadCount + 1)}>Thử lại</button>
+                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={handleReload}>Thử lại</button>
                         </div>
                     )}
 

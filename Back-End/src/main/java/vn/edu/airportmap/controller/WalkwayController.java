@@ -13,7 +13,6 @@ import java.util.Set;
 
 @RestController
 @RequestMapping("/api/walkways")
-@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class WalkwayController {
     private final WalkwayService walkwayService;
 

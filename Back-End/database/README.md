@@ -21,6 +21,13 @@ psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/d
 
 Có thể mở và chạy hai file theo thứ tự trong Query Tool của pgAdmin/DBeaver. Trên Windows có thể tạo role/database qua pgAdmin rồi chạy SQL; các biến môi trường bên dưới dùng cú pháp macOS/Linux.
 
+## Dùng Neon (PostgreSQL trên cloud)
+
+1. Mở `Back-End/.env.example`, sao chép thành `Back-End/.env` (file này bị git bỏ qua, không lên GitHub) và điền thông tin Neon.
+   Chuỗi Neon `postgresql://USER:PASSWORD@HOST/DB?sslmode=require` đổi thành `DB_URL=jdbc:postgresql://HOST/DB?sslmode=require`, `DB_USERNAME=USER`, `DB_PASSWORD=PASSWORD`.
+2. Nạp dữ liệu lên Neon một lần: pgAdmin → Register Server (Host = HOST, Database = DB, Username = USER, SSL mode = require) → Query Tool, chạy lần lượt 01 → 02 → 03 → 04. Nếu 01 báo bảng đã tồn tại thì database đã có dữ liệu, chỉ cần 03, 04.
+3. Chạy backend như bình thường (`.\mvnw.cmd spring-boot:run` trong thư mục `Back-End`): Spring đọc `.env` và kết nối Neon. Biến môi trường thật luôn được ưu tiên hơn file `.env`.
+
 ## Chạy ứng dụng
 
 ```bash

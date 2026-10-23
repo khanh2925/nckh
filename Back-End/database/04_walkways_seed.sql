@@ -1,6 +1,8 @@
 -- Starter walkway network, generated automatically from the SVG floor plans
 -- (corridor centre lines + elevators/escalators/stairs). Admin should check and redraw it on the map.
 -- Run once, after 03_walkways_schema.sql. Rows that already exist are skipped.
+-- 02_seed.sql empties search_path for the session (pgAdmin keeps it), so set it back first
+SET search_path TO public;
 BEGIN;
 INSERT INTO walkway_nodes (id, floor_id, lat, lng, connector)
 SELECT v.id, f.id, v.lat, v.lng, v.connector FROM (VALUES

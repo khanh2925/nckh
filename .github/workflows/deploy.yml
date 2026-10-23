@@ -28,6 +28,8 @@ jobs:
 
       # "prebuild" copies Back-End/data/airport-locations.json into the website first
       - run: npm run build
+      env:
+            VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
 
       # Uses Front-End/wrangler.jsonc (worker name + account_id)
       - name: Deploy
