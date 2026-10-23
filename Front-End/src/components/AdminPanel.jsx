@@ -124,7 +124,7 @@ function AdminPanel({ tab, onTabChange, children, terminal, locations, floor, ed
                 })}
             </div>
 
-            <p className="small text-muted mt-2 mb-0">Mẹo: bấm vào marker trên bản đồ để sửa nhanh. Dữ liệu được lưu trong PostgreSQL qua backend.</p>
+            <p className="small text-muted mt-2 mb-0">Mẹo: bấm vào marker trên bản đồ để sửa nhanh. Thay đổi được lưu thẳng vào database và hiện ngay cho mọi người.</p>
         </aside>
     );
 }

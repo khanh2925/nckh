@@ -7,6 +7,7 @@ import LocationDetail from "./components/LocationDetail";
 import RoutePanel from "./components/RoutePanel";
 import AdminPanel from "./components/AdminPanel";
 import WalkwayPanel from "./components/WalkwayPanel";
+import LoginDialog from "./components/LoginDialog";
 import { API_BASE, getLocations, isStaticMode } from "./api/locationApi";
 import { getWalkways } from "./api/walkwayApi";
 import { getLocationType } from "./data/locationTypes";
@@ -17,7 +18,9 @@ import { useWalkwayEditor } from "./hooks/useWalkwayEditor";
 
 const EMPTY_WALKWAYS = { nodes: [], edges: [] };
 
-function App() {
+// admin: null on the public website. On /admin (see Root.jsx), once logged in:
+// { session, onSessionChange, onLogout } and the map opens with the Admin panel.
+function App({ admin = null }) {
     const [locations, setLocations] = useState([]);
     const [walkways, setWalkways] = useState(EMPTY_WALKWAYS);
     const [error, setError] = useState("");
@@ -36,7 +39,8 @@ function App() {
     const [pickTarget, setPickTarget] = useState(null);   // end chosen with the crosshair button: "from" | "to" | null
 
     // Admin: adminTab = "locations" | "walkways"; editingId = location id, "new" (adding) or null (showing the list)
-    const [role, setRole] = useState("user");
+    // Message of the login box shown when a save is refused because the login expired (null = closed)
+    const [loginNotice, setLoginNotice] = useState(null);
     const [adminTab, setAdminTab] = useState("locations");
     const [editingId, setEditingId] = useState(null);
     const [isPicking, setIsPicking] = useState(false);
@@ -72,7 +76,7 @@ function App() {
         setReloadCount(reloadCount + 1);
     };
 
-    const isAdmin = role === "admin";
+    const isAdmin = Boolean(admin);
     const isEditingWalkways = isAdmin && adminTab === "walkways" && walkwayEditor.isEditing;
     const findById = (id) => locations.find(location => location.id === id) || null;
     const isInGroup = (location, groupId) => groupId === "all" || getLocationType(location.type).group === groupId;
@@ -212,14 +216,23 @@ function App() {
 
     const confirmDropWalkways = () => !walkwayEditor.isDirty || window.confirm("Lối đi có thay đổi chưa lưu. Bỏ các thay đổi này?");
 
-    const handleRoleChange = (newRole) => {
+    const handleLogout = () => {
         if (!confirmDropWalkways()) return;
         walkwayEditor.stop();
-        setAdminTab("locations");
-        setRole(newRole);
-        setSelectedId(null);
-        handleCloseRoute();
-        handleCancelEdit();
+        admin.onLogout();
+    };
+
+    // A save was refused (login expired): ask for the password again on top of the map,
+    // so the admin keeps the form or the unsaved walkways and just presses save again
+    useEffect(() => {
+        const handleExpired = () => setLoginNotice("Phiên đăng nhập đã hết hạn. Đăng nhập lại rồi bấm lưu lần nữa, thay đổi chưa lưu vẫn còn.");
+        window.addEventListener("admin-session-expired", handleExpired);
+        return () => window.removeEventListener("admin-session-expired", handleExpired);
+    }, []);
+
+    const handleLoggedInAgain = (session) => {
+        setLoginNotice(null);
+        admin.onSessionChange(session);
     };
 
     const handleAdminTabChange = (tab) => {
@@ -293,7 +306,7 @@ function App() {
 
     return (
         <main className="app-shell">
-            <Header terminal={terminal} onTerminalChange={handleTerminalChange} floor={floor} onFloorChange={handleFloorChange} role={role} onRoleChange={handleRoleChange} />
+            <Header terminal={terminal} onTerminalChange={handleTerminalChange} floor={floor} onFloorChange={handleFloorChange} username={admin?.session.username} onLogout={isAdmin ? handleLogout : null} />
 
             <section className={`map-shell ${isAdmin ? "is-admin" : ""}`} aria-label="Bản đồ nhà ga">
                 <MapView
@@ -388,6 +401,8 @@ function App() {
                     </AdminPanel>
                 )}
             </section>
+
+            {isAdmin && loginNotice && <LoginDialog notice={loginNotice} onLoggedIn={handleLoggedInAgain} onCancel={() => setLoginNotice(null)} />}
         </main>
     );
 }

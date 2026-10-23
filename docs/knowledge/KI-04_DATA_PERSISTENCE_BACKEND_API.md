@@ -26,6 +26,16 @@ Controller validate request và trả 400/404/204. Service thực hiện nghiệ
 - `PUT /api/walkways` thay toàn bộ mạng trong một transaction: `deleteAllInBatch()` cạnh rồi node, sau đó `saveAll`. Node và cạnh có ID do client đặt nên implement `Persistable` (`isNew`) để Hibernate INSERT thẳng, không SELECT trước từng dòng; insert gửi theo lô (`hibernate.jdbc.batch_size=500`). Tầng không tồn tại → service ném `IllegalArgumentException` → controller trả 400. Kiểm tra này phải nằm ở service: nếu đặt trong bean `@Repository`, Spring đổi exception thành `InvalidDataAccessApiUsageException` và API trả 500.
 - Terminal, tầng, loại và tiện ích chưa có sẽ được tạo khi thêm/sửa địa điểm (find-or-create trong service), giống hành vi API cũ.
 
+## Đăng nhập quản trị (Spring Security + JWT)
+
+- Ai cũng **đọc** được: `GET /api/**` mở. **Ghi** (POST/PUT/DELETE `/api/**`) cần role `ADMIN` (`security/SecurityConfig.java`). Không có/hết hạn/sai chữ ký token → 401; token không có role ADMIN → 403.
+- `POST /api/auth/login` `{ username, password }` → `{ token, username, expiresAt }` (`controller/AuthController.java`). Tài khoản duy nhất lấy từ biến môi trường `ADMIN_USERNAME` (mặc định `admin`) và `ADMIN_PASSWORD` (băm BCrypt khi khởi động). Không đặt `ADMIN_PASSWORD` → không ai đăng nhập được, API chỉ đọc.
+- Token: JWT HS256 (`security/TokenService.java`), claim `roles: ["ADMIN"]`, sống `app.jwt.lifetime` (8h). Khóa = SHA-256 của `JWT_SECRET`; trống thì sinh ngẫu nhiên mỗi lần khởi động (token cũ mất hiệu lực sau restart). Stateless, không session/cookie nên tắt CSRF.
+- Chống dò mật khẩu: sai 5 lần trong 15 phút từ một địa chỉ → 429 (`security/LoginAttemptService.java`, lưu trong bộ nhớ). Địa chỉ thật sau proxy Render nhờ `server.forward-headers-strategy=native`.
+- CORS vẫn cấu hình ở `config/WebConfig.java` (Security dùng lại qua `.cors()`); header `Authorization` được phép.
+- Test: `SecurityTest` (WebMvcTest, không cần database) kiểm tra đọc mở, ghi cần token, token giả/hết hạn/thiếu role, khóa sau 5 lần sai, CORS.
+- Không còn `READ_ONLY`/interceptor chỉ-đọc cũ.
+
 ## Schema và dữ liệu
 
 Tạo schema trực tiếp bằng `Back-End/database/01_schema.sql`, nạp SQL bằng `02_seed.sql`. `spring.jpa.hibernate.ddl-auto=none`: Hibernate không tạo hay sửa bảng. Không dùng Flyway V1/V2 hoặc tự seed khi backend khởi động. Cấu hình bằng DB_URL, DB_USERNAME, DB_PASSWORD. `spring.jpa.open-in-view=false`, mọi truy cập lazy nằm trong transaction của service.

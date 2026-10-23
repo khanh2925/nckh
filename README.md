@@ -29,4 +29,4 @@ npm run dev -- --port 5174
 
 ## Deploy Cloudflare Workers + Render + Neon
 
-Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render chỉ cho đọc (READ_ONLY=true), kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Sửa dữ liệu trên Neon Console hoặc Admin chạy ở máy. Xem [hướng dẫn](docs/CLOUD_DEPLOYMENT.md).
+Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Ai cũng xem được; sửa dữ liệu ở trang quản trị `/admin` (đăng nhập bằng ADMIN_PASSWORD). Xem [hướng dẫn](docs/CLOUD_DEPLOYMENT.md).

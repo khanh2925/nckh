@@ -135,6 +135,13 @@ button.campus-terminal { cursor: pointer; }
 .walkway-check-list button { display: flex; width: 100%; gap: 6px; padding: 4px 6px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
 .walkway-check-list button:hover { background: #f1f3f5; }
 
+/* Admin login: full page on /admin, or a box above the map when the login expired */
+.login-page { min-height: 100dvh; display: grid; place-items: center; padding: 16px; background: #eef0f0; }
+.login-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 16px; background: #1b1f2366; }
+.login-card { width: 100%; max-width: 360px; padding: 24px; background: #fff; border-radius: 12px; box-shadow: var(--panel-shadow); animation: panel-in .18s ease-out; }
+.login-page .login-card { border: 1px solid var(--border); }
+.admin-user { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
 /* ---------- Panels appear smoothly instead of popping in ---------- */
 @keyframes panel-in { from { opacity: 0; transform: translateY(-6px); } }
 @keyframes sheet-in { from { transform: translateY(100%); } }

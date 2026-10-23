@@ -24,10 +24,11 @@ Người tạo: chủ repo GitHub (Khánh), vì Render cần quyền đọc repo
 2. Điền biến môi trường (không commit):
    - `DB_URL` = `jdbc:postgresql://HOST_NEON/neondb?sslmode=require`
    - `DB_USERNAME`, `DB_PASSWORD` = tài khoản Neon.
-   - `CORS_ALLOWED_ORIGINS` (địa chỉ web Cloudflare, không có `/` cuối) và `READ_ONLY=true` đã có sẵn trong `render.yaml`.
+   - `ADMIN_PASSWORD` = mật khẩu trang quản trị (tự đặt, dài và khó đoán). Chưa đặt thì không ai đăng nhập được, API chỉ cho đọc.
+   - `CORS_ALLOWED_ORIGINS`, `ADMIN_USERNAME=admin` có sẵn trong `render.yaml`; `JWT_SECRET` do Render tự sinh (`generateValue`).
 3. Kiểm tra `https://<tên-service>.onrender.com/api/locations` và `/api/walkways` trả JSON.
 
-`READ_ONLY=true`: API không có đăng nhập, nên server online chỉ trả lời GET; thêm/sửa/xóa trả 403.
+Ai cũng đọc được (GET). Thêm/sửa/xóa cần đăng nhập ở `https://<web>/admin`; không có token hợp lệ thì API trả 401. Đổi mật khẩu: sửa `ADMIN_PASSWORD` trên Render (service tự deploy lại).
 Gói Free: ngủ sau 15 phút không ai truy cập, lần mở lại mất khoảng 1 phút (web hiện "Đang tải dữ liệu…"); 750 giờ/tháng.
 
 ## 3. Cloudflare Workers (frontend)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { saveWalkways } from "../api/walkwayApi";
+import { AuthError } from "../api/auth";
 import { closestPointOnSegment, distance } from "../utils/geo";
 import { floorLabel } from "../utils/text";
 
@@ -203,7 +204,7 @@ export function useWalkwayEditor({ terminal, floor, onSaved }) {
             onSaved(saved);
         } catch (err) {
             console.error(err);
-            setMessage("Không lưu được lối đi. Hãy kiểm tra backend.");
+            setMessage(err instanceof AuthError ? err.message : "Không lưu được lối đi. Hãy kiểm tra backend.");
         } finally {
             setIsSaving(false);
         }
