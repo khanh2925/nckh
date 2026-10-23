@@ -257,8 +257,13 @@ function MapView({ terminal = 'T1', onTerminalChange, floor, locations, selected
         layersRef.current = { overview, floorPlan, routeLayer, markers, pickLayer, routeEndLayer, walkwayLayer, focusLayer, baseTiles };
 
         const disableSmoothWheelZoom = enableSmoothWheelZoom(map);
+        // The map box can change size without a window resize (admin panels opening beside it):
+        // tell Leaflet, otherwise part of the map stays grey
+        const resizeObserver = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+        resizeObserver.observe(containerRef.current);
 
         return () => {
+            resizeObserver.disconnect();
             disableSmoothWheelZoom();
             map.remove();
             mapRef.current = null;

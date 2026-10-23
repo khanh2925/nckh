@@ -1,95 +1,83 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import MapView from "../components/MapView";
 import LocationEditor from "./LocationEditor";
-import { getGroup, getLocationType, locationTypes, typeGroups } from "../data/locationTypes";
+import LocationsTable from "./LocationsTable";
+import { getGroup, getLocationType, typeGroups } from "../data/locationTypes";
 import { airportFloors, airportTerminals } from "../data/airportCatalog";
-import { floorLabel, normalizeText, translateHours } from "../utils/text";
+import { floorLabel, normalizeText } from "../utils/text";
 
-const PAGE_SIZE = 50;
-const COLUMNS = [
-    { key: "name", label: "Tên" },
-    { key: "type", label: "Loại" },
-    { key: "terminal", label: "Ga" },
-    { key: "floor", label: "Tầng", isNumber: true },
-    // optional: hidden while the editor drawer is open, so the table stays readable
-    { key: "area", label: "Khu vực", optional: true },
-    { key: "openingHours", label: "Giờ mở cửa", sortable: false, optional: true }
-];
+const TERMINALS = airportTerminals.filter(item => item.id !== "SGN_CAMPUS");
+const firstFloor = (terminal) => airportFloors.find(item => item.terminal === terminal)?.id ?? 0;
+const positionOf = (location) => ({ terminal: location.terminal, floor: location.floor, lat: location.lat, lng: location.lng, x: location.x, y: location.y });
 
-const sortValue = {
-    name: location => location.name,
-    type: location => getLocationType(location.type).label,
-    terminal: location => location.terminal,
-    floor: location => location.floor,
-    area: location => location.area || "￿"   // empty last
-};
-
-// "Địa điểm": every location in a table. Search, filter, sort, then click a row to edit it in the side drawer.
-// URL ?edit=<id> opens that location directly (links from "Kiểm tra dữ liệu").
+// "Địa điểm": the map is the workspace.
+//   left  = the locations of the floor on screen (search covers every terminal), "Thêm địa điểm"
+//   map   = click a marker to edit it; when placing, click the floor plan to put the location there
+//   right = the editor of the selected location (LocationEditor), only while editing
+// "Bảng" switches to a table of every location (LocationsTable); a row opens it here on the map.
+// URL: ?edit=<id> opens a location, ?view=table opens the table, ?terminal=T2&floor=0 picks the floor.
 function LocationsPage({ locations, params, onLocationsChange }) {
+    const linked = locations.find(location => location.id === Number(params.get("edit"))) || null;
+    const [view, setView] = useState(params.get("view") === "table" ? "table" : "map");
+    const [terminal, setTerminal] = useState(linked?.terminal || (TERMINALS.some(item => item.id === params.get("terminal")) ? params.get("terminal") : "T1"));
+    const [floor, setFloor] = useState(linked?.floor ?? (params.get("floor") != null ? Number(params.get("floor")) : firstFloor(terminal)));
+    const [editing, setEditing] = useState(linked);        // location, "new", or null
+    const [position, setPosition] = useState(linked ? positionOf(linked) : null);
+    const [isPlacing, setIsPlacing] = useState(false);
     const [query, setQuery] = useState("");
-    const [terminal, setTerminal] = useState(params.get("terminal") || "all");
-    const [floor, setFloor] = useState(params.get("floor") ?? "all");
-    const [type, setType] = useState("all");
-    const [sort, setSort] = useState({ key: "name", direction: 1 });
-    const [pageIndex, setPageIndex] = useState(0);
-    const [editing, setEditing] = useState(() => {
-        const id = Number(params.get("edit"));
-        return id ? locations.find(location => location.id === id) || null : null;
-    });
-    const [isAdding, setIsAdding] = useState(false);
+    const [group, setGroup] = useState("all");
     const [notice, setNotice] = useState("");
 
-    const floors = terminal === "all" ? [] : airportFloors.filter(item => item.terminal === terminal);
+    const isEditing = editing !== null;
+    const editingLocation = editing === "new" ? null : editing;
 
-    const rows = useMemo(() => {
-        const words = normalizeText(query).split(/\s+/).filter(Boolean);
-        const filtered = locations.filter(location => {
-            if (terminal !== "all" && location.terminal !== terminal) return false;
-            if (floor !== "all" && location.floor !== Number(floor)) return false;
-            if (type !== "all" && location.type !== type && !(type.startsWith("group:") && getLocationType(location.type).group === type.slice(6))) return false;
-            if (words.length === 0) return true;
-            const text = normalizeText(`${location.name} ${getLocationType(location.type).label} ${location.area || ""} ${location.id}`);
-            return words.every(word => text.includes(word));
-        });
-        const value = sortValue[sort.key];
-        return filtered.sort((a, b) => {
-            const x = value(a), y = value(b);
-            const order = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "vi", { numeric: true });
-            return order * sort.direction || a.name.localeCompare(b.name, "vi", { numeric: true });
-        });
-    }, [locations, query, terminal, floor, type, sort]);
+    const setUrl = (search) => window.history.replaceState(null, "", `/admin/locations${search}`);
 
-    const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-    const page = Math.min(pageIndex, pageCount - 1);
-    const visible = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-    const hasFilter = query || terminal !== "all" || floor !== "all" || type !== "all";
+    // Esc stops placing (the location keeps its previous position)
+    useEffect(() => {
+        if (!isPlacing) return;
+        const handleKeyDown = (event) => {
+            if (event.key === "Escape") setIsPlacing(false);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [isPlacing]);
 
-    // Any filter change starts again from the first page
-    const filterBy = (setter) => (value) => {
-        setter(value);
-        setPageIndex(0);
+    const showFloor = (newTerminal, newFloor) => {
+        setTerminal(newTerminal);
+        setFloor(newFloor);
     };
-    const changeQuery = filterBy(setQuery);
-    const changeTerminal = filterBy((value) => {
-        setTerminal(value);
-        setFloor("all");
-    });
-    const changeFloor = filterBy(setFloor);
-    const changeType = filterBy(setType);
 
-    const openEditor = (location) => {
-        setIsAdding(false);
+    const openLocation = (location) => {
+        setView("map");
+        showFloor(location.terminal, location.floor);
         setEditing(location);
-        window.history.replaceState(null, "", location ? `/admin/locations?edit=${location.id}` : "/admin/locations");
+        setPosition(positionOf(location));
+        setIsPlacing(false);
+        setNotice("");
+        setUrl(`?edit=${location.id}`);
+    };
+
+    const startNew = () => {
+        setView("map");
+        setEditing("new");
+        setPosition(null);
+        setIsPlacing(true);
+        setNotice("");
+        setUrl("");
     };
 
     const closeEditor = () => {
         setEditing(null);
-        setIsAdding(false);
-        window.history.replaceState(null, "", "/admin/locations");
+        setPosition(null);
+        setIsPlacing(false);
+        setUrl("");
     };
 
-    const handleSort = (key) => setSort(current => ({ key, direction: current.key === key ? -current.direction : 1 }));
+    const handlePlace = (point) => {
+        setPosition({ terminal: point.terminal, floor: point.floor, lat: point.lat, lng: point.lng });
+        setIsPlacing(false);
+    };
 
     const handleSaved = (saved, isNew) => {
         onLocationsChange(isNew ? [...locations, saved] : locations.map(item => (item.id === saved.id ? saved : item)));
@@ -103,115 +91,128 @@ function LocationsPage({ locations, params, onLocationsChange }) {
         closeEditor();
     };
 
-    const clearFilters = () => {
-        setQuery("");
-        setTerminal("all");
-        setFloor("all");
-        setType("all");
-        setPageIndex(0);
+    const switchView = (newView) => {
+        setView(newView);
+        if (newView === "table") {
+            closeEditor();
+            setUrl("?view=table");
+        } else {
+            setUrl("");
+        }
     };
 
+    const viewSwitch = (
+        <div className="segmented" role="group" aria-label="Cách xem">
+            <button type="button" className={view === "map" ? "is-active" : ""} aria-pressed={view === "map"} onClick={() => switchView("map")}><i className="bi bi-map me-1" />Bản đồ</button>
+            <button type="button" className={view === "table" ? "is-active" : ""} aria-pressed={view === "table"} onClick={() => switchView("table")}><i className="bi bi-table me-1" />Bảng</button>
+        </div>
+    );
+
+    if (view === "table") {
+        return <LocationsTable locations={locations} params={params} notice={notice} onOpen={openLocation} onAdd={startNew} viewSwitch={viewSwitch} />;
+    }
+
+    // Left list: the floor on screen; a search looks through every terminal
+    const words = normalizeText(query).split(/\s+/).filter(Boolean);
+    const inGroup = (location) => group === "all" || getLocationType(location.type).group === group;
+    const listed = locations
+        .filter(location => (words.length > 0 || (location.terminal === terminal && location.floor === floor)) && inGroup(location))
+        .filter(location => {
+            if (words.length === 0) return true;
+            const text = normalizeText(`${location.name} ${getLocationType(location.type).label} ${location.area || ""} ${location.id}`);
+            return words.every(word => text.includes(word));
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "vi", { numeric: true }));
+    const floorLocations = locations.filter(location => location.terminal === terminal && location.floor === floor);
+    const floors = airportFloors.filter(item => item.terminal === terminal);
+
+    // The pin of the location being edited, where it is now (moved or new) and not yet saved
+    const isMoved = position && (!editingLocation || position.lat !== editingLocation.lat || position.lng !== editingLocation.lng || position.floor !== editingLocation.floor);
+
     return (
-        <div className={`admin-page ${editing || isAdding ? "has-editor" : ""}`}>
-            <header className="page-head">
-                <div>
-                    <h1>Địa điểm</h1>
-                    <p>{locations.length} địa điểm trong dữ liệu. Bấm một dòng để sửa.</p>
+        <div className={`locations-workspace ${isEditing ? "has-editor" : ""}`}>
+            <aside className="locations-list" aria-label="Danh sách địa điểm">
+                <header>
+                    <div className="d-flex align-items-center justify-content-between gap-2">
+                        <h1>Địa điểm</h1>
+                        {viewSwitch}
+                    </div>
+                    <button type="button" className="btn btn-dark w-100" onClick={startNew} disabled={isPlacing && editing === "new"}>
+                        <i className="bi bi-plus-lg me-1" />Thêm địa điểm
+                    </button>
+                    <div className="filter-search">
+                        <i className="bi bi-search" aria-hidden="true" />
+                        <input type="search" className="form-control" placeholder="Tìm ở mọi nhà ga" aria-label="Tìm địa điểm" value={query} onChange={(e) => setQuery(e.target.value)} />
+                    </div>
+                    <select className="form-select" aria-label="Lọc theo nhóm" value={group} onChange={(e) => setGroup(e.target.value)}>
+                        {typeGroups.map(item => <option key={item.id} value={item.id}>{item.id === "all" ? "Mọi nhóm" : item.label}</option>)}
+                    </select>
+                    <p className="list-meta">
+                        {words.length > 0 ? `${listed.length} kết quả ở mọi nhà ga` : `${listed.length} địa điểm ở ${floorLabel(floor).toLowerCase()} ${terminal}`}
+                    </p>
+                    {notice && <p className="list-notice" role="status"><i className="bi bi-check2 me-1" />{notice}</p>}
+                </header>
+
+                <ul className="list-items">
+                    {listed.map(location => {
+                        const type = getLocationType(location.type);
+                        return (
+                            <li key={location.id}>
+                                <button type="button" className={editingLocation?.id === location.id ? "is-open" : ""} onClick={() => openLocation(location)}>
+                                    <span className="type-dot is-small" style={{ background: getGroup(type.group).color }}><i className={`bi ${type.icon}`} aria-hidden="true" /></span>
+                                    <span className="min-w-0">
+                                        <span className="d-block text-truncate">{location.name}</span>
+                                        <small>{words.length > 0 ? `${location.terminal}, ${floorLabel(location.floor)}` : type.label}</small>
+                                    </span>
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </aside>
+
+            <section className={`locations-map ${isPlacing ? "is-placing" : ""}`} aria-label="Bản đồ địa điểm">
+                <MapView
+                    terminal={terminal}
+                    onTerminalChange={(value) => showFloor(value, firstFloor(value))}
+                    floor={floor}
+                    onFloorChange={(value) => setFloor(value)}
+                    locations={floorLocations}
+                    selectedLocation={editingLocation}
+                    onSelect={(location) => !isPlacing && openLocation(location)}
+                    onMapClick={isPlacing ? handlePlace : null}
+                    previewPoint={isMoved ? position : null}
+                />
+
+                <div className="map-switch">
+                    <select className="form-select form-select-sm" aria-label="Nhà ga" value={terminal} onChange={(e) => showFloor(e.target.value, firstFloor(e.target.value))}>
+                        {TERMINALS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                    <div className="segmented" role="group" aria-label="Tầng">
+                        {floors.map(item => (
+                            <button type="button" key={item.id} className={item.id === floor ? "is-active" : ""} aria-pressed={item.id === floor} title={item.name} onClick={() => setFloor(item.id)}>
+                                {floorLabel(item.id)}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <button type="button" className="btn btn-dark" onClick={() => { setEditing(null); setIsAdding(true); }}>
-                    <i className="bi bi-plus-lg me-1" />Thêm địa điểm
-                </button>
-            </header>
 
-            <div className="filters" role="search">
-                <div className="filter-search">
-                    <i className="bi bi-search" aria-hidden="true" />
-                    <input type="search" className="form-control" placeholder="Tìm theo tên, loại, khu vực hoặc mã" aria-label="Tìm địa điểm" value={query} onChange={(e) => changeQuery(e.target.value)} />
-                </div>
-                <select className="form-select" aria-label="Lọc theo nhà ga" value={terminal} onChange={(e) => changeTerminal(e.target.value)}>
-                    <option value="all">Mọi nhà ga</option>
-                    {airportTerminals.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </select>
-                <select className="form-select" aria-label="Lọc theo tầng" value={floor} onChange={(e) => changeFloor(e.target.value)} disabled={terminal === "all"}>
-                    <option value="all">{terminal === "all" ? "Chọn ga để lọc tầng" : "Mọi tầng"}</option>
-                    {floors.map(item => <option key={item.id} value={item.id}>{floorLabel(item.id)}</option>)}
-                </select>
-                <select className="form-select" aria-label="Lọc theo loại" value={type} onChange={(e) => changeType(e.target.value)}>
-                    <option value="all">Mọi loại</option>
-                    {typeGroups.filter(group => group.id !== "all").map(group => (
-                        <optgroup key={group.id} label={group.label}>
-                            <option value={`group:${group.id}`}>Cả nhóm {group.label.toLowerCase()}</option>
-                            {Object.entries(locationTypes).filter(([, item]) => item.group === group.id).map(([key, item]) => (
-                                <option key={key} value={key}>{item.label}</option>
-                            ))}
-                        </optgroup>
-                    ))}
-                </select>
-                {hasFilter && <button type="button" className="btn btn-link btn-sm" onClick={clearFilters}>Bỏ lọc</button>}
-            </div>
+                {isPlacing && (
+                    <div className="placing-banner" role="status">
+                        <i className="bi bi-crosshair" aria-hidden="true" />
+                        <span>Bấm vào mặt bằng để đặt {editing === "new" ? "địa điểm mới" : `“${editingLocation.name}”`}</span>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => (editing === "new" && !position ? closeEditor() : setIsPlacing(false))}>Hủy</button>
+                    </div>
+                )}
+            </section>
 
-            <div className="table-meta">
-                <span>{rows.length === 0 ? "Không có địa điểm nào khớp." : `${page * PAGE_SIZE + 1}–${page * PAGE_SIZE + visible.length} trong ${rows.length} địa điểm`}</span>
-                {notice && <span className="table-notice" role="status"><i className="bi bi-check2 me-1" />{notice}</span>}
-            </div>
-
-            <div className="table-wrap">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            {COLUMNS.map(column => (
-                                <th key={column.key} scope="col" className={[column.isNumber && "num", column.optional && "col-optional"].filter(Boolean).join(" ") || undefined} aria-sort={sort.key === column.key ? (sort.direction > 0 ? "ascending" : "descending") : undefined}>
-                                    {column.sortable === false ? column.label : (
-                                        <button type="button" onClick={() => handleSort(column.key)}>
-                                            {column.label}
-                                            <i className={`bi ${sort.key !== column.key ? "bi-arrow-down-up is-idle" : sort.direction > 0 ? "bi-arrow-up" : "bi-arrow-down"}`} aria-hidden="true" />
-                                        </button>
-                                    )}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {visible.map(location => {
-                            const locationType = getLocationType(location.type);
-                            const isOpen = editing?.id === location.id;
-                            return (
-                                <tr key={location.id} className={isOpen ? "is-open" : ""} onClick={() => openEditor(location)}
-                                    tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openEditor(location)} aria-label={`Sửa ${location.name}`}>
-                                    <td>
-                                        <span className="cell-name">
-                                            <span className="type-dot" style={{ background: getGroup(locationType.group).color }}><i className={`bi ${locationType.icon}`} aria-hidden="true" /></span>
-                                            <span className="min-w-0">
-                                                <span className="d-block text-truncate">{location.name}</span>
-                                                <small>Mã {location.id}</small>
-                                            </span>
-                                        </span>
-                                    </td>
-                                    <td className="nowrap">{locationType.label}</td>
-                                    <td>{location.terminal === "SGN_CAMPUS" ? "Khuôn viên" : location.terminal}</td>
-                                    <td className="num nowrap">{floorLabel(location.floor)}</td>
-                                    <td className="muted col-optional">{location.area || "—"}</td>
-                                    <td className="muted col-optional">{location.openingHours ? translateHours(location.openingHours) : "—"}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
-            {pageCount > 1 && (
-                <nav className="pager" aria-label="Phân trang">
-                    <button type="button" className="btn btn-light btn-sm" disabled={page === 0} onClick={() => setPageIndex(page - 1)}><i className="bi bi-chevron-left" /> Trước</button>
-                    <span>Trang {page + 1} / {pageCount}</span>
-                    <button type="button" className="btn btn-light btn-sm" disabled={page >= pageCount - 1} onClick={() => setPageIndex(page + 1)}>Sau <i className="bi bi-chevron-right" /></button>
-                </nav>
-            )}
-
-            {(editing || isAdding) && (
+            {isEditing && (
                 <LocationEditor
-                    key={editing ? editing.id : "new"}
-                    location={editing}
-                    defaults={{ terminal: terminal !== "all" && terminal !== "SGN_CAMPUS" ? terminal : "T1", floor: floor !== "all" ? Number(floor) : 1 }}
+                    key={editingLocation ? editingLocation.id : "new"}
+                    location={editingLocation}
+                    position={position}
+                    isPlacing={isPlacing}
+                    onStartPlacing={() => setIsPlacing(true)}
                     onSaved={handleSaved}
                     onDeleted={handleDeleted}
                     onClose={closeEditor}
