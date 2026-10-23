@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { addLocation, deleteLocation, updateLocation } from "../api/locationApi";
+import { AuthError } from "../api/auth";
 import { locationTypes } from "../data/locationTypes";
 import { airportFloors } from "../data/airportCatalog";
 
@@ -62,7 +63,7 @@ function AdminLocationForm({ terminal, location, floor, pickedPoint, isPicking, 
             onSaved(saved, isNew);
         } catch (err) {
             console.error(err);
-            setError("Không lưu được địa điểm. Hãy kiểm tra backend.");
+            setError(err instanceof AuthError ? err.message : "Không lưu được địa điểm. Hãy kiểm tra backend.");
         }
     };
 
@@ -73,7 +74,7 @@ function AdminLocationForm({ terminal, location, floor, pickedPoint, isPicking, 
             onDeleted(location.id);
         } catch (err) {
             console.error(err);
-            setError("Không xóa được địa điểm. Hãy kiểm tra backend.");
+            setError(err instanceof AuthError ? err.message : "Không xóa được địa điểm. Hãy kiểm tra backend.");
         }
     };
 

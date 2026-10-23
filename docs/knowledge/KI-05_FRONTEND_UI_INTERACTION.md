@@ -78,6 +78,12 @@
 - Marker địa điểm được tạo một lần và cache theo id; zoom/xoay chỉ tính lại marker nào đủ chỗ hiện (ẩn/hiện), kéo bản đồ không đụng marker. Không dùng CSS `filter` trên pane bản đồ.
 - `zoomDelta: 1` (nút +/−). Con lăn chuột và **chụm touchpad** dùng `utils/smoothWheelZoom.js` (tắt `scrollWheelZoom` của Leaflet): mỗi sự kiện wheel đổi zoom đích và vẽ lại ngay ở khung hình kế tiếp bằng `map._move(..., { pinch: true })`, giữ điểm dưới con trỏ đứng yên (tính cả góc xoay bản đồ), hết cử chỉ thì snap như pinch của leaflet-rotate. Handler mặc định của Leaflet chờ ngừng cuộn mới animate nên zoom bằng touchpad bị trễ, không bám tay.
 
+## 2.7. Trang quản trị `/admin`
+
+- `Root.jsx` chọn trang theo đường dẫn: `/` = bản đồ công khai (không có nút Admin); `/admin` = trang đăng nhập (`LoginDialog asPage`), đăng nhập xong mở `App` với `admin = { session, onSessionChange, onLogout }` → bản đồ + AdminPanel, header có nhãn QUẢN TRỊ, tên người dùng, nút mở trang công khai, nút đăng xuất. Cloudflare (`not_found_handling: single-page-application`) và Vite trả `index.html` cho `/admin`, không cần router.
+- `api/auth.js`: `login`, `logout`, `getSession`; token lưu `sessionStorage` (hết khi đóng tab) và trong bộ nhớ nếu trình duyệt chặn storage.
+- `request()` trong `locationApi.js` gắn `Authorization: Bearer` cho POST/PUT/DELETE. Bị 401/403 → xóa phiên, phát sự kiện `admin-session-expired`, ném `AuthError`; App hiện hộp đăng nhập đè lên bản đồ, form/lối đi chưa lưu vẫn giữ, đăng nhập lại rồi bấm lưu lần nữa.
+
 ## API khi deploy cloud
 
 locationApi.js dùng VITE_API_BASE_URL là origin Render ở production; không đặt biến thì local dùng /api qua Vite proxy, bản build dùng file JSON trong public/data. Bản build không có Admin (`canEdit`). Không đặt credentials database trong frontend. Chi tiết tại [hướng dẫn](../CLOUD_DEPLOYMENT.md).

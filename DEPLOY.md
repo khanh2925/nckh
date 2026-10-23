@@ -5,8 +5,8 @@ Hướng dẫn đầy đủ (Cloudflare Workers + Render + Neon): [docs/CLOUD_DE
 Tóm tắt:
 
 - Frontend tự deploy lên Cloudflare Workers mỗi khi có commit vào `main` (GitHub Actions, tab **Actions** để xem kết quả).
-- Web online đọc dữ liệu thật trên Neon qua backend Render (biến `VITE_API_BASE_URL`). Server online chỉ cho đọc, **không có Admin**.
-- Sửa dữ liệu: trên Neon Console, hoặc trang Admin chạy ở máy (`npm run dev`, backend dùng `Back-End/.env` trỏ Neon).
+- Web online đọc dữ liệu thật trên Neon qua backend Render (biến `VITE_API_BASE_URL`).
+- Sửa dữ liệu: trang quản trị **`/admin`** (ví dụ `https://aeroproce.aeroproce.workers.dev/admin`), đăng nhập `admin` + mật khẩu `ADMIN_PASSWORD` đặt trên Render. Không đăng nhập thì API chỉ cho đọc.
 
 ## Thủ công (dự phòng)
 

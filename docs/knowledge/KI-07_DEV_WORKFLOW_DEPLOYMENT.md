@@ -12,4 +12,4 @@ Mở rộng tầng/nhà ga cần đồng bộ cấu hình frontend và danh mụ
 
 ## Deploy Cloudflare Workers + Render + Neon
 
-Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render chỉ cho đọc (READ_ONLY=true), kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Sửa dữ liệu trên Neon Console hoặc Admin chạy ở máy. Xem [hướng dẫn](../CLOUD_DEPLOYMENT.md).
+Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Trang quản trị `/admin` có đăng nhập (ADMIN_USERNAME/ADMIN_PASSWORD, token ký bằng JWT_SECRET, xem KI-04). Chạy local: `Back-End/.env` chứa các biến này (git-ignore); trỏ DB_URL vào Neon thì Admin trên máy sửa thẳng dữ liệu thật. Xem [hướng dẫn](../CLOUD_DEPLOYMENT.md).
