@@ -18,3 +18,6 @@ services:
         sync: false
       - key: CORS_ALLOWED_ORIGINS
         value: https://aeroproce.aeroproce.workers.dev
+      # Public server: only GET (nobody on the internet can change data)
+      - key: READ_ONLY
+        value: "true"

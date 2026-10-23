@@ -3,8 +3,23 @@ import AdminLocationForm from "./AdminLocationForm";
 import { getLocationType } from "../data/locationTypes";
 import { normalizeText } from "../utils/text";
 
-// Admin CRUD: a list of locations on the current floor, or the add/edit form
-function AdminPanel({ terminal, locations, floor, editingLocation, isCreating, pickedPoint, isPicking, onEdit, onCreate, onCancel, onStartPick, onSaved, onDeleted }) {
+// Switch between managing locations and drawing walkways
+function AdminTabs({ tab, onTabChange }) {
+    return (
+        <div className="btn-group btn-group-sm w-100 mb-3" role="group" aria-label="Chế độ quản lý">
+            <button type="button" className={`btn ${tab === "locations" ? "btn-danger" : "btn-outline-danger"}`} aria-pressed={tab === "locations"} onClick={() => onTabChange("locations")}>
+                <i className="bi bi-geo-alt me-1" />Địa điểm
+            </button>
+            <button type="button" className={`btn ${tab === "walkways" ? "btn-danger" : "btn-outline-danger"}`} aria-pressed={tab === "walkways"} onClick={() => onTabChange("walkways")}>
+                <i className="bi bi-bezier2 me-1" />Lối đi
+            </button>
+        </div>
+    );
+}
+
+// Admin: tab "Địa điểm" = a list of locations on the current floor, or the add/edit form.
+// tab "Lối đi" = the walkway tools (children, see WalkwayPanel).
+function AdminPanel({ tab, onTabChange, children, terminal, locations, floor, editingLocation, isCreating, pickedPoint, isPicking, onEdit, onCreate, onCancel, onStartPick, onSaved, onDeleted }) {
     const [keyword, setKeyword] = useState("");
     const [message, setMessage] = useState("");
 
@@ -27,6 +42,19 @@ function AdminPanel({ terminal, locations, floor, editingLocation, isCreating, p
         setMessage("");
         onCreate();
     };
+
+    if (tab === "walkways") {
+        return (
+            <aside className="admin-card">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                    <span className="badge text-bg-danger">ADMIN</span>
+                    <strong className="flex-grow-1">Vẽ lối đi</strong>
+                </div>
+                <AdminTabs tab={tab} onTabChange={onTabChange} />
+                {children}
+            </aside>
+        );
+    }
 
     if (isCreating || editingLocation) {
         return (
@@ -67,6 +95,8 @@ function AdminPanel({ terminal, locations, floor, editingLocation, isCreating, p
                 </button>
             </div>
 
+            <AdminTabs tab={tab} onTabChange={onTabChange} />
+
             {message && <div className="alert alert-success py-1 px-2 small" role="status">{message}</div>}
 
             <input
@@ -94,7 +124,7 @@ function AdminPanel({ terminal, locations, floor, editingLocation, isCreating, p
                 })}
             </div>
 
-            <p className="small text-muted mt-2 mb-0">Mẹo: bấm vào marker trên bản đồ để sửa nhanh. Dữ liệu được lưu trong file JSON của backend.</p>
+            <p className="small text-muted mt-2 mb-0">Mẹo: bấm vào marker trên bản đồ để sửa nhanh. Dữ liệu được lưu trong PostgreSQL qua backend.</p>
         </aside>
     );
 }

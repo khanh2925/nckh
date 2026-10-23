@@ -11,11 +11,22 @@ createuser --login --pwprompt airport_map
 createdb --owner=airport_map airport_map
 psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/01_schema.sql
 psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/02_seed.sql
+psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/03_walkways_schema.sql
+psql -h localhost -U airport_map -d airport_map -v ON_ERROR_STOP=1 -f Back-End/database/04_walkways_seed.sql
 ```
+
+**Database đang dùng (đã chạy 01, 02):** chỉ cần chạy thêm `03_walkways_schema.sql` rồi `04_walkways_seed.sql` (một lần). 03 dùng `IF NOT EXISTS`, 04 bỏ qua dòng đã có, không đụng dữ liệu địa điểm. Hai bảng mới: `walkway_nodes`, `walkway_edges` (mạng lối đi cho chỉ đường). Dữ liệu trong 04 được sinh tự động từ mặt bằng SVG, Admin chỉnh lại bằng tab **Lối đi**.
 
 `01_schema.sql` tạo thẳng sáu bảng chuẩn, không tạo bảng tạm rồi chuyển đổi. `02_seed.sql` chứa INSERT SQL cho 705 địa điểm, danh mục, liên kết và giá trị sequence. Hai file tách cấu trúc và dữ liệu, không phải hai phiên bản schema. Chạy mỗi file một lần trên database mới; không chạy seed lên database đang sử dụng vì sẽ trùng khóa. Không cần JSON hoặc chạy backend để import.
 
 Có thể mở và chạy hai file theo thứ tự trong Query Tool của pgAdmin/DBeaver. Trên Windows có thể tạo role/database qua pgAdmin rồi chạy SQL; các biến môi trường bên dưới dùng cú pháp macOS/Linux.
+
+## Dùng Neon (PostgreSQL trên cloud)
+
+1. Mở `Back-End/.env.example`, sao chép thành `Back-End/.env` (file này bị git bỏ qua, không lên GitHub) và điền thông tin Neon.
+   Chuỗi Neon `postgresql://USER:PASSWORD@HOST/DB?sslmode=require` đổi thành `DB_URL=jdbc:postgresql://HOST/DB?sslmode=require`, `DB_USERNAME=USER`, `DB_PASSWORD=PASSWORD`.
+2. Nạp dữ liệu lên Neon một lần: pgAdmin → Register Server (Host = HOST, Database = DB, Username = USER, SSL mode = require) → Query Tool, chạy lần lượt 01 → 02 → 03 → 04. Nếu 01 báo bảng đã tồn tại thì database đã có dữ liệu, chỉ cần 03, 04.
+3. Chạy backend như bình thường (`.\mvnw.cmd spring-boot:run` trong thư mục `Back-End`): Spring đọc `.env` và kết nối Neon. Biến môi trường thật luôn được ưu tiên hơn file `.env`.
 
 ## Chạy ứng dụng
 
@@ -32,7 +43,7 @@ npm install
 npm run dev -- --port 5174
 ```
 
-Frontend proxy `/api` về backend 8080. API GET/POST/PUT/DELETE `/api/locations` giữ nguyên. Tọa độ x/y là pixel SVG; lat/lng là WGS84.
+Frontend proxy `/api` về backend 8080. API GET/POST/PUT/DELETE `/api/locations` giữ nguyên. `GET /api/walkways` trả `{ nodes, edges }`; `PUT /api/walkways` thay toàn bộ mạng lối đi (Admin bấm "Lưu lối đi"). Tọa độ x/y là pixel SVG; lat/lng là WGS84.
 
 Database local hiện có đã ở schema chuẩn nên giữ nguyên dữ liệu, không chạy lại script. Các bảng theo dõi Flyway/import của bản triển khai cũ không còn được ứng dụng sử dụng. Máy mới chỉ có sáu bảng nghiệp vụ.
 

@@ -1,47 +1,48 @@
-# Cloudflare Workers + Render + Neon
+# Deploy: Cloudflare Workers + Render + Neon
 
-React/Vite chạy trên Cloudflare Workers; Spring Boot Java 17 chạy Docker trên Render Free; PostgreSQL trên Neon. Không cần Vercel hoặc cài Docker trên máy để Render build.
+```text
+Người dùng → Cloudflare Workers (React) → Render (Spring Boot, CHỈ ĐỌC) → Neon (PostgreSQL)
+Máy Long / Khánh (npm run dev + backend chạy ở máy, Back-End/.env) → Neon   (Admin sửa, vẽ lối đi)
+```
 
-## Render backend
+Web online luôn đọc dữ liệu mới nhất trên Neon: sửa trên Neon xong, tải lại trang là thấy.
 
-Tạo Web Service từ GitHub repo, hoặc Blueprint bằng `render.yaml` tại root:
+## 1. Neon (database chung)
 
-- Branch: `main` (để thử code hiện ở khanh, dùng nhánh khanh trước khi merge).
-- Root Directory: `Back-End`.
-- Runtime: Docker; Dockerfile: `Dockerfile`; Instance Type: Free.
-- Health Check Path: `/api/locations`.
-- Auto deploy: On Commit.
+Đã có đủ dữ liệu: `01`, `02` (705 địa điểm) và `03`, `04` (lối đi). Không chạy lại script.
 
-Environment variables:
+Cách sửa dữ liệu:
 
-- DB_URL: `jdbc:postgresql://HOST_NEON/neondb?sslmode=require&channelBinding=require`.
-- DB_USERNAME: username từ Neon.
-- DB_PASSWORD: mật khẩu mới từ Neon, không commit.
-- CORS_ALLOWED_ORIGINS: URL frontend chính xác, ví dụ `https://aeroproce.aeroproce.workers.dev` (không dấu / cuối). Nhiều origin phân cách bằng dấu phẩy. Không dùng wildcard cho toàn bộ workers.dev.
+- **Sửa nhanh** (tên, mô tả, giờ mở cửa, điện thoại, tọa độ…): Neon Console → **Tables** → bảng `locations` → sửa ô → **Save**.
+- **Thêm/xóa địa điểm, đổi tầng, tiện ích, vẽ lối đi**: dùng trang Admin chạy trên máy (`npm run dev` + backend với `Back-End/.env` trỏ Neon). Dữ liệu này nằm ở nhiều bảng (`floors`, `location_facilities`, `walkway_nodes`, `walkway_edges`) nên sửa tay trên Console dễ sai.
 
-Neon đã có seed: không chạy lại script. Với database mới, chạy 01_schema.sql và 02_seed.sql một lần. Render dùng PORT do platform cấp. Free service ngủ sau 15 phút không có traffic, lần truy cập tiếp theo có thể chậm khoảng một phút.
+## 2. Render (backend)
 
-Kiểm tra `https://YOUR-SERVICE.onrender.com/api/locations` trả JSON.
+Người tạo: chủ repo GitHub (Khánh), vì Render cần quyền đọc repo.
 
-## Cloudflare Workers frontend
+1. Render → **New → Blueprint** → chọn repo `nckh` → Render đọc `render.yaml` (Docker, Free, nhánh `main`, thư mục `Back-End`).
+2. Điền biến môi trường (không commit):
+   - `DB_URL` = `jdbc:postgresql://HOST_NEON/neondb?sslmode=require`
+   - `DB_USERNAME`, `DB_PASSWORD` = tài khoản Neon.
+   - `CORS_ALLOWED_ORIGINS` (địa chỉ web Cloudflare, không có `/` cuối) và `READ_ONLY=true` đã có sẵn trong `render.yaml`.
+3. Kiểm tra `https://<tên-service>.onrender.com/api/locations` và `/api/walkways` trả JSON.
 
-Dùng Worker hiện có `aeroproce`, URL https://aeroproce.aeroproce.workers.dev. Cấu hình Workers Builds Git integration:
+`READ_ONLY=true`: API không có đăng nhập, nên server online chỉ trả lời GET; thêm/sửa/xóa trả 403.
+Gói Free: ngủ sau 15 phút không ai truy cập, lần mở lại mất khoảng 1 phút (web hiện "Đang tải dữ liệu…"); 750 giờ/tháng.
 
-- Repository: `khanh2925/nckh`.
-- Production branch: `main`.
-- Root Directory: `Front-End`.
-- Build command: `npm run build`.
-- Deploy command: `npx wrangler deploy`.
-- Wrangler config: `Front-End/wrangler.jsonc`, assets directory `./dist`, Worker name `aeroproce`.
-- NODE_VERSION: `22.12.0` hoặc bản mới hơn tương thích Vite.
-- VITE_API_BASE_URL: `https://YOUR-SERVICE.onrender.com`.
+## 3. Cloudflare Workers (frontend)
 
-VITE_API_BASE_URL là biến build công khai, chỉ chứa địa chỉ backend. Tuyệt đối không đưa thông tin database vào biến VITE_. Đặt biến trước khi build; thay giá trị phải redeploy. Local không đặt biến này vẫn dùng Vite proxy đến localhost:8080.
+GitHub Actions (`.github/workflows/deploy.yml`) build và deploy mỗi khi có commit vào `main`.
+(Cloudflare Workers Builds không thấy được repo của tài khoản GitHub khác nên không dùng.)
 
-Blueprint đã đặt CORS_ALLOWED_ORIGINS=https://aeroproce.aeroproce.workers.dev. Nếu tạo Render thủ công, đặt cùng giá trị và redeploy backend. Kiểm tra xem bản đồ và CRUD. Preview domain cần khai báo riêng và nên dùng database demo riêng; không mở preview CRUD vào database quan trọng.
+GitHub repo → **Settings → Secrets and variables → Actions**:
 
-Push/merge main tự kích hoạt hai deployment độc lập. Không tự chạy seed hoặc reset database khi deploy. Cấu hình đang chuẩn bị trong repo, chưa chứng minh deployment cloud thành công cho đến khi có URL và kiểm tra API/CORS.
+- Secret `CLOUDFLARE_API_TOKEN`: token deploy Cloudflare.
+- Variable `VITE_API_BASE_URL` = `https://<tên-service>.onrender.com` (không có `/` cuối).
 
-API ghi hiện chưa có xác thực admin; dùng dữ liệu demo cho bản public.
+Chưa đặt `VITE_API_BASE_URL` thì web dùng bản sao JSON trong `Front-End/public/data` (xuất bằng `npm run export-data`).
+Đổi biến này phải deploy lại: **Actions → Deploy to Cloudflare Workers → Run workflow**.
 
-Tài liệu: https://render.com/docs/free, https://render.com/docs/blueprint-spec, https://developers.cloudflare.com/workers/ci-cd/builds/configuration/.
+Không đưa thông tin database vào biến `VITE_` (biến này nằm công khai trong code web) và không commit `.env`.
+
+Tài liệu: https://render.com/docs/free, https://render.com/docs/blueprint-spec

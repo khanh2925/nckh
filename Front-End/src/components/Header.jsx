@@ -1,4 +1,5 @@
 import { airportFloors, airportTerminals } from "../data/airportCatalog";
+import { canEdit } from "../api/locationApi";
 
 function Header({ terminal, onTerminalChange, floor, onFloorChange, role, onRoleChange }) {
     const floors = airportFloors.filter(item => item.terminal === terminal);
@@ -30,11 +31,12 @@ function Header({ terminal, onTerminalChange, floor, onFloorChange, role, onRole
                     ))}
                 </nav>
 
-                {/* Adding locations is a desktop task, so the role switch is hidden on phones */}
-                <select className="form-select form-select-sm role-select d-none d-md-block" value={role} onChange={(e) => onRoleChange(e.target.value)} aria-label="Vai trò">
+                {/* Adding locations is a desktop task, so the role switch is hidden on phones.
+                    The online website is read-only, so there is no Admin at all (see canEdit). */}
+                {canEdit && <select className="form-select form-select-sm role-select d-none d-md-block" value={role} onChange={(e) => onRoleChange(e.target.value)} aria-label="Vai trò">
                     <option value="user">Người dùng</option>
                     <option value="admin">Admin</option>
-                </select>
+                </select>}
             </div>
         </header>
     );

@@ -23,12 +23,14 @@
    - `selectedId`: ID của địa điểm đang được mở popup chi tiết (`LocationDetail.jsx`).
 2. **Chế độ Chỉ đường (Routing Mode)**:
    - `isRouting`: Cờ bật/tắt giao diện chỉ đường.
-   - `routeFromId`, `routeToId`: Điểm xuất phát và điểm đích.
-   - `route`: Kết quả tính toán từ `useMemo` gọi `findRoute(from, to)`.
+   - `routeFrom`, `routeTo`: Điểm xuất phát và điểm đích, là một địa điểm hoặc một vị trí bất kỳ bấm trên mặt bằng (`isPoint: true`).
+   - `pickTarget`: đầu nào sẽ nhận cú bấm tiếp theo trên bản đồ (nút tâm ngắm trong `RoutePanel`); mặc định là đầu còn thiếu.
+   - `route`: Kết quả tính toán từ `useMemo` gọi `findRoute(walkways, from, to)` (xem KI-03).
 3. **Chế độ Quản trị (Admin Mode)**:
    - `role`: `"user"` hoặc `"admin"`.
    - `editingId`: ID địa điểm đang chỉnh sửa hoặc `"new"` khi thêm mới.
-   - `isPicking` & `pickedPoint`: Chế độ nhấp trực tiếp lên bản đồ để lấy tọa độ pixel (`x, y`).
+   - `isPicking` & `pickedPoint`: Chế độ nhấp trực tiếp lên bản đồ để lấy tọa độ `lat, lng`.
+   - `adminTab`: `"locations"` (CRUD địa điểm) hoặc `"walkways"` (vẽ lối đi bằng `useWalkwayEditor`).
 
 ---
 
@@ -62,4 +64,4 @@
 
 ## API khi deploy cloud
 
-locationApi.js dùng VITE_API_BASE_URL là origin Render ở production; không đặt biến thì dùng /api qua Vite proxy. Không đặt credentials database trong frontend. Chi tiết tại [hướng dẫn](../CLOUD_DEPLOYMENT.md).
+locationApi.js dùng VITE_API_BASE_URL là origin Render ở production; không đặt biến thì local dùng /api qua Vite proxy, bản build dùng file JSON trong public/data. Bản build không có Admin (`canEdit`). Không đặt credentials database trong frontend. Chi tiết tại [hướng dẫn](../CLOUD_DEPLOYMENT.md).

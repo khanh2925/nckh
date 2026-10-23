@@ -35,7 +35,7 @@ docs/knowledge/
 - Bất kỳ thay đổi nào với phép chiếu phải đồng bộ tại cả `mapProjection.js`, `projection.js` và `KI-02`.
 
 ### Quy Tắc 3: Kiểm Tra Tính Tương Thích Ngược
-- Khi thêm loại địa điểm mới (`locationTypes.js`), thêm tầng (`floors.js`) hoặc sửa đồ thị lối đi (`walkways.js`), cần đối chiếu với `KI-03` và `KI-05` để đảm bảo thuật toán Dijkstra không sinh ra chu trình cô lập (isolated component) hoặc lỗi render.
+- Khi thêm loại địa điểm mới (`locationTypes.js`), thêm tầng (`floors.js`) hoặc sửa mạng lối đi (Admin → tab Lối đi, bảng `walkway_nodes`/`walkway_edges`), cần đối chiếu với `KI-03` và `KI-05` để đảm bảo thuật toán Dijkstra không sinh ra chu trình cô lập (isolated component) hoặc lỗi render.
 
 ---
 

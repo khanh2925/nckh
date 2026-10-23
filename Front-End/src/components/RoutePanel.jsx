@@ -1,6 +1,31 @@
-function RoutePanel({ fromLocation, toLocation, route, floor, onSwap, onClearFrom, onClearTo, onClose, onFloorChange }) {
-    const isSamePlace = fromLocation && toLocation && fromLocation.id === toLocation.id;
-    const waitingFor = !fromLocation ? "điểm xuất phát" : !toLocation ? "điểm đến" : null;
+import { floorLabel } from "../utils/text";
+
+// One row of the panel: the chosen place, a "pick on the map" button and a clear button
+function RouteEnd({ icon, place, placeholder, isPicking, onPick, onClear, pickLabel, clearLabel }) {
+    return (
+        <div className={`route-point ${isPicking ? "is-picking" : ""}`}>
+            <i className={icon} />
+            <span className={place ? "" : "text-muted"}>
+                {place ? place.name : placeholder}
+                {place?.isPoint && <small className="text-muted"> · {floorLabel(place.floor)}</small>}
+            </span>
+            <button type="button" className={`btn btn-sm route-pick ${isPicking ? "btn-primary" : "btn-light"}`} onClick={onPick} aria-pressed={isPicking} aria-label={pickLabel} title={pickLabel}>
+                <i className="bi bi-crosshair" />
+            </button>
+            {place && (
+                <button type="button" className="btn btn-link btn-sm p-0 text-secondary" onClick={onClear} aria-label={clearLabel}>
+                    <i className="bi bi-x-circle-fill" />
+                </button>
+            )}
+        </div>
+    );
+}
+
+// fromPlace / toPlace: a location, or a point picked on the map ({ isPoint: true, name, terminal, floor, lat, lng })
+// pickTarget: "from" | "to" | null = which end the next click on the map fills
+function RoutePanel({ fromPlace, toPlace, route, floor, pickTarget, onPickTargetChange, onSwap, onClearFrom, onClearTo, onClose, onFloorChange }) {
+    const isSamePlace = fromPlace && toPlace && fromPlace.id === toPlace.id;
+    const pickText = pickTarget === "from" ? "điểm xuất phát" : "điểm đến";
 
     return (
         <aside className="route-panel" aria-label="Chỉ đường">
@@ -12,45 +37,45 @@ function RoutePanel({ fromLocation, toLocation, route, floor, onSwap, onClearFro
             </div>
 
             <div className="d-flex align-items-center gap-2">
-                <div className="flex-grow-1">
-                    <div className="route-point">
-                        <i className="bi bi-person-walking text-primary" />
-                        <span className={fromLocation ? "" : "text-muted"}>{fromLocation ? fromLocation.name : "Chọn điểm xuất phát"}</span>
-                        {fromLocation && (
-                            <button type="button" className="btn btn-link btn-sm p-0 text-secondary" onClick={onClearFrom} aria-label="Chọn lại điểm xuất phát">
-                                <i className="bi bi-x-circle-fill" />
-                            </button>
-                        )}
-                    </div>
-                    <div className="route-point">
-                        <i className="bi bi-geo-alt-fill text-danger" />
-                        <span className={toLocation ? "" : "text-muted"}>{toLocation ? toLocation.name : "Chọn điểm đến"}</span>
-                        {toLocation && (
-                            <button type="button" className="btn btn-link btn-sm p-0 text-secondary" onClick={onClearTo} aria-label="Chọn lại điểm đến">
-                                <i className="bi bi-x-circle-fill" />
-                            </button>
-                        )}
-                    </div>
+                <div className="flex-grow-1 min-w-0">
+                    <RouteEnd
+                        icon="bi bi-person-walking text-primary"
+                        place={fromPlace}
+                        placeholder="Chọn điểm xuất phát"
+                        isPicking={pickTarget === "from"}
+                        onPick={() => onPickTargetChange(pickTarget === "from" ? null : "from")}
+                        onClear={onClearFrom}
+                        pickLabel="Chọn điểm xuất phát trên bản đồ"
+                        clearLabel="Chọn lại điểm xuất phát"
+                    />
+                    <RouteEnd
+                        icon="bi bi-geo-alt-fill text-danger"
+                        place={toPlace}
+                        placeholder="Chọn điểm đến"
+                        isPicking={pickTarget === "to"}
+                        onPick={() => onPickTargetChange(pickTarget === "to" ? null : "to")}
+                        onClear={onClearTo}
+                        pickLabel="Chọn điểm đến trên bản đồ"
+                        clearLabel="Chọn lại điểm đến"
+                    />
                 </div>
                 <button type="button" className="btn btn-light border btn-sm" onClick={onSwap} aria-label="Đảo chiều" title="Đảo chiều">
                     <i className="bi bi-arrow-down-up" />
                 </button>
             </div>
 
-            {waitingFor && (
-                <p className="small text-muted mt-2 mb-0">
-                    <i className="bi bi-info-circle me-1" />
-                    Chạm vào một địa điểm trên bản đồ hoặc dùng ô tìm kiếm để chọn {waitingFor}.
+            {pickTarget && (
+                <p className="small text-primary mt-2 mb-0">
+                    <i className="bi bi-hand-index me-1" />
+                    Chạm vào vị trí bất kỳ trên mặt bằng, vào một địa điểm, hoặc dùng ô tìm kiếm để chọn {pickText}.
                 </p>
             )}
 
             {isSamePlace && <p className="small text-danger mt-2 mb-0">Điểm xuất phát và điểm đến đang trùng nhau.</p>}
 
-            {!waitingFor && !isSamePlace && !route && (
-                <p className="small text-danger mt-2 mb-0">Không tìm được đường đi giữa hai địa điểm này.</p>
-            )}
+            {route?.error && <p className="small text-danger mt-2 mb-0">{route.error}</p>}
 
-            {route && (
+            {route?.legs && (
                 <div className="mt-3">
                     <div className="route-summary">
                         <strong>{route.minutes} phút</strong>
@@ -69,13 +94,13 @@ function RoutePanel({ fromLocation, toLocation, route, floor, onSwap, onClearFro
                                             className={`btn btn-sm ${leg.floor === floor ? "btn-primary" : "btn-outline-primary"}`}
                                             onClick={() => onFloorChange(leg.floor)}
                                         >
-                                            Tầng {leg.floor}
+                                            {floorLabel(leg.floor)}
                                         </button>
                                         <span>
                                             Đi bộ ~{Math.round(leg.distance)} m
                                             {nextLeg
-                                                ? `, rồi đi ${leg.connector.toLowerCase()} ${nextLeg.floor > leg.floor ? "lên" : "xuống"} Tầng ${nextLeg.floor}`
-                                                : ` đến ${toLocation.name}`}
+                                                ? `, rồi đi ${leg.connector.toLowerCase()} ${nextLeg.floor > leg.floor ? "lên" : "xuống"} ${floorLabel(nextLeg.floor)}`
+                                                : ` đến ${toPlace.name}`}
                                         </span>
                                     </li>
                                 );

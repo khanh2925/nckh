@@ -12,4 +12,4 @@ Mở rộng tầng/nhà ga cần đồng bộ cấu hình frontend và danh mụ
 
 ## Deploy Cloudflare Workers + Render + Neon
 
-Frontend dùng VITE_API_BASE_URL trỏ Render; local giữ proxy /api. Backend Docker dùng PORT và CORS_ALLOWED_ORIGINS là danh sách origin phân cách dấu phẩy, kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Blueprint render.yaml chọn main và Free; Cloudflare chọn main trong dashboard. Xem [hướng dẫn](../CLOUD_DEPLOYMENT.md). Chưa deploy cloud.
+Frontend (Cloudflare, deploy bằng GitHub Actions) dùng VITE_API_BASE_URL trỏ backend Render; local giữ proxy /api. Backend Docker trên Render chỉ cho đọc (READ_ONLY=true), kết nối Neon qua DB_URL/DB_USERNAME/DB_PASSWORD. Sửa dữ liệu trên Neon Console hoặc Admin chạy ở máy. Xem [hướng dẫn](../CLOUD_DEPLOYMENT.md).

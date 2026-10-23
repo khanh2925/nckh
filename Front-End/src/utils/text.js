@@ -9,3 +9,8 @@ export function normalizeText(text) {
         .toLowerCase()
         .trim();
 }
+
+// Short floor name for messages: 0 -> "Tầng trệt", 2 -> "Tầng 2"
+export function floorLabel(floor) {
+    return floor === 0 ? "Tầng trệt" : `Tầng ${floor}`;
+}

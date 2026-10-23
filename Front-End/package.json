@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "export-data": "node scripts/export-data.mjs",
+    "deploy": "npm run build && npx wrangler deploy"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
