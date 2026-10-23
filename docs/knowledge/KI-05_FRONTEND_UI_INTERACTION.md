@@ -50,6 +50,8 @@
 - Người dùng có thể tìm kiếm không dấu hoặc có dấu (Ví dụ: `cua 14` tìm ra `Cửa 14`, `ve sinh` tìm ra `Nhà vệ sinh`).
 - Hàm `normalizeText` trong `text.js` chuẩn hóa ký tự Unicode và loại bỏ toàn bộ dấu thanh/dấu mũ tiếng Việt.
 
+- Kết quả ưu tiên nhà ga rồi tầng đang xem, ghi rõ `Loại · Ga · Tầng · Khu`. Bàn phím: ↑ ↓ chọn, Enter mở, Esc đóng (combobox/listbox ARIA). Danh sách đóng khi ô tìm kiếm mất focus.
+
 ### 2.3. Lọc Theo Nhóm Danh Mục (`CategoryFilter.jsx`)
 - Phân loại trực quan:
   - 🚪 **Cửa ra máy bay (Gates)**
@@ -61,6 +63,20 @@
 ### 2.4. Quản Trị Trực Tiếp Cho Admin (`AdminPanel.jsx` & `AdminLocationForm.jsx`)
 - Cho phép Admin xem danh sách theo tầng, tìm kiếm, sửa thông tin, xóa và thêm địa điểm mới.
 - Tính năng **Chọn tọa độ trực quan trên bản đồ (Point Picker)**: Admin chỉ cần nhấn "Chọn trên bản đồ" và click vào vị trí mong muốn, tọa độ pixel `x, y` và `lat, lng` sẽ tự động điền vào form.
+
+## 2.5. Quy ước giao diện điện thoại (< 768px)
+
+- Header 2 dòng: logo + ô chọn nhà ga (đóng vai trò tiêu đề); dòng dưới là tab tầng tên ngắn (`floorLabel`: "Tầng trệt", "Tầng 1"), tên đầy đủ ở `title`.
+- Chi tiết địa điểm, chỉ đường, Admin là bottom sheet trượt lên. Khi chọn địa điểm, bản đồ đặt nó ở ~30% chiều cao màn hình để không bị sheet che. Bản đồ xoay (bearing 85°) nên dời bản đồ bằng `containerPointToLatLng`, không dùng `panBy` (panBy đi theo trục chưa xoay).
+- Panel xuất hiện có hiệu ứng ngắn; tắt khi `prefers-reduced-motion`.
+- Marker cửa ra máy bay chỉ hiện số khi tên dạng `Cửa 09` / `Cửa 01-05` (độ rộng theo độ dài số); tên khác (dữ liệu gán nhầm loại, ví dụ "Cửa Hàng Sasco") dùng icon thường.
+- Chi tiết: điện thoại là link `tel:`, website mở tab mới; giờ mở cửa tiếng Anh từ dữ liệu crawl được đổi sang tiếng Việt / 24 giờ ("24 Hours" → "Mở cửa 24 giờ", "5AM-9PM" → "05:00 – 21:00").
+
+## 2.6. Hiệu năng bản đồ (zoom)
+
+- Mặt bằng và ảnh khuôn viên vẽ bằng **SVG nhúng** (`utils/inlineSvg.js` + `L.svgOverlay`), không dùng `L.imageOverlay(url)`. Ảnh `<img>` SVG bị vẽ lại toàn bộ sau mỗi lần zoom (khuôn viên ~24000×15000 px ở zoom 19.5) làm bản đồ đơ; SVG nhúng chỉ vẽ phần trong màn hình. `inlineSvg` thêm tiền tố cho class/id vì các file CorelDRAW trùng tên class (`.fil0`…).
+- Marker địa điểm được tạo một lần và cache theo id; zoom/xoay chỉ tính lại marker nào đủ chỗ hiện (ẩn/hiện), kéo bản đồ không đụng marker. Không dùng CSS `filter` trên pane bản đồ.
+- `zoomDelta: 1` (nút +/−). Con lăn chuột và **chụm touchpad** dùng `utils/smoothWheelZoom.js` (tắt `scrollWheelZoom` của Leaflet): mỗi sự kiện wheel đổi zoom đích và vẽ lại ngay ở khung hình kế tiếp bằng `map._move(..., { pinch: true })`, giữ điểm dưới con trỏ đứng yên (tính cả góc xoay bản đồ), hết cử chỉ thì snap như pinch của leaflet-rotate. Handler mặc định của Leaflet chờ ngừng cuộn mới animate nên zoom bằng touchpad bị trễ, không bám tay.
 
 ## API khi deploy cloud
 

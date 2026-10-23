@@ -25,6 +25,19 @@ Admin → tab **Lối đi**. Bản nháp là cả mạng lối đi; chỉ ghi v�
 
 Kéo điểm để dời vị trí. Ctrl+Z hoàn tác. Mở "Chỉ đường" khi đang vẽ để thử ngay trên bản nháp (lúc đó bản đồ khóa chỉnh sửa).
 
+### Kiểm tra lối đi (`utils/walkwayCheck.js`)
+
+Cuối tab **Lối đi** có mục **Kiểm tra lối đi** cho nhà ga đang xem, tính lại trên bản nháp sau mỗi thay đổi (vài ms):
+
+- **Mảnh chính** = mảnh có nhiều địa điểm nối vào nhất. Các mảnh khác là **mảnh rời**: vẽ màu đỏ trên bản đồ, điểm của chúng tô đỏ.
+- **Địa điểm không tới được**: `noWalkway` = không có đoạn lối đi cùng tầng trong 60 m; `isolated` = chỉ nối được vào mảnh rời.
+- **Thang chưa nối tầng**: điểm có `connector` nhưng không có cạnh sang tầng khác.
+- Thanh tiến độ `tới được / tổng` địa điểm. Bấm một mục → chuyển tầng, đưa bản đồ tới đó và khoanh đỏ.
+
+`checkWalkways` dùng lại `buildGraph`, `findPieces`, `findEntries` của `routing.js` (đã export), nên "tới được" trùng đúng với việc `findRoute` tìm được đường từ mảnh chính (đã đối chiếu 264/264 địa điểm T2). Khi đổi luật nhập mạng (60 m, chiếu lên đoạn) trong routing, kiểm tra tự đổi theo.
+
+Kết quả trên dữ liệu seed (23/10/2026): T1 189/189, T3 247/247, **T2 168/265 (63%)**: 4 mảnh rời, phần lớn Tầng trệt T2 tách khỏi mạng chính.
+
 ## 3. Thuật toán (`utils/routing.js`)
 
 1. **Điểm bất kỳ**: điểm đi/đến là một địa điểm hoặc một vị trí bấm trên mặt bằng (`{ isPoint, terminal, floor, lat, lng }`). Chỉ hỗ trợ trong cùng một nhà ga.

@@ -1,5 +1,19 @@
 import { useState } from "react";
 import { getGroup, getLocationType } from "../data/locationTypes";
+import { floorLabel } from "../utils/text";
+
+// The crawled data writes opening hours in English: "24 Hours", "5AM-9PM", "6AM - 11:45PM"
+function translateHours(text) {
+    if (/^24\s*hours?$/i.test(text.trim())) return "Mở cửa 24 giờ";
+    return text
+        .replace(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/gi, (match, hour, minute = "00", half) => {
+            const value = (Number(hour) % 12) + (half.toUpperCase() === "PM" ? 12 : 0);
+            return `${String(value).padStart(2, "0")}:${minute}`;
+        })
+        .replace(/\s*-\s*/g, " – ");
+}
+// Some websites in the data have no "https://", which would make the link relative to our own site
+const toUrl = (website) => (/^https?:\/\//i.test(website) ? website : `https://${website}`);
 
 // Desktop: a panel on the left, always showing everything.
 // Phone: a bottom sheet. Collapsed = short preview, "Xem chi tiết" expands it (see App.css).
@@ -28,7 +42,7 @@ function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
 
             <div className="d-flex flex-wrap gap-2 mt-3">
                 <span className="badge text-bg-light border"><i className="bi bi-building me-1" />Ga {location.terminal || "T1"}</span>
-                <span className="badge text-bg-light border"><i className="bi bi-layers me-1" />Tầng {location.floor}</span>
+                <span className="badge text-bg-light border"><i className="bi bi-layers me-1" />{floorLabel(location.floor)}</span>
                 {location.area && <span className="badge text-bg-light border"><i className="bi bi-geo-alt me-1" />{location.area}</span>}
             </div>
 
@@ -51,15 +65,31 @@ function LocationDetail({ location, onClose, onRouteFrom, onRouteTo }) {
                 {!hasMoreInfo && <p className="text-muted small mt-3 mb-0">Chưa có thêm thông tin cho địa điểm này.</p>}
 
                 {location.description && <p className="mt-3 mb-0">{location.description}</p>}
-                {location.phone && <p className="mt-2 mb-0">Điện thoại: {location.phone}</p>}
-                {location.website && <p className="mt-2 mb-0">Website: {location.website}</p>}
+                {location.phone && (
+                    <div className="detail-row">
+                        <i className="bi bi-telephone" />
+                        <div>
+                            <small className="text-muted d-block">Điện thoại</small>
+                            <a href={`tel:${location.phone.replace(/[^\d+]/g, "")}`}>{location.phone}</a>
+                        </div>
+                    </div>
+                )}
+                {location.website && (
+                    <div className="detail-row">
+                        <i className="bi bi-globe" />
+                        <div className="min-w-0">
+                            <small className="text-muted d-block">Website</small>
+                            <a href={toUrl(location.website)} target="_blank" rel="noopener noreferrer" className="text-break">{location.website.replace(/^https?:\/\//i, "").replace(/\/$/, "")}</a>
+                        </div>
+                    </div>
+                )}
 
                 {location.openingHours && (
                     <div className="detail-row">
                         <i className="bi bi-clock" />
                         <div>
                             <small className="text-muted d-block">Giờ mở cửa</small>
-                            {location.openingHours}
+                            {translateHours(location.openingHours)}
                         </div>
                     </div>
                 )}

@@ -24,7 +24,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .topbar p { font-size: 13px; color: var(--muted); margin: 3px 0 0; }
 .header-actions { display: flex; align-items: center; gap: 10px; }
 .floor-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--border); background: #f7f7f7; border-radius: 9px; }
-.floor-button { border: 0; border-radius: 6px; padding: 7px 14px; color: #656c72; background: transparent; white-space: nowrap; }
+.floor-button { border: 0; border-radius: 6px; padding: 7px 14px; color: #656c72; background: transparent; white-space: nowrap; transition: background-color .15s, color .15s; }
+.floor-button:not(.active):hover { background: #ececec; color: var(--text); }
 .floor-button.active { color: var(--brand); background: #fff; box-shadow: 0 1px 5px #00000013; font-weight: 650; }
 .role-select { width: auto; }
 
@@ -35,6 +36,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .route-open { flex: 0 0 auto; width: 44px; min-height: 44px; font-size: 18px; box-shadow: 0 1px 4px #00000024; }
 .search-box .form-control { min-height: 44px; }
 .search-results { position: absolute; z-index: 1001; top: calc(100% + 6px); left: 0; right: 0; max-height: 320px; overflow-y: auto; }
+.search-results .is-active { background: #f1f3f5; }
 .category-filter { display: flex; flex-wrap: wrap; gap: 6px; }
 .category-filter .btn { white-space: nowrap; box-shadow: 0 1px 4px #00000014; }
 
@@ -78,7 +80,7 @@ button.campus-terminal { cursor: pointer; }
 .campus-terminal:focus-visible { outline: 3px solid #1a73e8; outline-offset: 4px; }
 .campus-parking { display: grid; place-items: center; width: 66px; height: 66px; transform: translate(-50%, -50%); background: #666; border: 3px solid white; border-radius: 50%; box-shadow: 0 3px 4px #0002; }
 .campus-parking .campus-symbol { color: #666; font-weight: 800; }
-.leaflet-tile-pane { filter: saturate(.65); }
+/* No CSS filter on the tiles: a filter is re-applied on every frame while zooming and made it stutter */
 .floor-plan-svg text { fill: #535353; font-family: Arial, sans-serif; text-anchor: middle; user-select: none; }
 .terminal-label { background: #484848; color: #fff; border: 2px solid #fff; border-radius: 999px; box-shadow: 0 3px 10px #0003; padding: 8px 14px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .terminal-label::before { display: none; }
@@ -125,14 +127,32 @@ button.campus-terminal { cursor: pointer; }
 .walkway-hit.tool-draw { cursor: copy; }
 .walkway-hit.tool-erase, .walkway-hit.tool-select { cursor: pointer; }
 .walkway-selected { padding: 10px; border-radius: 8px; background: #f3f0fa; }
+.walkway-node.is-problem { background: #dc3545; box-shadow: 0 0 0 3px #dc354566, 0 1px 4px #0006; }
+.walkway-focus { display: block; width: 100%; height: 100%; border: 3px solid #dc3545; border-radius: 50%; animation: walkway-focus 1.2s ease-out 3; }
+@keyframes walkway-focus { from { transform: scale(0.4); opacity: 1; } to { transform: scale(1.3); opacity: 0.3; } }
+.walkway-check { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.walkway-check-list { max-height: 180px; overflow-y: auto; }
+.walkway-check-list button { display: flex; width: 100%; gap: 6px; padding: 4px 6px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
+.walkway-check-list button:hover { background: #f1f3f5; }
+
+/* ---------- Panels appear smoothly instead of popping in ---------- */
+@keyframes panel-in { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+.location-detail, .route-panel, .admin-card { animation: panel-in .18s ease-out; }
+.search-results { animation: panel-in .12s ease-out; }
 
 /* ---------- Phone ---------- */
 @media (max-width: 767.98px) {
-  .topbar { padding: 8px 12px; gap: 8px; }
+  /* Row 1: badge + terminal select. Row 2: floor tabs, full width, scroll sideways if needed */
+  .topbar { flex-wrap: wrap; padding: 8px 12px 0; gap: 8px; }
   .terminal-badge { font-size: 15px; padding: 8px; }
-  .topbar h1 { font-size: 16px; white-space: nowrap; }
-  .header-actions { gap: 6px; }
-  .floor-button { padding: 6px 10px; }
+  /* The select and tabs become direct items of .topbar, so the tabs can take a full row */
+  .header-actions { display: contents; }
+  .terminal-select { flex: 1; min-width: 0; min-height: 36px; font-weight: 600; }
+  .floor-tabs { order: 3; flex: 1 0 100%; margin: 0 -12px; padding: 4px 12px 6px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: #fff; overflow-x: auto; scrollbar-width: none; }
+  .floor-tabs::-webkit-scrollbar { display: none; }
+  .floor-button { padding: 6px 12px; }
+  .floor-button.active { background: #fbeff0; box-shadow: none; }
 
   .map-top { top: 10px; left: 10px; right: 10px; width: auto; }
   /* Chips scroll sideways instead of wrapping to many lines */
@@ -153,7 +173,13 @@ button.campus-terminal { cursor: pointer; }
   .map-footnote { left: 10px; right: 60px; bottom: 18px; }
 
   .admin-card { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 60dvh; border-radius: 16px 16px 0 0; }
+  /* Bottom sheets slide up from the edge */
+  .location-detail, .route-panel, .admin-card { animation: sheet-in .24s cubic-bezier(.2, .8, .3, 1); }
   .is-admin .location-detail { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .location-detail, .route-panel, .admin-card, .search-results, .walkway-focus { animation: none; }
 }
 
 /* Desktop: detail always shows all information */

@@ -1,5 +1,6 @@
 import { airportFloors } from "../data/airportCatalog";
 import { floorLabel } from "../utils/text";
+import { getLatLng } from "../utils/geo";
 
 const TOOLS = [
     { id: "draw", label: "Vẽ", icon: "bi-pencil", hint: "Bấm lên mặt bằng để đặt điểm, mỗi điểm mới tự nối với điểm trước. Bấm vào một điểm có sẵn để nối tới nó, bấm vào giữa một đoạn để rẽ nhánh. Esc hoặc bấm lại điểm cuối để kết thúc nét." },
@@ -9,9 +10,86 @@ const TOOLS = [
 
 const CONNECTORS = ["Thang máy", "Thang cuốn", "Thang bộ"];
 
+const REASONS = {
+    noWalkway: "không có lối đi trong 60 m",
+    isolated: "chỉ gần mảnh rời"
+};
+const LIST_LIMIT = 50;   // longer lists only show the first ones, the map highlight still shows all
+
+// One collapsible group of problems. Each item is a button that jumps to the problem on the map.
+function CheckGroup({ title, items, renderItem, onFocus }) {
+    if (items.length === 0) return null;
+    return (
+        <details className="small mb-1">
+            <summary className="fw-semibold text-danger">{title} ({items.length})</summary>
+            <div className="walkway-check-list mt-1">
+                {items.slice(0, LIST_LIMIT).map(item => {
+                    const { key, point, label } = renderItem(item);
+                    return <button type="button" key={key} onClick={() => onFocus(point)}>{label}</button>;
+                })}
+                {items.length > LIST_LIMIT && <p className="text-muted mb-0 px-2">… và {items.length - LIST_LIMIT} mục khác</p>}
+            </div>
+        </details>
+    );
+}
+
+// Result of utils/walkwayCheck.js for the current terminal. Recomputed on every change of the drawing.
+function WalkwayCheck({ check, terminal, floor, onFocus }) {
+    const { locations, unreachable, pieces, connectors } = check;
+    const percent = locations.total === 0 ? 100 : Math.floor(locations.reachable / locations.total * 100);
+    const hasProblems = unreachable.length > 0 || pieces.length > 0 || connectors.length > 0;
+    // Problems on the floor being viewed first
+    const byFloor = (a, b) => (a.floor !== floor) - (b.floor !== floor) || a.floor - b.floor;
+
+    return (
+        <section className="walkway-check" aria-label="Kiểm tra lối đi">
+            <strong className="d-block small mb-1">Kiểm tra lối đi · Ga {terminal}</strong>
+            <div className="progress mb-1" role="progressbar" aria-label="Địa điểm chỉ đường tới được" aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100" style={{ height: 6 }}>
+                <div className={`progress-bar ${percent === 100 ? "bg-success" : percent >= 80 ? "bg-warning" : "bg-danger"}`} style={{ width: `${percent}%` }} />
+            </div>
+            <p className="small mb-2"><b>{locations.reachable}/{locations.total}</b> địa điểm chỉ đường tới được ({percent}%)</p>
+
+            {!hasProblems && <p className="small text-success mb-0"><i className="bi bi-check-circle me-1" />Không phát hiện vấn đề.</p>}
+
+            <CheckGroup
+                title="Địa điểm không tới được"
+                items={[...unreachable].sort((a, b) => byFloor(a.location, b.location) || a.location.name.localeCompare(b.location.name, "vi"))}
+                onFocus={onFocus}
+                renderItem={({ location, reason }) => ({
+                    key: location.id,
+                    point: { floor: location.floor, ...getLatLng(location) },
+                    label: <><span className="flex-grow-1">{location.name} · {floorLabel(location.floor)}</span><span className="text-muted text-nowrap">{REASONS[reason]}</span></>
+                })}
+            />
+            <CheckGroup
+                title="Mảnh lối đi rời"
+                items={pieces}
+                onFocus={onFocus}
+                renderItem={piece => ({
+                    key: piece.id,
+                    point: { floor: piece.node.floor, lat: piece.node.lat, lng: piece.node.lng },
+                    label: <span>{piece.size} điểm · {piece.floors.map(floorLabel).join(", ")}</span>
+                })}
+            />
+            <CheckGroup
+                title="Thang chưa nối tầng"
+                items={[...connectors].sort(byFloor)}
+                onFocus={onFocus}
+                renderItem={node => ({
+                    key: node.id,
+                    point: { floor: node.floor, lat: node.lat, lng: node.lng },
+                    label: <span>{node.connector} · {floorLabel(node.floor)}</span>
+                })}
+            />
+
+            {pieces.length > 0 && <p className="small text-muted mt-2 mb-0">Lối đi màu đỏ trên bản đồ là mảnh rời: vẽ nối nó vào lối đi màu cam để sửa.</p>}
+        </section>
+    );
+}
+
 // Admin tab "Lối đi": tools for drawing the walkway network that directions use.
 // All the logic lives in hooks/useWalkwayEditor.js, this component only shows buttons.
-function WalkwayPanel({ editor, terminal, floor }) {
+function WalkwayPanel({ editor, terminal, floor, check, onFocus }) {
     const { draft, tool, selectedId } = editor;
     const floorNodes = draft.nodes.filter(node => node.terminal === terminal && node.floor === floor);
     const floorNodeIds = new Set(floorNodes.map(node => node.id));
@@ -90,6 +168,8 @@ function WalkwayPanel({ editor, terminal, floor }) {
 
             {editor.message && <p className="small mt-2 mb-0" role="status">{editor.message}</p>}
             <p className="small text-muted mt-2 mb-0">Mở "Chỉ đường" để thử ngay trên bản nháp trước khi lưu.</p>
+
+            {check && <WalkwayCheck check={check} terminal={terminal} floor={floor} onFocus={onFocus} />}
         </div>
     );
 }

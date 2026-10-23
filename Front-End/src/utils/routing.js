@@ -8,7 +8,7 @@ const MAX_SNAP_METERS = 60;       // a point farther than this from every walkwa
 
 // Keep only the nodes/edges of one terminal and list the neighbors of every node:
 // node id -> [{ id, cost }]. Edges between 2 floors are elevators/escalators/stairs.
-function buildGraph(walkways, terminal) {
+export function buildGraph(walkways, terminal) {
     const nodeById = new Map();
     walkways.nodes
         .filter(node => node.terminal === terminal)
@@ -30,7 +30,7 @@ function buildGraph(walkways, terminal) {
 
 // The network may have separate "pieces" that are not joined (e.g. a corridor not drawn to the rest yet).
 // Give every node the number of its piece: nodes reachable from each other get the same number.
-function findPieces(graph) {
+export function findPieces(graph) {
     const pieceOf = new Map();
     let piece = 0;
     graph.nodeById.forEach((node, id) => {
@@ -53,7 +53,7 @@ function findPieces(graph) {
 // Any point (a shop, or a spot picked on the map) is not a node.
 // It joins the network at the closest spot of a walkway on its floor.
 // Returns the closest entry of EVERY piece nearby: piece number -> { a, b, spot, gap }
-function findEntries(graph, pieceOf, point) {
+export function findEntries(graph, pieceOf, point) {
     const entries = new Map();
     graph.segments.forEach(([a, b]) => {
         if (a.floor !== point.floor) return;
