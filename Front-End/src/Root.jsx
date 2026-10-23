@@ -1,13 +1,13 @@
 import { useState } from "react";
 import App from "./App";
+import AdminApp from "./admin/AdminApp";
 import LoginDialog from "./components/LoginDialog";
 import { getSession, logout } from "./api/auth";
 
-// Two pages share the same map:
-// - "/"      public website, read only
-// - "/admin" admin page: login first, then the map with the Admin panel
-// Cloudflare and Vite send every unknown path to index.html, so /admin needs no router.
-const isAdminPage = window.location.pathname.replace(/\/+$/, "") === "/admin";
+// - "/"        public map, read only
+// - "/admin…"  admin app (src/admin): login first, then overview, locations, walkways, data checks
+// Cloudflare and Vite send every unknown path to index.html, so these paths need no router library.
+const isAdminPage = /^\/admin(\/|$)/.test(window.location.pathname);
 
 function Root() {
     const [session, setSession] = useState(getSession);
@@ -15,14 +15,14 @@ function Root() {
     if (!isAdminPage) return <App />;
     if (!session) return <LoginDialog asPage onLoggedIn={setSession} />;
     return (
-        <App admin={{
-            session,
-            onSessionChange: setSession,
-            onLogout: () => {
+        <AdminApp
+            session={session}
+            onSessionChange={setSession}
+            onLogout={() => {
                 logout();
                 setSession(null);
-            }
-        }} />
+            }}
+        />
     );
 }
 

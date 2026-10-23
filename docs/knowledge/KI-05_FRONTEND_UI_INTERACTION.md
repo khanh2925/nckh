@@ -78,11 +78,20 @@
 - Marker địa điểm được tạo một lần và cache theo id; zoom/xoay chỉ tính lại marker nào đủ chỗ hiện (ẩn/hiện), kéo bản đồ không đụng marker. Không dùng CSS `filter` trên pane bản đồ.
 - `zoomDelta: 1` (nút +/−). Con lăn chuột và **chụm touchpad** dùng `utils/smoothWheelZoom.js` (tắt `scrollWheelZoom` của Leaflet): mỗi sự kiện wheel đổi zoom đích và vẽ lại ngay ở khung hình kế tiếp bằng `map._move(..., { pinch: true })`, giữ điểm dưới con trỏ đứng yên (tính cả góc xoay bản đồ), hết cử chỉ thì snap như pinch của leaflet-rotate. Handler mặc định của Leaflet chờ ngừng cuộn mới animate nên zoom bằng touchpad bị trễ, không bám tay.
 
-## 2.7. Trang quản trị `/admin`
+## 2.7. Ứng dụng quản trị `/admin` (`src/admin/`)
 
-- `Root.jsx` chọn trang theo đường dẫn: `/` = bản đồ công khai (không có nút Admin); `/admin` = trang đăng nhập (`LoginDialog asPage`), đăng nhập xong mở `App` với `admin = { session, onSessionChange, onLogout }` → bản đồ + AdminPanel, header có nhãn QUẢN TRỊ, tên người dùng, nút mở trang công khai, nút đăng xuất. Cloudflare (`not_found_handling: single-page-application`) và Vite trả `index.html` cho `/admin`, không cần router.
-- `api/auth.js`: `login`, `logout`, `getSession`; token lưu `sessionStorage` (hết khi đóng tab) và trong bộ nhớ nếu trình duyệt chặn storage.
-- `request()` trong `locationApi.js` gắn `Authorization: Bearer` cho POST/PUT/DELETE. Bị 401/403 → xóa phiên, phát sự kiện `admin-session-expired`, ném `AuthError`; App hiện hộp đăng nhập đè lên bản đồ, form/lối đi chưa lưu vẫn giữ, đăng nhập lại rồi bấm lưu lần nữa.
+Trang công khai (`App.jsx`) chỉ có bản đồ, tìm kiếm, chỉ đường; không còn chế độ Admin. `Root.jsx` chuyển mọi đường dẫn `/admin…` sang `AdminApp` sau khi đăng nhập (`LoginDialog asPage`). Không dùng thư viện router: `history.pushState` + `popstate`; Cloudflare/Vite trả `index.html` cho mọi đường dẫn.
+
+| Đường dẫn | Trang | Nội dung |
+|---|---|---|
+| `/admin` | `OverviewPage` | Bảng theo nhà ga/tầng (số địa điểm, điểm lối đi, % chỉ đường tới được, mảnh rời), "Việc cần làm", số địa điểm theo nhóm |
+| `/admin/locations` | `LocationsPage` + `LocationEditor` | Bảng tất cả địa điểm: tìm không dấu, lọc ga/tầng/loại (cả nhóm), sắp xếp cột, 50 dòng/trang. Bấm dòng → ngăn sửa bên phải có bản đồ nhỏ (bấm mặt bằng để đặt/dời vị trí), xóa bấm 2 lần. `?edit=<id>`, `?terminal=T2&floor=0` mở sẵn |
+| `/admin/walkways` | `WalkwaysPage` | Trình vẽ lối đi toàn màn hình (`useWalkwayEditor` với `initialNetwork`) + `WalkwayPanel` và kiểm tra lối đi. `?terminal=T2`. Rời trang khi chưa lưu → hỏi lại (cả khi đóng tab) |
+| `/admin/quality` | `QualityPage` | Lối đi: % tới được, mảnh rời, thang chưa nối. Dữ liệu (`admin/dataChecks.js`): loại cửa ra máy bay nhưng tên không phải số cửa, tên "vệ sinh" sai loại, "Của" gõ nhầm "Cửa", chưa phân loại, thiếu lat/lng, nghi trùng (cùng tên, cùng tầng, < 3 m), cách lối đi > 20 m. Mỗi dòng có "Sửa"/"Vẽ lối đi" |
+
+Giao diện: `admin/admin.css`, font Be Vietnam Pro (Google Fonts trong `index.html`). Sidebar màu than chì, trang hiện tại đánh dấu bằng ô vàng `#F2B705` (kiểu biển chỉ dẫn sân bay); màu đỏ thương hiệu chỉ cho logo và xóa. Dưới 992px sidebar thành thanh biểu tượng phía trên, ngăn sửa chiếm toàn chiều ngang.
+
+Đăng nhập: `api/auth.js` (`login`, `logout`, `getSession`, token trong `sessionStorage` + bộ nhớ). `request()` trong `locationApi.js` gắn `Authorization: Bearer` cho POST/PUT/DELETE; bị 401/403 → xóa phiên, sự kiện `admin-session-expired` → `AdminApp` hiện hộp đăng nhập, dữ liệu đang sửa vẫn giữ.
 
 ## API khi deploy cloud
 

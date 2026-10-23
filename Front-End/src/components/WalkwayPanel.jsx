@@ -167,7 +167,6 @@ function WalkwayPanel({ editor, terminal, floor, check, onFocus }) {
             </div>
 
             {editor.message && <p className="small mt-2 mb-0" role="status">{editor.message}</p>}
-            <p className="small text-muted mt-2 mb-0">Mở "Chỉ đường" để thử ngay trên bản nháp trước khi lưu.</p>
 
             {check && <WalkwayCheck check={check} terminal={terminal} floor={floor} onFocus={onFocus} />}
         </div>

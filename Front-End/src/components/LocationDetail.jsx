@@ -1,17 +1,7 @@
 import { useState } from "react";
 import { getGroup, getLocationType } from "../data/locationTypes";
-import { floorLabel } from "../utils/text";
+import { floorLabel, translateHours } from "../utils/text";
 
-// The crawled data writes opening hours in English: "24 Hours", "5AM-9PM", "6AM - 11:45PM"
-function translateHours(text) {
-    if (/^24\s*hours?$/i.test(text.trim())) return "Mở cửa 24 giờ";
-    return text
-        .replace(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/gi, (match, hour, minute = "00", half) => {
-            const value = (Number(hour) % 12) + (half.toUpperCase() === "PM" ? 12 : 0);
-            return `${String(value).padStart(2, "0")}:${minute}`;
-        })
-        .replace(/\s*-\s*/g, " – ");
-}
 // Some websites in the data have no "https://", which would make the link relative to our own site
 const toUrl = (website) => (/^https?:\/\//i.test(website) ? website : `https://${website}`);
 
