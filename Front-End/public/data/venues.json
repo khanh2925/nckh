@@ -1,0 +1,17 @@
+[
+ {
+  "id": 1,
+  "slug": "tan-son-nhat",
+  "name": "Sân bay Quốc tế Tân Sơn Nhất",
+  "kind": "airport",
+  "description": "Trường Sơn, P.2, Tân Bình, TP.HCM · mở cửa 24/7. Bản đồ 3 nhà ga và khuôn viên, chỉ đường trong nhà.",
+  "centerLat": 10.8165,
+  "centerLng": 106.66,
+  "status": "PUBLISHED",
+  "ownerName": "Cảng HKQT Tân Sơn Nhất (demo)",
+  "updatedAt": "2026-10-24T09:12:00Z",
+  "buildingCount": 4,
+  "floorCount": 11,
+  "locationCount": 705
+ }
+]

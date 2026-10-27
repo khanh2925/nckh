@@ -1,0 +1,183 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import {
+    HeadingFilter, StepDetector, advanceTrip, buildVenueModel, confirmFloorChange, createProjection, distance, findPieces, buildGraph,
+    findRoute, fixTripPosition, isAtFloorChange, isRouteError, parseQrPayload, findNodeByCode, plateText, planRoute, searchPlaces,
+    startTrip, translateHours, viewTrip, type Position, type VenueMapDto
+} from "../src";
+
+// Dữ liệu thật của Sân bay Tân Sơn Nhất (sinh bởi Front-End/scripts/build-demo-venue.py)
+const bundle = JSON.parse(
+    readFileSync(new URL("../../../Front-End/public/data/venues/tan-son-nhat.json", import.meta.url), "utf8")
+) as VenueMapDto;
+const model = buildVenueModel(bundle);
+
+const t1 = model.buildings.find(b => b.code === "T1")!;
+const [t1f1, t1f0] = model.floorsOf(t1.id); // cao xuống thấp: Tầng 1, Tầng trệt
+
+describe("venue model", () => {
+    it("lập chỉ mục đủ dữ liệu", () => {
+        expect(model.buildings.map(b => b.code)).toEqual(["T1", "T2", "T3", "KV"]);
+        expect(model.floors).toHaveLength(11);
+        expect(model.locations.length).toBe(705);
+        expect(t1f1!.level).toBe(1);
+        expect(t1f0!.level).toBe(0);
+        expect(model.groups[0]!.code).toBe("gate");
+    });
+
+    it("tìm kiếm không dấu, gần trước khi biết vị trí", () => {
+        const hits = searchPlaces(model, "nha ve sinh", { floorId: t1f1!.id });
+        expect(hits.length).toBeGreaterThan(0);
+        const near = { floorId: t1f1!.id, lat: hits[0]!.place.lat, lng: hits[0]!.place.lng };
+        const sorted = searchPlaces(model, "cua", { near });
+        for (let i = 1; i < sorted.length; i++) expect(sorted[i]!.meters!).toBeGreaterThanOrEqual(sorted[i - 1]!.meters!);
+    });
+});
+
+describe("projection", () => {
+    it("bản vẽ InMapz: góc trên-trái và trên-phải khớp điểm mốc, chiếu xuôi rồi ngược ra lại", () => {
+        const p = createProjection(t1f1!.plan!)!;
+        const tl = p.toLatLng(0, 0);
+        expect(tl.lat).toBeCloseTo(t1f1!.plan!.anchor!.latlng[0], 6);
+        expect(tl.lng).toBeCloseTo(t1f1!.plan!.anchor!.latlng[1], 6);
+        const back = p.toImage(p.toLatLng(12345, 23456));
+        expect(back.x).toBeCloseTo(12345, 3);
+        expect(back.y).toBeCloseTo(23456, 3);
+        // góc dưới-phải phải gần đông-nam của khung bao crawl (sw.lat 10.812182, ne.lng 106.663239)
+        const br = p.toLatLng(t1f1!.plan!.width!, t1f1!.plan!.height!);
+        expect(br.lat).toBeCloseTo(10.812182, 4);
+        expect(br.lng).toBeCloseTo(106.663239, 5);
+    });
+});
+
+describe("routing", () => {
+    const gate = model.locations.find(l => l.floorId === t1f1!.id && l.type === "gate")!;
+    const checkin = model.locations.find(l => l.floorId === t1f0!.id && l.type === "checkin")!;
+
+    it("cùng tầng: tuyến một chặng, dài hơn đường chim bay", () => {
+        const other = model.locations.find(l => l.floorId === t1f1!.id && l.type === "restroom")!;
+        const route = findRoute(model.walkways, gate, other);
+        expect(isRouteError(route)).toBe(false);
+        if (isRouteError(route)) return;
+        expect(route.legs).toHaveLength(1);
+        expect(route.distance).toBeGreaterThanOrEqual(Math.floor(distance(gate, other)) - 1);
+    });
+
+    it("khác tầng: hai chặng, có thang, chỉ dẫn có bước đổi tầng và bước đến nơi", () => {
+        const planned = planRoute(model, checkin, gate);
+        expect("error" in planned).toBe(false);
+        if ("error" in planned) return;
+        expect(planned.legs.length).toBeGreaterThanOrEqual(2);
+        expect(planned.legs[0]!.connector).toBeTruthy();
+        const kinds = planned.steps.map(s => s.kind);
+        expect(kinds[0]).toBe("depart");
+        expect(kinds).toContain("floor-up");
+        expect(kinds[kinds.length - 1]).toBe("arrive");
+        // "at" tăng dần
+        for (let i = 1; i < planned.steps.length; i++) expect(planned.steps[i]!.at).toBeGreaterThanOrEqual(planned.steps[i - 1]!.at - 0.01);
+    });
+
+    it("tránh thang cuốn: chỉ đổi tầng bằng thang máy (hoặc báo lỗi rõ ràng)", () => {
+        const route = findRoute(model.walkways, checkin, gate, { avoidStairs: true });
+        if (isRouteError(route)) {
+            expect(route.error).toMatch(/thang máy/);
+        } else {
+            route.legs.slice(0, -1).forEach(leg => expect(leg.connector).toBe("Thang máy"));
+        }
+    });
+
+    it("mảnh rời được đánh số", () => {
+        const pieces = new Set(findPieces(buildGraph(model.walkways)).values());
+        expect(pieces.size).toBeGreaterThan(0);
+    });
+});
+
+describe("trip", () => {
+    const gate = model.locations.find(l => l.floorId === t1f1!.id && l.type === "gate")!;
+    const checkin = model.locations.find(l => l.floorId === t1f0!.id && l.type === "checkin")!;
+    const from: Position = { floorId: checkin.floorId, lat: checkin.lat, lng: checkin.lng, source: "place" };
+
+    it("đi hết chặng 1 thì dừng chờ đổi tầng, xác nhận rồi đi tiếp tới nơi", () => {
+        const planned = planRoute(model, from, gate);
+        if ("error" in planned) throw new Error(planned.error);
+        let trip = startTrip(planned, from, gate, 0);
+        trip = advanceTrip(trip, 10_000, 1);
+        expect(trip.progress).toBeCloseTo(planned.legs[0]!.distance, 3);
+        expect(isAtFloorChange(trip)).toBe(true);
+        expect(viewTrip(trip).atFloorChange).toBe(true);
+        trip = confirmFloorChange(trip);
+        expect(trip.activeLeg).toBe(1);
+        for (let i = 0; i < 1000 && !trip.arrived; i++) {
+            if (isAtFloorChange(trip)) trip = confirmFloorChange(trip);
+            trip = advanceTrip(trip, 1.3, i);
+        }
+        expect(trip.arrived).toBe(true);
+    });
+
+    it("quét QR gần tuyến thì nhảy tới chỗ đó, xa thì lập lại tuyến", () => {
+        const planned = planRoute(model, from, gate);
+        if ("error" in planned) throw new Error(planned.error);
+        const trip = startTrip(planned, from, gate, 0);
+        const onRoute = planned.legs[0]!.points[Math.floor(planned.legs[0]!.points.length / 2)]!;
+        const fixed = fixTripPosition(model, trip, { ...onRoute, source: "qr" });
+        expect(fixed.progress).toBeGreaterThan(0);
+        expect(fixed.qrFixes).toBe(1);
+        expect(fixed.rerouted).toBe(0);
+    });
+});
+
+describe("qr, text, pdr", () => {
+    it("đọc nội dung mã QR", () => {
+        expect(parseQrPayload("https://indoormap.vn/q/tan-son-nhat/T1-1-17")).toEqual({ slug: "tan-son-nhat", code: "T1-1-17" });
+        expect(parseQrPayload("tan-son-nhat:T1-0-5")).toEqual({ slug: "tan-son-nhat", code: "T1-0-5" });
+        expect(parseQrPayload(" t1-1-17 ")).toEqual({ slug: null, code: "t1-1-17" });
+        expect(findNodeByCode(model, "t1-1-17")?.id).toBe("T1-1-17");
+    });
+
+    it("biển số và giờ mở cửa", () => {
+        expect(plateText({ type: "gate", name: "Cửa 12" })).toBe("12");
+        expect(plateText({ type: "restroom", name: "WC" })).toBe("WC");
+        expect(translateHours("5AM-9PM")).toBe("05:00 – 21:00");
+    });
+
+    it("đếm bước từ dao động gia tốc ~2 Hz", () => {
+        const detector = new StepDetector();
+        let steps = 0;
+        for (let t = 0; t < 10_000; t += 20) {
+            const z = 9.8 + 3 * Math.sin((2 * Math.PI * 2 * t) / 1000);
+            if (detector.push(0, 0, z, t)) steps++;
+        }
+        expect(steps).toBeGreaterThanOrEqual(17);
+        expect(steps).toBeLessThanOrEqual(21);
+    });
+
+    it("làm mượt la bàn qua mốc 0°", () => {
+        const f = new HeadingFilter(0.5);
+        f.push(350);
+        const v = f.push(10);
+        expect(v === 0 || v > 350 || v < 10).toBe(true);
+    });
+});
+
+describe("search relevance", () => {
+    it("từ khoá khớp đầu từ, tên khớp nhiều từ lên trước", () => {
+        const hits = searchPlaces(model, "quay thu tuc b");
+        expect(hits[0]!.place.name).toBe("Quầy Thủ Tục B");
+        expect(searchPlaces(model, "cua 05")[0]!.place.name).toBe("Cửa 05");
+    });
+});
+
+describe("trip view at floor change", () => {
+    it("bước hiện tại là bước đổi tầng", () => {
+        const gate = model.locations.find(l => l.floorId === t1f1!.id && l.type === "gate")!;
+        const checkin = model.locations.find(l => l.floorId === t1f0!.id && l.type === "checkin")!;
+        const from: Position = { floorId: checkin.floorId, lat: checkin.lat, lng: checkin.lng, source: "place" };
+        const planned = planRoute(model, from, gate);
+        if ("error" in planned) throw new Error(planned.error);
+        let trip = startTrip(planned, from, gate, 0);
+        trip = advanceTrip(trip, planned.legs[0]!.distance - 1.5, 1);
+        const view = viewTrip(trip);
+        expect(view.atFloorChange).toBe(true);
+        expect(view.step?.kind.startsWith("floor")).toBe(true);
+    });
+});

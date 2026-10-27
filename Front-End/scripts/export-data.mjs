@@ -1,26 +1,25 @@
-// Saves a snapshot of the data for the static website (Cloudflare Workers has no backend):
-// public/data/locations.json and public/data/walkways.json.
-// PostgreSQL stays the source of truth: never edit these JSON files by hand.
-// Usage: start the backend (PostgreSQL) first, then run "npm run export-data".
+// Lưu bản chụp dữ liệu cho website tĩnh (Cloudflare Workers không có backend):
+//   public/data/venues.json              = GET /api/venues
+//   public/data/venues/<slug>.json       = GET /api/venues/<slug>/map   (mỗi địa điểm đã xuất bản)
+// PostgreSQL vẫn là nguồn chính: không sửa tay các tệp JSON này.
+// Cách dùng: chạy backend trước, rồi "npm run export-data" (API_BASE=https://... để lấy từ backend khác).
 import { mkdirSync, writeFileSync } from "node:fs";
 
-const apiBase = globalThis.process?.env.API_BASE || "http://localhost:8080";
-const exports = [
-    { url: `${apiBase}/api/locations`, target: "public/data/locations.json", count: data => `${data.length} locations` },
-    { url: `${apiBase}/api/walkways`, target: "public/data/walkways.json", count: data => `${data.nodes.length} walkway nodes, ${data.edges.length} edges` }
-];
+const apiBase = (globalThis.process?.env.API_BASE || "http://localhost:8080").replace(/\/+$/, "");
 
-mkdirSync("public/data", { recursive: true });
-for (const item of exports) {
-    const response = await fetch(item.url);
-    if (!response.ok) {
-        throw new Error(`Backend answered HTTP ${response.status} for ${item.url}`);
-    }
-    const data = await response.json();
-    // locations: one location per block (easy to read in a diff); walkways: one line per node/edge (smaller file)
-    const text = item.target.endsWith("walkways.json")
-        ? `{"nodes":[\n${data.nodes.map(node => JSON.stringify(node)).join(",\n")}\n],"edges":[\n${data.edges.map(edge => JSON.stringify(edge)).join(",\n")}\n]}`
-        : JSON.stringify(data, null, 2);
-    writeFileSync(item.target, text + "\n");
-    console.log(`Saved ${item.count(data)} from ${item.url} -> ${item.target}`);
+async function getJson(url) {
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`Backend trả HTTP ${response.status} cho ${url}`);
+    return response.json();
+}
+
+mkdirSync("public/data/venues", { recursive: true });
+const venues = await getJson(`${apiBase}/api/venues`);
+writeFileSync("public/data/venues.json", JSON.stringify(venues, null, 1) + "\n");
+console.log(`Đã lưu ${venues.length} địa điểm -> public/data/venues.json`);
+
+for (const venue of venues) {
+    const bundle = await getJson(`${apiBase}/api/venues/${encodeURIComponent(venue.slug)}/map`);
+    writeFileSync(`public/data/venues/${venue.slug}.json`, JSON.stringify(bundle) + "\n");
+    console.log(`  ${venue.slug}: ${bundle.floors.length} tầng, ${bundle.locations.length} địa điểm, ${bundle.walkways.nodes.length} nút lối đi`);
 }
