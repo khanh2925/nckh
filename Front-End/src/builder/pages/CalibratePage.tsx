@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type * as Leaflet from "leaflet";
-import { anchorsFromTwoPoints, createProjection, describeProjection, type ControlPoint, type FloorDto, type PlanDto } from "@indoor-map/core";
+import { anchorsFromTwoPoints, controlDistance, createProjection, describeProjection, svgPixelsPerMeter, withMeasuredDistance, type ControlPoint, type FloorDto, type PlanDto } from "@indoor-map/core";
 import L from "../../lib/leaflet";
 import { api } from "../../lib/data";
 import { buildPlanOverlay, parsePlanSvg, rasterAsSvg } from "../../lib/planSvg";
@@ -106,6 +106,8 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
     const [opacity, setOpacity] = useState(0.6);
     const [dirty, setDirty] = useState(false);
     const [panelOpen, setPanelOpen] = useState(true);
+    // Khoảng cách thật giữa 2 mốc (m), người dùng gõ; trống = tự lấy từ tỉ lệ khai trong SVG, hoặc theo bản đồ
+    const [measured, setMeasured] = useState("");
     const fileInput = useRef<HTMLInputElement>(null);
 
     // Bản vẽ dạng tệp (/plans/...svg): tải chữ SVG để vẽ lớp chồng
@@ -118,9 +120,17 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
         };
     }, [source]);
 
-    const anchors = a.image && a.latlng && b.image && b.latlng
-        ? anchorsFromTwoPoints({ image: a.image, latlng: a.latlng } as ControlPoint, { image: b.image, latlng: b.latlng } as ControlPoint)
-        : null;
+    const pxPerMeter = useMemo(() => svgPixelsPerMeter(source?.svg ?? svgText ?? ""), [source, svgText]);
+    const pixelGap = a.image && b.image ? Math.hypot(b.image[0] - a.image[0], b.image[1] - a.image[1]) : null;
+    const typed = Number(measured.replace(",", "."));
+    const autoMeters = pxPerMeter && pixelGap ? pixelGap / pxPerMeter : null;
+    const meters = typed > 0 ? typed : autoMeters;
+    const ctrlA = a.image && a.latlng ? ({ image: a.image, latlng: a.latlng } as ControlPoint) : null;
+    const ctrlB = b.image && b.latlng ? ({ image: b.image, latlng: b.latlng } as ControlPoint) : null;
+    const mapMeters = ctrlA && ctrlB ? controlDistance(ctrlA, ctrlB) : null;
+    // Có số đo: B trên bản đồ được kéo dọc hướng A→B tới đúng khoảng cách đó
+    const fixedB = ctrlA && ctrlB && meters ? withMeasuredDistance(ctrlA, ctrlB, meters) : ctrlB;
+    const anchors = ctrlA && fixedB ? anchorsFromTwoPoints(ctrlA, fixedB) : null;
     const draft: PlanDto | null = source && anchors ? { ...source, anchor: anchors.anchor, end: anchors.end, depthScale } : null;
     const projection = useMemo(() => (draft ? createProjection(draft) : null), [draft?.anchor?.latlng[0], draft?.anchor?.latlng[1], draft?.end?.latlng[0], draft?.end?.latlng[1], depthScale, source]); // eslint-disable-line react-hooks/exhaustive-deps
     const info = draft ? describeProjection(draft) : null;
@@ -138,6 +148,7 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
             setA({});
             setB({});
             setDepthScale(1);
+            setMeasured("");
             setPick("a-img");
             setDirty(true);
             toast(`Đã tải ${file.name} · ${Math.round(next.width)}×${Math.round(next.height)}. Chấm 2 điểm mốc.`);
@@ -204,7 +215,7 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
                     </section>
                     <section className="cb-calib-pane" aria-label="Bản đồ nền">
                         <div className="cb-pane-label">Bản đồ nền · lat/lng</div>
-                        <WorldPane model={model} floor={floor} a={a.latlng} b={b.latlng} picking={pick === "a-map" || pick === "b-map"}
+                        <WorldPane model={model} floor={floor} a={a.latlng} b={fixedB?.latlng ?? b.latlng} picking={pick === "a-map" || pick === "b-map"}
                             overlay={overlay}
                             onPick={ll => {
                                 setDirty(true);
@@ -221,7 +232,24 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
                                 <span>Mốc A</span>{hasA ? <Status kind="ok">đã chấm</Status> : <Status kind="warn">{pick?.startsWith("a") ? "đang chấm" : "chưa"}</Status>}
                                 <span>Mốc B</span>{hasB ? <Status kind="ok">đã chấm</Status> : <Status kind="warn">{pick?.startsWith("b") ? "đang chấm" : "chưa"}</Status>}
                                 <span>Góc xoay</span><b className="cb-mono">{info ? `${info.rotation}°` : "—"}</b>
-                                <span>Tỉ lệ</span><b className="cb-mono">{info ? `${info.metersPerPixel < 0.01 ? info.metersPerPixel.toExponential(2) : info.metersPerPixel.toFixed(3)} m/px` : "—"}</b>
+                                <span>Tỉ lệ</span><b className="cb-mono">{info ? (info.metersPerPixel < 0.1 ? `${(info.metersPerPixel * 100).toFixed(2)} cm/px` : `${info.metersPerPixel.toFixed(3)} m/px`) : "—"}</b>
+                            </div>
+                            <div className="cb-field" style={{ gap: 4 }}>
+                                <label className="cb-label" htmlFor="measured">Khoảng cách thật A–B</label>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    <input id="measured" className="cb-input" inputMode="decimal" style={{ width: 110, fontFamily: "var(--mono)" }}
+                                        placeholder={autoMeters ? autoMeters.toFixed(2) : "vd. 22,3"} value={measured}
+                                        onChange={e => { setMeasured(e.target.value.replace(/[^\d.,]/g, "")); setDirty(true); }} />
+                                    <span className="cb-muted">m</span>
+                                    {measured && <button type="button" className="cb-btn cb-btn-ghost is-small" onClick={() => { setMeasured(""); setDirty(true); }}>Xoá</button>}
+                                </div>
+                                <div className="cb-field-help" style={{ fontSize: 12 }}>
+                                    {typed > 0
+                                        ? <>Tỉ lệ theo số đo. {mapMeters != null && <>Bạn chấm trên bản đồ: <b className="cb-mono">{mapMeters.toFixed(1)} m</b> → B đã được kéo về đúng {typed} m.</>}</>
+                                        : autoMeters
+                                            ? <>Bản vẽ khai tỉ lệ <b className="cb-mono">{pxPerMeter} px = 1 m</b> → A–B = <b className="cb-mono">{autoMeters.toFixed(2)} m</b>, đã tự áp dụng.</>
+                                            : <>Đo bằng thước dây, máy laser hoặc app Đo trên iPhone. Để trống thì tỉ lệ lấy theo bản đồ (chỉ ước lượng{mapMeters != null ? `, hiện ${mapMeters.toFixed(1)} m` : ""}).</>}
+                                </div>
                             </div>
                             <label className="cb-label" htmlFor="depth" style={{ display: "flex", justifyContent: "space-between" }}>Co giãn chiều sâu <span className="cb-mono">{depthScale.toFixed(2)}</span></label>
                             <input id="depth" type="range" min={0.3} max={1.6} step={0.01} value={depthScale} onChange={e => { setDepthScale(Number(e.target.value)); setDirty(true); }} />
@@ -231,7 +259,7 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
                                 <Button small onClick={() => setPick("a-img")}>Chấm lại A</Button>
                                 <Button small onClick={() => setPick("b-img")}>Chấm lại B</Button>
                             </div>
-                            <p className="cb-muted" style={{ fontSize: 12 }}>Chọn 2 mốc càng xa nhau càng chính xác. Bản vẽ bị kéo giãn theo chiều sâu thì chỉnh “co giãn” tới khi tường khớp đường phố.</p>
+                            <p className="cb-muted" style={{ fontSize: 12 }}>Chọn 2 mốc càng xa nhau càng chính xác. Có số đo thật thì bản đồ chỉ còn quyết định vị trí và hướng. Bản vẽ bị kéo giãn theo chiều sâu thì chỉnh “co giãn” tới khi tường khớp đường phố.</p>
                         </div>
                     </section>
                 </div>

@@ -59,6 +59,9 @@ packages/core/src/
 - **Căn chỉnh mặt bằng**: khung trái là ảnh (CRS.Simple, pixel (x,y) ↔ latLng(−y, x)), khung phải là bản đồ thật.
   Chấm A, B ở cả hai bên → `anchorsFromTwoPoints` ra phép đồng dạng (xoay + tỉ lệ), `depthScale` chỉnh co giãn chiều sâu.
   Tệp SVG/PNG/JPG tối đa 8 MB, gửi lên dạng data URL.
+  **Tỉ lệ theo số đo thật** (`withMeasuredDistance`): gõ khoảng cách thật A–B (thước, máy laser, app Đo) → giữ A và hướng A→B
+  trên bản đồ, kéo B tới đúng khoảng cách đó; bản đồ đường phố chỉ còn quyết định vị trí + hướng. SVG có
+  `data-px-per-meter="100"` trên thẻ gốc (mặt bằng xuất từ LiDAR/RoomPlan, CAD có thước) thì tự áp dụng, không cần gõ.
 - **Lối đi**: sửa trên bản sao cục bộ (có hoàn tác), lưu là thay toàn bộ mạng; rời trang khi chưa lưu sẽ bị hỏi.
   Nối tầng: chọn nút thang → nối với nút chồng đúng vị trí hoặc gần nhất ở tầng kia.
 - **Mã QR** = id nút lối đi, URL `/q/<slug>/<mã>`. Gợi ý = nút thang + giao lộ ≥ 3 nhánh, cách nhau ≥ 30 m.
@@ -71,5 +74,5 @@ API thống kê lượt xem/tìm kiếm, nhật ký hệ thống, cấu hình h�
 
 ## Kiểm thử
 
-`tsc -b`, `eslint`, `vite build`, 17 test core đều qua. Luồng giao diện đã chạy end-to-end bằng Playwright
+`tsc -b`, `eslint`, `vite build`, 18 test core đều qua. Luồng giao diện đã chạy end-to-end bằng Playwright
 trên API giả lập (không commit) — cần chạy lại với backend Spring Boot thật.

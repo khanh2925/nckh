@@ -207,3 +207,18 @@ describe("calibration from two arbitrary points", () => {
         expect(d.metersPerPixel).toBeGreaterThan(0);
     });
 });
+
+describe("đặt tỉ lệ bằng số đo", () => {
+    it("kéo B tới đúng khoảng cách, giữ hướng; mét/pixel khớp số đo", async () => {
+        const { withMeasuredDistance, controlDistance, anchorsFromTwoPoints, describeProjection, svgPixelsPerMeter } = await import("../src");
+        const A = { image: [643, 765] as [number, number], latlng: [10.8000, 106.6600] as [number, number] };
+        const B = { image: [2873, 765] as [number, number], latlng: [10.8001, 106.6603] as [number, number] }; // ước lượng ~35 m
+        const fixed = withMeasuredDistance(A, B, 22.3);
+        expect(controlDistance(A, fixed)).toBeCloseTo(22.3, 2);
+        const r = anchorsFromTwoPoints(A, fixed)!;
+        const d = describeProjection({ width: 2931, height: 1792, anchor: r.anchor, end: r.end })!;
+        expect(d.metersPerPixel).toBeCloseTo(0.01, 4);
+        expect(svgPixelsPerMeter('<svg xmlns="http://www.w3.org/2000/svg" data-px-per-meter="100" viewBox="0 0 10 10">')).toBe(100);
+        expect(svgPixelsPerMeter("<svg viewBox='0 0 1 1'><g data-px-per-meter='5'/></svg>")).toBeNull();
+    });
+});

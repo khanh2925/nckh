@@ -1,4 +1,5 @@
 import type { ControlPoint, LatLng, PlanDto } from "./types";
+import { bearing, distance, offset } from "./geo";
 
 // Đặt bản vẽ mặt bằng (đơn vị pixel của bản vẽ) lên bản đồ thật (lat/lng). Toán thuần, không phụ thuộc Leaflet,
 // để app React Native cũng dùng được.
@@ -118,4 +119,32 @@ export function describeProjection(plan: PlanDto): { rotation: number; metersPer
     // trục x của bản vẽ chỉ hướng nào (0 = Đông): góc xoay bản vẽ = hướng trục x − 90°
     const xAxisBearing = (Math.atan2(dLng, dLat) * 180) / Math.PI;
     return { rotation: Math.round((xAxisBearing - 90) * 10) / 10, metersPerPixel: meters / Math.abs(span) };
+}
+
+/**
+ * Đặt tỉ lệ bằng số đo thật: giữ mốc A và hướng A→B trên bản đồ, kéo B tới đúng khoảng cách "meters".
+ * Bản đồ đường phố chỉ còn quyết định vị trí và góc xoay; tỉ lệ lấy theo thước đo (thước dây, máy đo laser, LiDAR).
+ */
+export function withMeasuredDistance(a: ControlPoint, b: ControlPoint, meters: number): ControlPoint {
+    const A = { lat: a.latlng[0], lng: a.latlng[1] };
+    const B = { lat: b.latlng[0], lng: b.latlng[1] };
+    if (!(meters > 0) || distance(A, B) === 0) return b;
+    const moved = offset(A, bearing(A, B), meters);
+    return { image: [b.image[0], b.image[1]], latlng: [moved.lat, moved.lng] };
+}
+
+/** Khoảng cách giữa 2 mốc trên bản đồ (m) */
+export function controlDistance(a: ControlPoint, b: ControlPoint): number {
+    return distance({ lat: a.latlng[0], lng: a.latlng[1] }, { lat: b.latlng[0], lng: b.latlng[1] });
+}
+
+/**
+ * Bản vẽ tự khai tỉ lệ: thuộc tính data-px-per-meter="100" trên thẻ <svg> gốc
+ * (mặt bằng xuất từ bản quét LiDAR/RoomPlan, CAD có thước). Không có thì trả null.
+ */
+export function svgPixelsPerMeter(svg: string): number | null {
+    const root = svg.match(/<svg\b[^>]*>/i)?.[0];
+    const value = root?.match(/\bdata-px-per-meter\s*=\s*["']([\d.]+)["']/i)?.[1];
+    const n = value ? Number(value) : NaN;
+    return n > 0 ? n : null;
 }
