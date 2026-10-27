@@ -181,3 +181,29 @@ describe("trip view at floor change", () => {
         expect(view.step?.kind.startsWith("floor")).toBe(true);
     });
 });
+
+describe("analyzeVenue", () => {
+    it("báo cáo dữ liệu Tân Sơn Nhất", async () => {
+        const { analyzeVenue } = await import("../src");
+        const r = analyzeVenue(model);
+        expect(r.nodes).toBe(2138);
+        expect(r.unreachable.length + r.isolated.length).toBeLessThan(model.locations.length);
+        expect(r.floorsWithoutPlan).toHaveLength(0);
+        console.log("unreachable", r.unreachable.length, "isolated", r.isolated.length, "stray", r.strayNodes.size, "loose", r.looseConnectors.length);
+    });
+});
+
+describe("calibration from two arbitrary points", () => {
+    it("đặt lại đúng hai điểm mốc", async () => {
+        const { anchorsFromTwoPoints, createProjection: cp, describeProjection } = await import("../src");
+        const A = { image: [120, 340] as [number, number], latlng: [10.81300, 106.66200] as [number, number] };
+        const B = { image: [900, 80] as [number, number], latlng: [10.81420, 106.66310] as [number, number] };
+        const r = anchorsFromTwoPoints(A, B)!;
+        const p = cp({ width: 1000, height: 600, anchor: r.anchor, end: r.end, depthScale: 1 })!;
+        const b = p.toLatLng(900, 80);
+        expect(b.lat).toBeCloseTo(10.81420, 6);
+        expect(b.lng).toBeCloseTo(106.66310, 6);
+        const d = describeProjection({ width: 1000, height: 600, anchor: r.anchor, end: r.end })!;
+        expect(d.metersPerPixel).toBeGreaterThan(0);
+    });
+});

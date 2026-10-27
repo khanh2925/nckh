@@ -22,6 +22,7 @@ import NavigatePage from "./viewer/pages/NavigatePage";
 
 import SettingsPage from "./viewer/pages/SettingsPage";
 import { Loading } from "./viewer/components/ui";
+import consoleRoutes from "./console/routes";
 
 // Tải sau (camera, quét QR có thư viện jsQR; trang Builder/Admin) để trang bản đồ mở nhanh
 const ScanPage = lazy(() => import("./viewer/pages/ScanPage"));
@@ -29,6 +30,7 @@ const GlobalScanPage = lazy(() => import("./viewer/pages/ScanPage").then(m => ({
 const QrEntryPage = lazy(() => import("./viewer/pages/ScanPage").then(m => ({ default: m.QrEntryPage })));
 const CameraPage = lazy(() => import("./viewer/pages/CameraPage"));
 const ComingSoon = lazy(() => import("./portal/ComingSoon"));
+const ConsoleRoot = lazy(() => import("./console/ConsoleRoot"));
 
 // Bản đồ các trang. Viewer (khách tham quan) nằm dưới /v/:slug; Builder/Admin làm ở đợt 2.
 createRoot(document.getElementById("root")!).render(
@@ -52,6 +54,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/q/:slug" element={<VenueLayout />}>
                     <Route path=":code" element={<QrEntryPage />} />
                 </Route>
+                <Route element={<ConsoleRoot />}>{consoleRoutes()}</Route>
                 <Route path="*" element={<ComingSoon />} />
             </Routes>
             </Suspense>

@@ -82,6 +82,12 @@ export function createApiClient({ apiBase = "", tryApi = true, staticBase = "", 
         fetchPlanSvg(plan: PlanDto): Promise<string | null> {
             if (plan.svg) return Promise.resolve(plan.svg);
             if (!plan.imageUrl) return Promise.resolve(null);
+            // Ảnh raster nhúng (PNG/JPG dạng data URL) không phải SVG: để giao diện tự vẽ bằng <image>
+            if (/^data:image\/(?!svg)/i.test(plan.imageUrl)) return Promise.resolve(null);
+            if (/^data:image\/svg\+xml/i.test(plan.imageUrl)) {
+                const [meta, payload = ""] = plan.imageUrl.split(",", 2);
+                return Promise.resolve(meta?.includes(";base64") ? atobSafe(payload) : decodeURIComponent(payload));
+            }
             const url = /^https?:/i.test(plan.imageUrl) || plan.imageUrl.startsWith("/plans/")
                 ? `${plan.imageUrl.startsWith("/") ? staticBase : ""}${plan.imageUrl}`
                 : `${base}${plan.imageUrl}`;
@@ -96,3 +102,12 @@ export function createApiClient({ apiBase = "", tryApi = true, staticBase = "", 
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+function atobSafe(payload: string): string | null {
+    try {
+        const decode = (globalThis as unknown as { atob?: (s: string) => string }).atob;
+        return decode ? decodeURIComponent(escape(decode(payload))) : null;
+    } catch {
+        return null;
+    }
+}

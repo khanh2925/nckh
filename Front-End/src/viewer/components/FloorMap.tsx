@@ -4,7 +4,7 @@ import L from "../../lib/leaflet";
 import "leaflet-rotate";
 import { plateText, type FloorPoint, type LatLng, type LocationTypeDto, type Place, type Route, type VenueModel } from "@indoor-map/core";
 import { api } from "../../lib/data";
-import { buildPlanOverlay, parsePlanSvg } from "../../lib/planSvg";
+import { buildPlanOverlay, parsePlanSvg, rasterAsSvg } from "../../lib/planSvg";
 
 // Bản đồ một tầng: nền bản đồ ngoài trời + bản vẽ mặt bằng + vùng + địa điểm + tuyến + vị trí khách.
 // Leaflet vẽ trong <div>; React chỉ truyền dữ liệu, mỗi lớp vẽ lại khi dữ liệu của nó đổi.
@@ -180,8 +180,8 @@ export default function FloorMap({
         group.addLayer(L.rectangle(bounds.pad(0.02), { pane: "planPane", stroke: false, fillColor: "#EEF0F4", fillOpacity: 0.85, interactive: false }));
         const plan = floor.plan;
         void api.fetchPlanSvg(plan).then(text => {
-            if (!alive || !text) return;
-            const svg = parsePlanSvg(text);
+            if (!alive) return;
+            const svg = text ? parsePlanSvg(text) : plan.imageUrl?.startsWith("data:image/") ? rasterAsSvg(plan.imageUrl, plan.width ?? 1, plan.height ?? 1) : null;
             if (svg) group.addLayer(L.svgOverlay(buildPlanOverlay(svg, plan, projection), bounds, { pane: "planPane", interactive: false }));
         });
         return () => {

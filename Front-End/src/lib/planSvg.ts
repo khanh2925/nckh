@@ -51,3 +51,16 @@ export function buildPlanOverlay(planSvg: SVGSVGElement, plan: PlanDto, projecti
     outer.appendChild(group);
     return outer;
 }
+
+/** Ảnh PNG/JPG (data URL) bọc trong <svg> để dùng chung phép chiếu với bản vẽ SVG */
+export function rasterAsSvg(href: string, width: number, height: number): SVGSVGElement {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    const image = document.createElementNS(ns, "image");
+    image.setAttribute("href", href);
+    image.setAttribute("width", String(width));
+    image.setAttribute("height", String(height));
+    svg.appendChild(image);
+    return svg;
+}

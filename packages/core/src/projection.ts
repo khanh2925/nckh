@@ -1,4 +1,4 @@
-import type { LatLng, PlanDto } from "./types";
+import type { ControlPoint, LatLng, PlanDto } from "./types";
 
 // Đặt bản vẽ mặt bằng (đơn vị pixel của bản vẽ) lên bản đồ thật (lat/lng). Toán thuần, không phụ thuộc Leaflet,
 // để app React Native cũng dùng được.
@@ -78,4 +78,44 @@ export function createProjection(plan: PlanDto): FloorProjection | null {
         // SVG có trục y hướng XUỐNG nên đảo dấu các hệ số theo y
         transform: `matrix(${ux} ${-uy} ${uy * depthScale} ${ux * depthScale} ${origin.x - minX} ${maxY - origin.y})`
     };
+}
+
+/**
+ * Hai cặp điểm mốc bất kỳ (pixel ↔ lat/lng) -> anchor/end theo định dạng của API (end nằm cùng hàng pixel với anchor).
+ * Tính phép đồng dạng (xoay + tỉ lệ) bằng số phức: q = (B−A)thế giới / (B−A)bản vẽ, trục y của bản vẽ đảo chiều.
+ * depthScale để 1; người dùng chỉnh thêm nếu bản vẽ bị kéo giãn theo chiều sâu.
+ */
+export function anchorsFromTwoPoints(a: ControlPoint, b: ControlPoint): { anchor: ControlPoint; end: ControlPoint } | null {
+    const aw = mercatorProject({ lat: a.latlng[0], lng: a.latlng[1] });
+    const bw = mercatorProject({ lat: b.latlng[0], lng: b.latlng[1] });
+    const vx = b.image[0] - a.image[0];
+    const vy = -(b.image[1] - a.image[1]);
+    const wx = bw.x - aw.x;
+    const wy = bw.y - aw.y;
+    const norm = vx * vx + vy * vy;
+    if (norm < 1 || wx * wx + wy * wy === 0) return null;
+    // q = w / v (số phức)
+    const qx = (wx * vx + wy * vy) / norm;
+    const qy = (wy * vx - wx * vy) / norm;
+    const span = Math.max(Math.abs(vx), Math.abs(vy), 1);
+    const endWorld = { x: aw.x + qx * span, y: aw.y + qy * span };
+    const end = mercatorUnproject(endWorld);
+    return {
+        anchor: { image: [a.image[0], a.image[1]], latlng: [a.latlng[0], a.latlng[1]] },
+        end: { image: [a.image[0] + span, a.image[1]], latlng: [end.lat, end.lng] }
+    };
+}
+
+/** Thông số dễ hiểu của phép chiếu: góc xoay (độ, theo chiều kim đồng hồ so với hướng Bắc lên trên) và mét / pixel */
+export function describeProjection(plan: PlanDto): { rotation: number; metersPerPixel: number } | null {
+    if (!hasProjection(plan)) return null;
+    const a = plan.anchor.latlng;
+    const e = plan.end.latlng;
+    const span = plan.end.image[0] - plan.anchor.image[0];
+    const dLat = (e[0] - a[0]) * 110574;
+    const dLng = (e[1] - a[1]) * 111320 * Math.cos((a[0] * Math.PI) / 180);
+    const meters = Math.hypot(dLat, dLng);
+    // trục x của bản vẽ chỉ hướng nào (0 = Đông): góc xoay bản vẽ = hướng trục x − 90°
+    const xAxisBearing = (Math.atan2(dLng, dLat) * 180) / Math.PI;
+    return { rotation: Math.round((xAxisBearing - 90) * 10) / 10, metersPerPixel: meters / Math.abs(span) };
 }

@@ -1,7 +1,7 @@
 # KI-09 · Viewer v2 (khách tham quan) — React + TypeScript
 
 Đợt 1 của frontend v2: 13 màn hình của khách tham quan theo bản thiết kế "UX/UI theo actor" (theme Wayfind),
-nối API v2. Builder và Admin làm ở đợt 2 (hiện `/builder`, `/admin` là trang chờ).
+nối API v2. Builder và Admin: xem [KI-10](KI-10_BUILDER_ADMIN_V2.md).
 
 ## Cấu trúc
 
@@ -22,7 +22,7 @@ Front-End/
   src/lib/              phần chỉ có trên web: Leaflet, SVG mặt bằng, cảm biến trình duyệt, camera + jsQR, cài đặt
   src/viewer/           VenueContext, useTripEngine, components (FloorMap, ui, Icon), pages/
   src/styles/wayfind.css
-  src/portal/           trang chờ Builder/Admin (theme Cobalt)
+  src/portal/           trang 404 (theme Cobalt)
   scripts/build-demo-venue.py   sinh dữ liệu mẫu v2 + 04_plans_tan_son_nhat.sql từ dữ liệu v1 + bản vẽ InMapz
   scripts/export-data.mjs       chụp dữ liệu từ backend ra public/data/
   public/plans/tan-son-nhat/    11 bản vẽ SVG (InMapz, đã crawl)

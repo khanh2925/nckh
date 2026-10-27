@@ -11,3 +11,4 @@ export * from "./qr";
 export * from "./pdr";
 export * from "./trip";
 export * from "./api";
+export * from "./checks";

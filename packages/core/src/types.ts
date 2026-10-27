@@ -148,3 +148,28 @@ export interface VenueMapDto {
     locations: LocationDto[];
     walkways: WalkwayNetworkDto;
 }
+
+// ---------------------------------------------------------------- tài khoản & quản trị
+export type Role = "VENUE_ADMIN" | "SYSTEM_ADMIN";
+export type UserStatus = "PENDING" | "ACTIVE" | "LOCKED";
+
+export interface UserDto {
+    id: number;
+    email: string;
+    fullName: string;
+    role: Role;
+    status: UserStatus;
+    createdAt?: string;
+}
+
+export interface LoginResponse {
+    token: string;
+    user: UserDto;
+    expiresAt: string;
+}
+
+export interface ImportResultDto {
+    imported: number;
+    skipped: number;
+    errors: string[];
+}
