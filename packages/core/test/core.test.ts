@@ -239,3 +239,41 @@ describe("chỉ đường trong không gian nhỏ (căn hộ quét LiDAR)", () =
         expect(r.steps.some(s => s.detail?.includes("qua Bếp"))).toBe(false);
     });
 });
+
+describe("đếm bước thích nghi", () => {
+    // Giả lập gia tốc khi đi: trọng lực + dao động theo nhịp bước + nhiễu
+    function walk(stepsPerSec: number, amplitude: number, seconds: number, noise = 0.15, seed = 1) {
+        let r = seed;
+        const rand = () => ((r = (r * 16807) % 2147483647) / 2147483647 - 0.5) * 2;
+        const out: [number, number, number, number][] = [];
+        for (let t = 0; t < seconds * 60; t++) {
+            const time = (t / 60) * 1000;
+            const a = amplitude * Math.sin(2 * Math.PI * stepsPerSec * (t / 60)) + noise * rand();
+            out.push([0.3 * rand() * noise, 0.2, 9.81 + a, time]);
+        }
+        return out;
+    }
+    const count = async (samples: [number, number, number, number][]) => {
+        const { AdaptiveStepDetector } = await import("../src");
+        const d = new AdaptiveStepDetector();
+        return samples.filter(s => d.push(...s)).length;
+    };
+    it("đi thường (1,8 bước/s, mạnh) và đi chậm nhẹ trong nhà (1,3 bước/s) đều đếm sát", async () => {
+        const normal = await count(walk(1.8, 2.0, 10));
+        const gentle = await count(walk(1.3, 0.7, 10, 0.1, 7));
+        expect(Math.abs(normal - 18)).toBeLessThanOrEqual(2);
+        expect(Math.abs(gentle - 13)).toBeLessThanOrEqual(2);
+    });
+    it("đứng yên rung tay không đếm bước; StepDetector cũ sót bước khi đi nhẹ", async () => {
+        expect(await count(walk(1.5, 0, 10, 0.12, 3))).toBe(0);
+        const { StepDetector } = await import("../src");
+        const old = new StepDetector();
+        expect(walk(1.3, 0.7, 10, 0.1, 7).filter(s => old.push(...s)).length).toBeLessThan(5);
+    });
+    it("độ dài bước từ lần đo", async () => {
+        const { stepLengthFrom } = await import("../src");
+        expect(stepLengthFrom(10, 16)).toBe(0.63);
+        expect(stepLengthFrom(10, 2)).toBeNull();
+    });
+});
+

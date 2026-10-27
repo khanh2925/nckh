@@ -29,6 +29,59 @@ export class StepDetector {
     }
 }
 
+/**
+ * Đếm bước có ngưỡng tự thích nghi (dùng thay StepDetector).
+ * - Bỏ trọng lực: trừ trung bình trượt chậm của độ lớn gia tốc -> dao động quanh 0.
+ * - Làm mượt nhẹ để bớt rung tay.
+ * - Ngưỡng = một phần biên độ dao động gần đây (bao trên/dưới giảm dần), nên đi nhẹ trong nhà
+ *   hay đi mạnh ngoài đường đều đếm được; đứng yên rung tay nhẹ (< minSwing) thì không đếm.
+ * Một bước = xuống dưới đáy rồi vượt lên đỉnh, cách bước trước ≥ minIntervalMs.
+ */
+export class AdaptiveStepDetector {
+    private baseline: number | null = null;
+    private signal = 0;
+    private top = 0;
+    private bottom = 0;
+    private armed = false;
+    private lastStep = -Infinity;
+    private lastTime: number | null = null;
+
+    constructor(
+        private readonly options = { minSwing: 0.45, ratio: 0.4, smoothing: 0.35, baselineSeconds: 1.5, envelopeSeconds: 1.2, minIntervalMs: 300 }
+    ) {}
+
+    push(x: number, y: number, z: number, timeMs: number): boolean {
+        const magnitude = Math.hypot(x, y, z);
+        const dt = this.lastTime == null ? 1 / 60 : Math.min(0.2, Math.max(0.001, (timeMs - this.lastTime) / 1000));
+        this.lastTime = timeMs;
+        const o = this.options;
+        if (this.baseline == null) this.baseline = magnitude;
+        this.baseline += (magnitude - this.baseline) * Math.min(1, dt / o.baselineSeconds);
+        this.signal += (magnitude - this.baseline - this.signal) * o.smoothing;
+        // bao trên/dưới: bám theo đỉnh/đáy, tự co lại dần
+        const decay = Math.exp(-dt / o.envelopeSeconds);
+        this.top = Math.max(this.signal, this.top * decay);
+        this.bottom = Math.min(this.signal, this.bottom * decay);
+        const swing = this.top - this.bottom;
+        if (swing < o.minSwing) return false;
+        const high = this.top * o.ratio;
+        const low = this.bottom * o.ratio;
+        if (this.signal < low) this.armed = true;
+        if (this.armed && this.signal > high && timeMs - this.lastStep > o.minIntervalMs) {
+            this.armed = false;
+            this.lastStep = timeMs;
+            return true;
+        }
+        return false;
+    }
+}
+
+/** Độ dài bước chân từ một lần đo: đi đúng "meters" mét, đếm được "steps" bước. Giới hạn 0,35–1,1 m. */
+export function stepLengthFrom(meters: number, steps: number): number | null {
+    if (!(meters > 0) || !(steps >= 4)) return null;
+    return Math.round(Math.min(1.1, Math.max(0.35, meters / steps)) * 100) / 100;
+}
+
 /** Làm mượt hướng la bàn trên vòng tròn (không nhảy 359° -> 1°) */
 export class HeadingFilter {
     private value: number | null = null;

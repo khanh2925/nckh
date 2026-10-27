@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HeadingFilter, StepDetector } from "@indoor-map/core";
+import { AdaptiveStepDetector, HeadingFilter } from "@indoor-map/core";
 
 // Cảm biến trên trình duyệt điện thoại. Thuật toán (đếm bước, làm mượt la bàn) nằm ở @indoor-map/core;
 // tệp này chỉ đọc sự kiện của trình duyệt. App React Native sau này đọc expo-sensors rồi dùng cùng thuật toán.
@@ -94,7 +94,7 @@ export function useStepDetector(enabled: boolean, onStep: () => void): boolean {
 
     useEffect(() => {
         if (!enabled || !granted || !("DeviceMotionEvent" in window)) return undefined;
-        const detector = new StepDetector();
+        const detector = new AdaptiveStepDetector();
         let seen = false;
         const onMotion = (e: DeviceMotionEvent) => {
             const g = e.accelerationIncludingGravity;

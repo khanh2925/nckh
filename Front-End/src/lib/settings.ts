@@ -12,12 +12,14 @@ export interface Settings {
     preferQr: boolean;
     /** Mét mỗi bước chân */
     stepLength: number;
+    /** Độ bù la bàn theo từng địa điểm (độ), đặt bằng nút "Căn hướng" khi đang đi */
+    headingOffsets: Record<string, number>;
     /** "slug:id" địa điểm đã xem gần đây */
     recent: string[];
 }
 
 const KEY = "indoor-map.settings.v2";
-const DEFAULTS: Settings = { avoidStairs: false, vibrate: true, voice: false, largeText: false, preferQr: true, stepLength: 0.7, recent: [] };
+const DEFAULTS: Settings = { avoidStairs: false, vibrate: true, voice: false, largeText: false, preferQr: true, stepLength: 0.7, headingOffsets: {}, recent: [] };
 
 function read(): Settings {
     try {

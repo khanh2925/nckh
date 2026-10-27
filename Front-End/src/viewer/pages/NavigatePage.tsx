@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getSettings } from "../../lib/settings";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { formatMeters, type Trip } from "@indoor-map/core";
 import { useModel, useVenue } from "../VenueContext";
@@ -35,7 +36,7 @@ export function SensorBar({ engine }: { engine: TripEngine }) {
             <span className={`wf-dot${engine.lost ? " is-warn" : ""}`} />
             {engine.simulating
                 ? "Mô phỏng đi bộ 1,3 m/s"
-                : `Định vị: ${engine.trip.lastFixSource === "qr" ? "QR" : engine.trip.lastFixSource === "pick" ? "chọn tay" : "địa điểm"}${engine.stepsLive ? ` + bước chân · ${engine.steps} bước` : ""} · ±${Math.round(engine.uncertainty)} m`}
+                : `Định vị: ${engine.trip.lastFixSource === "qr" ? "QR" : engine.trip.lastFixSource === "pick" ? "chọn tay" : "địa điểm"}${engine.stepsLive ? ` + bước chân · ${engine.steps} bước × ${getSettings().stepLength.toFixed(2).replace(".", ",")} m` : ""} · ±${Math.round(engine.uncertainty)} m${engine.headingOffset ? ` · bù hướng ${engine.headingOffset > 0 ? "+" : ""}${engine.headingOffset}°` : ""}`}
         </div>
     );
 }
@@ -46,6 +47,13 @@ function TwoD({ engine }: { engine: TripEngine }) {
     const navigate = useNavigate();
     const { trip, view } = engine;
     const [headingUp, setHeadingUp] = useState(true);
+    const [aligning, setAligning] = useState(false);
+    const [notice, setNotice] = useState<string | null>(null);
+    useEffect(() => {
+        if (!notice) return undefined;
+        const t = window.setTimeout(() => setNotice(null), 3500);
+        return () => window.clearTimeout(t);
+    }, [notice]);
     const next = view.next;
     const here = view.here;
     const floorId = here?.floorId ?? trip.route.legs[trip.activeLeg]!.floorId;
@@ -72,6 +80,12 @@ function TwoD({ engine }: { engine: TripEngine }) {
                     focus={here ? { lat: here.lat, lng: here.lng, zoom: 20 } : "floor"} />
                 <div className="wf-map-badges">
                     <SensorBar engine={engine} />
+                    {engine.canAlign && !aligning && (
+                        <button type="button" className="wf-sensor-bar is-action" onClick={() => setAligning(true)}>
+                            <Icon name="compass" size={16} />{engine.headingOffset ? "Căn lại hướng" : "Mũi tên lệch hướng? Căn hướng"}
+                        </button>
+                    )}
+                    {notice && <div className="wf-sensor-bar" role="status">{notice}</div>}
                     {engine.lost && (
                         <Link to={`/v/${slug}/scan?then=go`} className="wf-sensor-bar is-warn">Vị trí có thể đã lệch — quét QR để căn lại</Link>
                     )}
@@ -87,7 +101,21 @@ function TwoD({ engine }: { engine: TripEngine }) {
                 <div className="wf-floor-tag">{model.floorsById.get(floorId)?.buildingCode} · {model.floorsById.get(floorId)?.name.split(" · ")[0]}</div>
             </div>
 
-            <div className="wf-sheet">
+            {aligning && (
+                <div className="wf-sheet" role="dialog" aria-label="Căn hướng la bàn">
+                    <p style={{ margin: 0 }}><b>Căn hướng</b><br />Cầm máy thẳng trước ngực, quay người theo <b>hướng thật của đoạn đường đang đi</b> — đường xanh ngay trước chấm của bạn{next && next.kind !== "arrive" ? <>, trước khi tới lượt “{next.title}”</> : null} — rồi bấm Xong. Mũi tên của địa điểm này sẽ chỉnh theo hướng đó.</p>
+                    <div className="wf-row-actions">
+                        <Button variant="secondary" full={false} onClick={() => setAligning(false)}>Huỷ</Button>
+                        {engine.headingOffset !== 0 && <Button variant="secondary" full={false} onClick={() => { engine.resetHeading(); setAligning(false); setNotice("Đã bỏ bù hướng"); }}>Bỏ bù</Button>}
+                        <Button icon="check" onClick={() => {
+                            const offset = engine.alignHeading();
+                            setAligning(false);
+                            setNotice(offset == null ? "Chưa có la bàn — thử lại sau vài giây" : `Đã căn hướng · bù ${offset > 0 ? "+" : ""}${offset}°`);
+                        }}>Xong</Button>
+                    </div>
+                </div>
+            )}
+            {!aligning && <div className="wf-sheet">
                 <div className="wf-progress-text">
                     <span>Đã đi <b>{Math.round(trip.progress)} m</b> / {trip.route.distance} m</span>
                     <span>còn <b>{Math.max(1, Math.round(view.remainingSeconds / 60))} phút</b> · {trip.to.name}</span>
@@ -105,7 +133,7 @@ function TwoD({ engine }: { engine: TripEngine }) {
                         </Button>
                     )}
                 </div>
-            </div>
+            </div>}
         </div>
     );
 }

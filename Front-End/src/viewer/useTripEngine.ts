@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LOST_THRESHOLD_METERS, bearing, pointAt, positionUncertainty, viewTrip, type Trip, type TripView } from "@indoor-map/core";
-import { getSettings, useSettings } from "../lib/settings";
+import { LOST_THRESHOLD_METERS, angleDiff, bearing, pointAt, positionUncertainty, viewTrip, type Trip, type TripView } from "@indoor-map/core";
+import { getSettings, updateSettings, useSettings } from "../lib/settings";
 import { hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useCompass, useSensorPermission, useStepDetector, vibrate } from "../lib/sensors";
 import { useVenue } from "./VenueContext";
 
@@ -24,12 +24,19 @@ export interface TripEngine {
     uncertainty: number;
     lost: boolean;
     steps: number;
+    /** Độ bù la bàn đang áp dụng cho địa điểm này */
+    headingOffset: number;
+    /** Có thể căn hướng ngay lúc này (có la bàn + biết hướng tuyến) */
+    canAlign: boolean;
+    /** Khách đang quay mặt đúng hướng mũi tên: lấy độ lệch la bàn – tuyến làm độ bù. Trả về độ bù mới. */
+    alignHeading(): number | null;
+    resetHeading(): void;
 }
 
 const SIM_SPEED = 1.3; // m/s
 
 export function useTripEngine(trip: Trip): TripEngine {
-    const { advance } = useVenue();
+    const { advance, slug } = useVenue();
     const settings = useSettings();
     const permission = useSensorPermission();
     const [simulating, setSimulating] = useState(false);
@@ -60,7 +67,10 @@ export function useTripEngine(trip: Trip): TripEngine {
         return Number.isFinite(b) && (here.lat !== ahead.lat || here.lng !== ahead.lng) ? b : null;
     }, [view.here, trip.route, trip.progress]);
 
-    const heading = simulating ? routeBearing : compass;
+    // La bàn thật lệch so với bản vẽ (bản vẽ đặt sai hướng, nhiễu từ trong nhà): cộng độ bù khách đã căn
+    const headingOffset = settings.headingOffsets?.[slug] ?? 0;
+    const heading = simulating ? routeBearing : compass == null ? null : (compass + headingOffset + 360) % 360;
+    const canAlign = !simulating && compass != null && routeBearing != null;
 
     // Báo khi sang bước mới
     const lastAnnounced = useRef<number | null>(null);
@@ -84,7 +94,20 @@ export function useTripEngine(trip: Trip): TripEngine {
         },
         uncertainty,
         lost: !simulating && uncertainty > LOST_THRESHOLD_METERS + 6,
-        steps
+        steps,
+        headingOffset,
+        canAlign,
+        alignHeading: () => {
+            if (compass == null || routeBearing == null) return null;
+            const offset = Math.round(angleDiff(routeBearing, compass));
+            updateSettings(s => ({ headingOffsets: { ...s.headingOffsets, [slug]: offset } }));
+            return offset;
+        },
+        resetHeading: () => updateSettings(s => {
+            const next = { ...s.headingOffsets };
+            delete next[slug];
+            return { headingOffsets: next };
+        })
     };
 }
 

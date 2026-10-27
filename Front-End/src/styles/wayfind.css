@@ -56,6 +56,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .wf-btn.is-full { flex: 1; }
 .wf-btn-primary { background: var(--cobalt); color: var(--surface); border-color: var(--cobalt); }
 .wf-btn-primary:hover { background: #1F43C4; color: var(--surface); }
+.wf-input { min-height: 52px; padding: 0 12px; border: var(--b); background: var(--surface); color: var(--ink); font-family: var(--mono, monospace); font-size: calc(16px * var(--fs)); }
+.wf-input:focus { outline: 3px solid var(--cobalt); outline-offset: 1px; }
 .wf-btn-secondary { background: var(--surface); color: var(--ink); }
 .wf-btn-secondary:hover { color: var(--cobalt); }
 .wf-btn-danger { background: var(--surface); color: var(--danger); border-color: var(--danger); }
