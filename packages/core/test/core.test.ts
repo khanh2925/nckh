@@ -222,3 +222,20 @@ describe("đặt tỉ lệ bằng số đo", () => {
         expect(svgPixelsPerMeter("<svg viewBox='0 0 1 1'><g data-px-per-meter='5'/></svg>")).toBeNull();
     });
 });
+
+describe("chỉ đường trong không gian nhỏ (căn hộ quét LiDAR)", () => {
+    it("giữ lượt rẽ vào cửa, mốc là phòng/cửa, không lặp 'đi qua'", async () => {
+        const fs = await import("fs");
+        const { buildVenueModel, planRoute, findNodeByCode } = await import("../src");
+        const d = JSON.parse(fs.readFileSync(new URL("./fixtures/nha-khanh.json", import.meta.url), "utf8"));
+        const types = [{ id: 1, code: "room", name: "Phòng" }, { id: 2, code: "entrance", name: "Lối vào" }, { id: 3, code: "corridor", name: "Hành lang" }];
+        const model = buildVenueModel({ venue: { id: 1, slug: "nha-khanh", name: "Nhà Khánh" } as never, buildings: [d.building], floors: [d.floor], zones: [], types: types as never, facilities: [], locations: d.locations, walkways: { nodes: d.nodes, edges: d.edges } });
+        const qr = findNodeByCode(model, "nha-c3")!;
+        const to = model.locations.find(l => l.name === "Phòng khách")!;
+        const r = planRoute(model, { floorId: qr.floorId, lat: qr.lat, lng: qr.lng }, to) as { distance: number; steps: { title: string; detail?: string }[] };
+        expect(r.distance).toBeGreaterThan(11);
+        expect(r.distance).toBeLessThan(15);
+        expect(r.steps.map(s => s.title)).toEqual(["Đi thẳng 4 m", "Rẽ phải tại Cửa căn hộ", "Rẽ phải tại Phòng ăn", "Đến Phòng khách"]);
+        expect(r.steps.some(s => s.detail?.includes("qua Bếp"))).toBe(false);
+    });
+});

@@ -30,24 +30,32 @@ const TURN_MIN = 32; // đổi hướng ít hơn thế coi như đi thẳng
 const SHARP = 65;
 const UTURN = 150;
 const MIN_SEGMENT = 6; // đoạn ngắn hơn 6 m gộp vào đoạn bên cạnh (tránh "rẽ trái, rẽ phải" liên tục)
+const MERGE_TURNS = 10; // hai lượt rẽ cùng phía gần hơn thế gộp làm một
+// Không gian nhỏ (căn hộ, văn phòng): ngưỡng co lại theo độ dài chặng, để không nuốt mất lượt rẽ vào cửa.
+// Chặng ≥ 50 m giữ nguyên ngưỡng gốc; chặng 13 m -> gộp đoạn < 1,6 m, gộp rẽ < 2,6 m.
+const scaled = (legMeters: number, ratio: number, min: number, max: number) => Math.min(max, Math.max(min, legMeters * ratio));
 const LANDMARK_RADIUS = 14;
 // Loại địa điểm dễ thấy, hay dùng làm mốc. "other" và thang thì không.
 const LANDMARK_TYPES = new Set([
-    "coffee", "restaurant", "shop", "information", "restroom", "checkin", "gate", "security", "atm", "lounge", "baggage", "ticket", "medical"
+    "coffee", "restaurant", "shop", "information", "restroom", "checkin", "gate", "security", "atm", "lounge", "baggage", "ticket", "medical",
+    // loại chung cho toà nhà nhỏ, căn hộ, văn phòng
+    "entrance", "room"
 ]);
+// Phòng, cửa: chỉ dùng làm mốc rẽ ("rẽ phải tại Bếp"), không nói "đi qua" (trong nhà nhỏ, phòng nào cũng "đi qua")
+const TURN_ONLY_TYPES = new Set(["entrance", "room"]);
 
 const TURN_TITLE: Record<"left" | "right" | "slight-left" | "slight-right" | "uturn", string> = {
     left: "Rẽ trái", right: "Rẽ phải", "slight-left": "Chếch sang trái", "slight-right": "Chếch sang phải", uturn: "Quay lại"
 };
 
-function simplify(points: RoutePoint[]): RoutePoint[] {
+function simplify(points: RoutePoint[], minSegment = MIN_SEGMENT): RoutePoint[] {
     if (points.length <= 2) return points.slice();
     const out: RoutePoint[] = [points[0]!];
     for (let i = 1; i < points.length - 1; i++) {
         const prev = out[out.length - 1]!;
         const cur = points[i]!;
         const next = points[i + 1]!;
-        if (distance(prev, cur) < MIN_SEGMENT) continue;
+        if (distance(prev, cur) < minSegment) continue;
         const turn = Math.abs(angleDiff(bearing(cur, next), bearing(prev, cur)));
         if (turn < TURN_MIN) continue;
         out.push(cur);
@@ -76,7 +84,7 @@ function nearestLandmark(locations: Landmark[], point: LatLng, floorId: number, 
 function passingLandmark(locations: Landmark[], a: LatLng, b: LatLng, floorId: number, exclude?: number): { loc: Landmark; side: Side } | null {
     let best: { loc: Landmark; d: number; side: Side } | null = null;
     for (const loc of locations) {
-        if (loc.floorId !== floorId || !LANDMARK_TYPES.has(loc.type ?? "") || loc.id === exclude) continue;
+        if (loc.floorId !== floorId || !LANDMARK_TYPES.has(loc.type ?? "") || TURN_ONLY_TYPES.has(loc.type ?? "") || loc.id === exclude) continue;
         const spot = closestPointOnSegment(loc, a, b);
         if (spot.t < 0.15 || spot.t > 0.85) continue;
         const d = distance(loc, spot);
@@ -99,7 +107,8 @@ export function buildDirections(route: Route, { locations = [], floorsById = new
     const destId = destination?.id;
 
     route.legs.forEach((leg, legIndex) => {
-        const pts = simplify(leg.points);
+        const pts = simplify(leg.points, scaled(leg.distance, 0.12, 1.2, MIN_SEGMENT));
+        const mergeTurns = scaled(leg.distance, 0.2, 2, MERGE_TURNS);
         const along = [0];
         for (let i = 1; i < pts.length; i++) along.push(along[i - 1]! + distance(pts[i - 1]!, pts[i]!));
         const total = along[along.length - 1]!;
@@ -109,6 +118,8 @@ export function buildDirections(route: Route, { locations = [], floorsById = new
             const a = pts[i]!;
             const b = pts[i + 1]!;
             const segLen = (along[i + 1]! - along[i]!) * scale;
+            // Lượt rẽ ngay trước điểm đến (còn < 1 m) chỉ là nhiễu: để bước "Đến nơi" lo
+            if (i > 0 && i === pts.length - 2 && segLen < 1) continue;
             const pass = passingLandmark(locations, a, b, leg.floorId, destId);
             const passText = pass ? `qua ${pass.loc.name} bên ${pass.side}` : "";
             if (i === 0) {
@@ -123,7 +134,7 @@ export function buildDirections(route: Route, { locations = [], floorsById = new
                 let distanceAfter = segLen;
                 // Hai lượt rẽ cùng phía cách nhau chưa tới 10 m: gộp thành một ("chếch phải" + "chếch phải" = "rẽ phải")
                 const prev = steps[steps.length - 1] as (Step & { delta?: number }) | undefined;
-                if (prev && prev.legIndex === legIndex && prev.delta != null && prev.distance < 10 && Math.sign(prev.delta) === Math.sign(delta)) {
+                if (prev && prev.legIndex === legIndex && prev.delta != null && prev.distance < mergeTurns && Math.sign(prev.delta) === Math.sign(delta)) {
                     steps.pop();
                     delta = prev.delta + delta;
                     at = prev.at;

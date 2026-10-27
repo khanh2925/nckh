@@ -1,0 +1,297 @@
+{
+"floor": {
+"id": 26,
+"buildingId": 6,
+"level": 1,
+"name": "Tầng căn hộ",
+"plan": {
+"width": 2931,
+"height": 1792,
+"anchor": {
+"image": [
+0,
+0
+],
+"latlng": [
+10.82205,
+106.68695
+]
+},
+"end": {
+"image": [
+2931,
+0
+],
+"latlng": [
+10.82205,
+106.687218064
+]
+},
+"depthScale": 1
+}
+},
+"building": {
+"id": 6,
+"venueId": 3,
+"code": "A",
+"name": "Chung cư"
+},
+"locations": [
+{
+"id": 420372055569,
+"floorId": 26,
+"name": "Cửa căn hộ",
+"x": 400,
+"y": 780,
+"type": "entrance"
+},
+{
+"id": 420372055570,
+"floorId": 26,
+"name": "Bếp",
+"x": 480,
+"y": 600,
+"type": "room"
+},
+{
+"id": 420372055571,
+"floorId": 26,
+"name": "Phòng ăn",
+"x": 480,
+"y": 330,
+"type": "room"
+},
+{
+"id": 420372055572,
+"floorId": 26,
+"name": "Phòng làm việc",
+"x": 470,
+"y": 125,
+"type": "room"
+},
+{
+"id": 420372055573,
+"floorId": 26,
+"name": "Phòng khách",
+"x": 820,
+"y": 420,
+"type": "room"
+},
+{
+"id": 420372055574,
+"floorId": 26,
+"name": "Đầu hành lang",
+"x": 110,
+"y": 852,
+"type": "corridor"
+},
+{
+"id": 420372055575,
+"floorId": 26,
+"name": "Cuối hành lang",
+"x": 2775,
+"y": 1650,
+"type": "corridor"
+}
+],
+"nodes": [
+{
+"id": "nha-c0",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.68696006
+},
+{
+"id": "nha-c1",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.686973047
+},
+{
+"id": "nha-c2",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.686986583
+},
+{
+"id": "nha-c3",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687023166
+},
+{
+"id": "nha-c4",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687068896
+},
+{
+"id": "nha-c5",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687108497
+},
+{
+"id": "nha-c6",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687138587
+},
+{
+"id": "nha-c7",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687169499
+},
+{
+"id": "nha-c8",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687192547
+},
+{
+"id": "nha-c9",
+"floorId": 26,
+"lat": 10.821973464,
+"lng": 106.687203796
+},
+{
+"id": "nha-c10",
+"floorId": 26,
+"lat": 10.821942202,
+"lng": 106.687203796
+},
+{
+"id": "nha-c11",
+"floorId": 26,
+"lat": 10.821909414,
+"lng": 106.687203796
+},
+{
+"id": "nha-c12",
+"floorId": 26,
+"lat": 10.821901778,
+"lng": 106.687203796
+},
+{
+"id": "nha-door",
+"floorId": 26,
+"lat": 10.821981279,
+"lng": 106.686986583
+},
+{
+"id": "nha-k",
+"floorId": 26,
+"lat": 10.821992508,
+"lng": 106.686991156
+},
+{
+"id": "nha-kd",
+"floorId": 26,
+"lat": 10.82200742,
+"lng": 106.686990242
+},
+{
+"id": "nha-d",
+"floorId": 26,
+"lat": 10.822020356,
+"lng": 106.686992985
+},
+{
+"id": "nha-o",
+"floorId": 26,
+"lat": 10.822038322,
+"lng": 106.686992985
+},
+{
+"id": "nha-dl",
+"floorId": 26,
+"lat": 10.822014067,
+"lng": 106.687011551
+},
+{
+"id": "nha-l",
+"floorId": 26,
+"lat": 10.822012271,
+"lng": 106.687023166
+}
+],
+"edges": [
+{
+"from": "nha-c0",
+"to": "nha-c1"
+},
+{
+"from": "nha-c1",
+"to": "nha-c2"
+},
+{
+"from": "nha-c2",
+"to": "nha-c3"
+},
+{
+"from": "nha-c3",
+"to": "nha-c4"
+},
+{
+"from": "nha-c4",
+"to": "nha-c5"
+},
+{
+"from": "nha-c5",
+"to": "nha-c6"
+},
+{
+"from": "nha-c6",
+"to": "nha-c7"
+},
+{
+"from": "nha-c7",
+"to": "nha-c8"
+},
+{
+"from": "nha-c8",
+"to": "nha-c9"
+},
+{
+"from": "nha-c9",
+"to": "nha-c10"
+},
+{
+"from": "nha-c10",
+"to": "nha-c11"
+},
+{
+"from": "nha-c11",
+"to": "nha-c12"
+},
+{
+"from": "nha-c2",
+"to": "nha-door"
+},
+{
+"from": "nha-door",
+"to": "nha-k"
+},
+{
+"from": "nha-k",
+"to": "nha-kd"
+},
+{
+"from": "nha-kd",
+"to": "nha-d"
+},
+{
+"from": "nha-d",
+"to": "nha-o"
+},
+{
+"from": "nha-d",
+"to": "nha-dl"
+},
+{
+"from": "nha-dl",
+"to": "nha-l"
+}
+]
+}
