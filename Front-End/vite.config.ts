@@ -12,6 +12,8 @@ export default defineConfig({
         port: 5173,
         // host: true để điện thoại cùng Wi-Fi mở được http://<IP-máy>:5173 (camera/la bàn cần HTTPS, xem README)
         host: true,
+        // Cho phép link tạm của Cloudflare Tunnel (cloudflared tunnel --url http://localhost:5173) để test bằng 4G
+        allowedHosts: [".trycloudflare.com"],
         proxy: { "/api": backendUrl },
         // @indoor-map/core nằm ngoài thư mục Front-End (../packages/core)
         fs: { allow: [".."] }
