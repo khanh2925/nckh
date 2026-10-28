@@ -1,7 +1,21 @@
 # KI-09 · Viewer v2 (khách tham quan) — React + TypeScript
 
-Đợt 1 của frontend v2: 13 màn hình của khách tham quan theo bản thiết kế "UX/UI theo actor" (theme Wayfind),
-nối API v2. Builder và Admin: xem [KI-10](KI-10_BUILDER_ADMIN_V2.md).
+Frontend v2 của khách tham quan, nối API v2. Giao diện theo bản thiết kế hướng **"Biển chỉ dẫn"** (bản 31, 2026-10-28):
+than chì `#23272D` + vàng tín hiệu `#FFC629`, một phông Familjen Grotesk, bản đồ phẳng tràn màn + thanh tìm kiếm nổi
++ bảng trượt dưới. Builder và Admin: xem [KI-10](KI-10_BUILDER_ADMIN_V2.md) (dùng chung bảng màu).
+
+## Bộ giao diện khách (client kit)
+
+- Token màu dùng chung: `src/design/tokens.css` (cả Viewer lẫn Builder). Vàng **chỉ làm nền**: nút chính, tuyến, biển số cửa đích.
+- Lớp CSS: `src/styles/wayfind.css`, mọi lớp có tiền tố `wf-`. Cỡ chữ 13/15/17/22/28/44 (`wf-t13`…`wf-t44`), bo góc 4/12/16/24/999,
+  chiều cao bấm 44/52, nút chính luôn ở đáy bảng trượt hoặc đáy màn. Chữ lớn (`html.large-text`) phóng cỡ chữ.
+- Thành phần: `viewer/components/ui.tsx` (Button, IconButton, Sheet, Row, Segmented, Toggle, Hud, Dots, ErrorScreen, NotYet…).
+- Icon giao diện: `src/design/Lc.tsx` (Lucide, sinh trong `src/design/lucide.ts`). Bootstrap Icons chỉ còn cho biểu tượng loại
+  địa điểm lưu trong CSDL (`type.icon = "bi-…"`).
+- Bản đồ (`FloorMap.tsx` + `viewer/mapTheme.ts` + `themePlanSvg` trong `lib/planSvg.ts`): mặt bằng tô theo vai trò màu, điểm là ô biển
+  bo 4 px; nhìn xa chỉ hiện mốc định hướng (cửa ra, an ninh, thang máy, thông tin), gần hơn hiện thêm loại quan trọng và nhãn;
+  tuyến vàng viền than chì; vị trí khách = chấm vàng viền than chì + quầng sai số + nón hướng nhìn. Không nghiêng 3D.
+- Không giả số liệu: chức năng chưa có API hiện "Chưa khả dụng" (Quy trình/hành trình, báo lỗi bản đồ, nhận diện mốc).
 
 ## Cấu trúc
 
@@ -20,9 +34,10 @@ packages/core/          @indoor-map/core — TypeScript thuần, dùng chung web
 Front-End/
   src/main.tsx          bảng route
   src/lib/              phần chỉ có trên web: Leaflet, SVG mặt bằng, cảm biến trình duyệt, camera + jsQR, cài đặt
-  src/viewer/           VenueContext, useTripEngine, components (FloorMap, ui, Icon), pages/
-  src/styles/wayfind.css
-  src/portal/           trang 404 (theme Cobalt)
+  src/design/           tokens.css (màu dùng chung), Lc.tsx + lucide.ts (icon)
+  src/viewer/           VenueContext, useTripEngine, format.ts, mapTheme.ts, components (FloorMap, ui), pages/
+  src/styles/wayfind.css   bộ giao diện khách (wf-*)
+  src/portal/           trang 404
   scripts/build-demo-venue.py   sinh dữ liệu mẫu v2 + 04_plans_tan_son_nhat.sql từ dữ liệu v1 + bản vẽ InMapz
   scripts/export-data.mjs       chụp dữ liệu từ backend ra public/data/
   public/plans/tan-son-nhat/    11 bản vẽ SVG (InMapz, đã crawl)
@@ -33,16 +48,25 @@ Front-End/
 
 | Thiết kế | Route | Tệp |
 |---|---|---|
-| Chọn địa điểm | `/` | `HomePage.tsx` |
-| Thông tin địa điểm | `/v/:slug` | `VenueInfoPage.tsx` |
-| Bản đồ trong nhà (+ chọn vị trí `?pick=position`) | `/v/:slug/map` | `MapPage.tsx` |
-| Tìm kiếm (+ chọn điểm đi/đến `?pick=from|to`) | `/v/:slug/search` | `SearchPage.tsx` |
-| Chi tiết địa điểm | `/v/:slug/place/:id` | `PlacePage.tsx` |
-| Xem tuyến | `/v/:slug/route?to=` | `RoutePage.tsx` |
-| Đang đi 2D · Chuyển tầng · Đã đến | `/v/:slug/go` | `NavigatePage.tsx` |
-| Quét QR định vị | `/v/:slug/scan`, `/scan`, `/q/:slug/:mã` | `ScanPage.tsx` |
-| Chỉ đường bằng camera · Mất vị trí | `/v/:slug/camera` | `CameraPage.tsx` |
-| Cài đặt | `/settings` | `SettingsPage.tsx` |
+| Main (chọn địa điểm) | `/` | `HomePage.tsx` |
+| VenueInfo | `/v/:slug` | `VenueInfoPage.tsx` |
+| Map (Khám phá), WhereAmI (`?pick=position`), FloorPicker (menu) | `/v/:slug/map` | `MapPage.tsx` |
+| Preview (xem như khách) | `/v/:slug/preview` | `MapPage.tsx` |
+| Search (+ `?pick=from\|to\|here`, `?group=`) | `/v/:slug/search` | `SearchPage.tsx` |
+| Detail | `/v/:slug/place/:id` | `PlacePage.tsx` |
+| Route, RouteError | `/v/:slug/route?to=` | `RoutePage.tsx` |
+| Permission (xin quyền cảm biến/camera) | `/v/:slug/permission?to=&then=go\|camera` | `PermissionPage.tsx` |
+| Navigate, FloorChange, Arrived | `/v/:slug/go` | `NavigatePage.tsx` |
+| QR, QRLanding | `/v/:slug/scan`, `/scan`, `/q/:slug/:mã` | `ScanPage.tsx` |
+| Camera, Camera-Lost | `/v/:slug/camera` | `CameraPage.tsx` |
+| Share, SharedRoute | `/v/:slug/share?to=`, `/v/:slug/shared?den=&tu=` | `SharePage.tsx`, `SharedRoutePage.tsx` |
+| Stride (đo bước chân) | `/v/:slug/stride`, `/settings/stride` | `StridePage.tsx` |
+| Journeys, JourneyRun (chưa có API) | `/v/:slug/journeys`, `/journeys/:id` | `JourneysPage.tsx` |
+| Report (chưa có API, không gửi gì) | `/v/:slug/report` | `ReportPage.tsx` |
+| Settings | `/settings` | `SettingsPage.tsx` |
+| Error | địa điểm không tồn tại / lỗi mạng | `ErrorScreen` trong `ui.tsx` |
+
+**Link chia sẻ tuyến**: `/v/<slug>/shared?den=<id điểm đến>&tu=qr:<mã>|diem:<id>` — chỉ chứa id, không bao giờ chứa lat/lng thô.
 
 ## Định vị trong nhà (không có GPS)
 
@@ -77,8 +101,8 @@ CSDL đã migrate v2: chạy thêm `Back-End/database/v2/04_plans_tan_son_nhat.s
 ## Ghi chú kỹ thuật
 
 - TypeScript strict + `noUncheckedIndexedAccess`; ESLint typescript-eslint + react-hooks 7.
-- Phông chữ đi kèm (`@fontsource`, có bộ tiếng Việt) — không phụ thuộc Google Fonts khi mạng trong toà nhà yếu.
+- Phông chữ đi kèm: Familjen Grotesk 400/600/700 (`@fontsource`, có bộ tiếng Việt) — không phụ thuộc Google Fonts khi mạng trong toà nhà yếu.
 - Leaflet + leaflet-rotate; bản vẽ SVG nội tuyến (`L.svgOverlay`) đặt bằng ma trận affine của `projection.ts`.
   Đã vá `_onZoomTransitionEnd` của Leaflet để không báo lỗi `_leaflet_pos` khi chuyển trang giữa lúc zoom.
-- Nền bản đồ ngoài trời: CARTO light (OpenStreetMap).
+- Nền bản đồ ngoài trời: CARTO light (OpenStreetMap), làm nhạt màu để mặt bằng nổi lên.
 - Màn camera, quét QR (jsQR) và trang Builder/Admin được tải sau (code-splitting).

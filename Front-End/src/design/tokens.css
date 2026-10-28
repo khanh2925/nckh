@@ -1,0 +1,42 @@
+/* Hướng "Biển chỉ dẫn" — bảng token DUY NHẤT cho cả Viewer (khách) lẫn Builder/Admin.
+   Than chì #23272D + vàng tín hiệu #FFC629. Vàng chỉ làm NỀN: nút chính, tuyến đường, biển số cửa đích.
+   Chữ, icon, viền nhấn, mục đang chọn dùng than chì. Một phông: Familjen Grotesk (400, 600).
+   Nguồn: bản thiết kế (tools/tokens.py) — đổi màu ở đây thì đổi cả hai phía. */
+:root {
+    --graphite: #23272D; --signal: #FFC629;
+    --paper: #F4F5F2; --surface: #FFFFFF;
+    --surface-2: color-mix(in srgb, var(--graphite) 4%, var(--surface));
+    --surface-3: color-mix(in srgb, var(--graphite) 8%, var(--surface));
+    --ink: var(--graphite); --ink-2: #3A3F46; --muted: #5B6169;
+    --rule: color-mix(in srgb, var(--graphite) 13%, var(--surface));
+    --rule-2: color-mix(in srgb, var(--graphite) 24%, var(--surface));
+    --accent: var(--signal); --accent-ink: var(--graphite); --accent-wash: #FFF3CC;
+    --route: var(--signal); --route-edge: var(--graphite);
+    --hud: var(--graphite); --hud-ink: #FFFFFF;
+    --hud-muted: color-mix(in srgb, #FFFFFF 70%, var(--graphite));
+    --hud-line: color-mix(in srgb, #FFFFFF 22%, var(--graphite));
+    --hud-2: color-mix(in srgb, #FFFFFF 9%, var(--graphite));
+    --ok: #12704F; --warn: #8A5A12; --danger: #B42318;
+    --map-bg: var(--paper); --m-floor: var(--surface); --m-wall: var(--graphite);
+    --m-edge: color-mix(in srgb, var(--graphite) 34%, var(--surface));
+    --m-gate: color-mix(in srgb, var(--graphite) 4%, var(--surface)); --m-amenity: color-mix(in srgb, var(--graphite) 11%, var(--surface));
+    --m-lounge: color-mix(in srgb, var(--signal) 8%, var(--surface)); --m-retail: color-mix(in srgb, var(--signal) 22%, var(--surface));
+    --m-core: color-mix(in srgb, var(--signal) 40%, var(--surface)); --m-service: color-mix(in srgb, var(--graphite) 11%, var(--paper));
+    --m-hatch: color-mix(in srgb, var(--graphite) 20%, var(--paper)); --m-bridge: color-mix(in srgb, var(--graphite) 16%, var(--surface));
+    --poi-food: #B4561A; --poi-wc: #127070; --poi-shop: #9E2F45; --poi-lift: #3A64B0; --poi-security: #B42318;
+    --font: "Familjen Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --shadow-float: 0 1px 2px color-mix(in srgb, var(--graphite) 14%, transparent), 0 6px 18px color-mix(in srgb, var(--graphite) 12%, transparent);
+    color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { margin: 0; }
+body {
+    font-family: var(--font); font-variant-numeric: tabular-nums; background: var(--paper); color: var(--ink);
+    -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font-family: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--graphite); outline-offset: 2px; }
+::selection { background: var(--accent-wash); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

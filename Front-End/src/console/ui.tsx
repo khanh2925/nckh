@@ -1,7 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Link } from "react-router-dom";
+import Lc, { type LucideName } from "../design/Lc";
+import { LUCIDE } from "../design/lucide";
 
-// Bộ giao diện "Cobalt" cho Builder và Admin: giấy trắng lạnh, đường kẻ mảnh 1px, nút chính có bóng phím.
+// Thành phần dùng chung Builder + Admin theo bộ màn máy tính (console.css): nút 40/32, ô nhập 40, thẻ bo 12.
+
+/** Icon giao diện: tên Lucide; tên "bi-*" (dữ liệu cũ) vẫn vẽ bằng Bootstrap Icons */
+export function UiIcon({ name, size = 16 }: { name: string; size?: number }) {
+    if (name in LUCIDE) return <Lc name={name as LucideName} size={size} />;
+    return <i className={`bi ${name}`} aria-hidden="true" style={{ fontSize: size }} />;
+}
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
@@ -20,7 +28,7 @@ interface ButtonProps {
 
 export function Button({ children, variant = "secondary", onClick, to, type = "button", disabled, busy, small, icon, title }: ButtonProps) {
     const className = `cb-btn cb-btn-${variant}${small ? " is-small" : ""}`;
-    const content = <>{icon && <i className={`bi ${icon}`} aria-hidden="true" />}{busy ? <span className="cb-spinner is-inline" aria-hidden="true" /> : null}<span>{children}</span></>;
+    const content = <>{busy ? <span className="cb-spinner is-inline" aria-hidden="true" /> : icon && <UiIcon name={icon} />}<span>{children}</span></>;
     if (to && !disabled) return <Link to={to} className={className} title={title}>{content}</Link>;
     return <button type={type} className={className} onClick={onClick} disabled={disabled || busy} title={title} aria-busy={busy || undefined}>{content}</button>;
 }
@@ -86,18 +94,19 @@ export function Card({ title, actions, children, pad = true, className = "" }: {
 }
 
 export type StatusKind = "ok" | "warn" | "err" | "mut" | "live";
-const STATUS_ICON: Record<StatusKind, string> = { ok: "bi-check-lg", warn: "bi-exclamation-triangle", err: "bi-x-circle", mut: "bi-dot", live: "bi-record-circle" };
+const STATUS_ICON: Record<StatusKind, LucideName> = { ok: "circle-check", warn: "triangle-alert", err: "circle-alert", mut: "circle-dot", live: "circle-dot" };
 
 /** Trạng thái bằng chữ + icon (không chỉ bằng màu) */
 export function Status({ kind, children }: { kind: StatusKind; children: ReactNode }) {
-    return <span className={`cb-status is-${kind}`}><i className={`bi ${STATUS_ICON[kind]}`} aria-hidden="true" />{children}</span>;
+    return <span className={`cb-status is-${kind}`}><Lc name={STATUS_ICON[kind]} size={14} />{children}</span>;
 }
 
+/** Số liệu: số lớn trước, nhãn nhỏ sau (giống bản thiết kế) */
 export function Kpi({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: "live" | "ok" | "warn" | "err" }) {
     return (
         <div className="cb-card cb-kpi">
+            <div className={`cb-kpi-value${tone && tone !== "live" ? ` is-${tone}` : ""}`}>{value}</div>
             <div className="cb-muted">{label}</div>
-            <div className={`cb-kpi-value${tone ? ` is-${tone}` : ""}`}>{value}</div>
             {sub && <div className="cb-kpi-sub">{sub}</div>}
         </div>
     );
@@ -113,11 +122,11 @@ export function Empty({ title, children, action }: { title: string; children?: R
     );
 }
 
-/** Chức năng có trong thiết kế nhưng backend chưa có API */
-export function NotYet({ title, children }: { title: string; children: ReactNode }) {
+/** Chức năng có trong thiết kế nhưng backend chưa có API: nói thẳng "Chưa khả dụng", không giả số liệu */
+export function NotYet({ title = "Chưa khả dụng", children }: { title?: string; children: ReactNode }) {
     return (
         <div className="cb-notyet" role="note">
-            <i className="bi bi-hourglass-split" aria-hidden="true" />
+            <Lc name="clock" size={16} color="var(--muted)" />
             <div><b>{title}</b><p>{children}</p></div>
         </div>
     );
@@ -130,7 +139,7 @@ export function Spinner({ label = "Đang tải…" }: { label?: string }) {
 export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
     return (
         <div className="cb-alert is-err" role="alert">
-            <i className="bi bi-x-circle" aria-hidden="true" />
+            <Lc name="circle-alert" size={16} />
             <span>{(error as Error)?.message || "Có lỗi xảy ra"}</span>
             {onRetry && <Button small onClick={onRetry}>Thử lại</Button>}
         </div>
@@ -192,12 +201,12 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         <FeedbackContext.Provider value={{ toast, confirm }}>
             {children}
             <div className="cb-toasts" aria-live="polite">
-                {toasts.map(t => <div key={t.id} className={`cb-toast is-${t.kind}`}><i className={`bi ${t.kind === "ok" ? "bi-check-lg" : "bi-x-circle"}`} aria-hidden="true" />{t.text}</div>)}
+                {toasts.map(t => <div key={t.id} className={`cb-toast is-${t.kind}`}><Lc name={t.kind === "ok" ? "check" : "circle-alert"} size={16} />{t.text}</div>)}
             </div>
             {dialog && (
                 <div className="cb-modal-backdrop" onClick={() => close(false)}>
                     <div className="cb-modal" role="alertdialog" aria-modal="true" aria-labelledby="cb-confirm-title" onClick={e => e.stopPropagation()}>
-                        <h2 id="cb-confirm-title" className="cb-h3">{dialog.text}</h2>
+                        <h2 id="cb-confirm-title" className="cb-h2">{dialog.text}</h2>
                         {dialog.detail && <p className="cb-muted">{dialog.detail}</p>}
                         <div className="cb-actions is-end">
                             <Button onClick={() => close(false)}>Huỷ</Button>

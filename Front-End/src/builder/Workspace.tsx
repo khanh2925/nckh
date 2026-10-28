@@ -1,12 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useParams } from "react-router-dom";
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { NavLink, Outlet, useLocation, useParams } from "react-router-dom";
 import {
     buildVenueModel, type BuildingDto, type FacilityDto, type FloorDto, type LocationDto, type LocationTypeDto, type VenueDto, type VenueModel,
     type WalkwayNetworkDto, type ZoneDto
 } from "@indoor-map/core";
 import { adminApi, catalogApi, locationApi, planApi, venueApi, walkwayApi } from "../console/api";
 import { useAuth } from "../console/auth";
-import { Button, ErrorNote, Spinner, Status } from "../console/ui";
+import { ConsoleFrame, GlobalSidebar, SideGroup, SideItem, SideSep, Sidebar, StepMark } from "../console/Shell";
+import { Button, ErrorNote, Spinner } from "../console/ui";
+import Lc, { type LucideName } from "../design/Lc";
 
 // Dữ liệu một địa điểm đang biên tập (bản nháp, chưa cần xuất bản). Mọi tab của trình biên tập dùng chung.
 export interface WorkspaceData {
@@ -88,9 +90,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const model = useMemo(() => (data ? buildVenueModel({ ...data, venue: data.venue }) : null), [data]);
 
     if (error) {
-        return <div className="cb-main"><ErrorNote error={error} onRetry={() => setAttempt(a => a + 1)} /><Button to="/builder">← Về danh sách địa điểm</Button></div>;
+        return (
+            <ConsoleFrame crumbs={[{ label: "Địa điểm của tôi", to: "/builder" }, { label: "Không mở được địa điểm" }]} nav={<GlobalSidebar />}>
+                <div className="k-page"><ErrorNote error={error} onRetry={() => setAttempt(a => a + 1)} /><div><Button to="/builder" icon="arrow-left">Về Địa điểm của tôi</Button></div></div>
+            </ConsoleFrame>
+        );
     }
-    if (!data || !model) return <Spinner label="Đang tải dữ liệu địa điểm…" />;
+    if (!data || !model) return <ConsoleFrame crumbs={[{ label: "Địa điểm của tôi", to: "/builder" }, { label: "Đang mở…" }]} nav={<GlobalSidebar />}><Spinner label="Đang tải dữ liệu địa điểm…" /></ConsoleFrame>;
     return <WorkspaceContext.Provider value={{ venueId, data, model, reload, patch }}>{children}</WorkspaceContext.Provider>;
 }
 
@@ -101,31 +107,86 @@ export function useWorkspace(): WorkspaceState {
     return value;
 }
 
-const TABS: [string, string][] = [
-    ["plan", "Mặt bằng"], ["buildings", "Toà nhà & tầng"], ["editor", "Điểm & vùng"], ["walkways", "Lối đi"], ["types", "Loại & tiện ích"],
-    ["qr", "Mã QR"], ["landmarks", "Mốc camera"], ["test", "Thử chỉ đường"], ["publish", "Xuất bản"]
+// Thứ tự dựng bản đồ (sidebar "Dựng bản đồ") và công cụ phụ, giống bản thiết kế
+const STEPS: [string, string, (d: WorkspaceData) => boolean][] = [
+    ["buildings", "Toà nhà và tầng", d => d.floors.length > 0],
+    ["plan", "Mặt bằng", d => d.floors.length > 0 && d.floors.every(f => !!f.plan)],
+    ["editor", "Điểm và vùng", d => d.locations.length > 0],
+    ["walkways", "Lối đi", d => d.walkways.nodes.length > 1],
+    ["test", "Thử chỉ đường", () => false],
+    ["publish", "Xuất bản", d => d.venue.status === "PUBLISHED"]
 ];
+const TOOLS: [string, string, LucideName, string?][] = [
+    ["journeys", "Quy trình", "workflow"], ["qr", "Mã QR định vị", "qr-code"], ["types", "Loại và tiện ích", "list"],
+    ["landmarks", "Mốc camera", "camera", "GĐ 2"], ["settings", "Cài đặt địa điểm", "settings"]
+];
+const SHORT: Record<string, string> = {
+    buildings: "Toà nhà", plan: "Mặt bằng", editor: "Điểm", walkways: "Lối đi", test: "Thử", publish: "Xuất bản",
+    journeys: "Quy trình", qr: "Mã QR", types: "Loại", landmarks: "Mốc", settings: "Cài đặt"
+};
+const LABEL: Record<string, string> = {
+    ...Object.fromEntries([...STEPS, ...TOOLS].map(([path, label]) => [path, label])),
+    import: "Nhập từ CSV, GeoJSON", diff: "Khác biệt bản nháp", "qr-print": "In tem mã QR"
+};
+/** Màn biên tập canvas: sidebar thu gọn thành rail để canvas rộng */
+const RAIL = new Set(["editor", "walkways", "journeys"]);
 
-function Workbar() {
-    const { data, venueId } = useWorkspace();
-    const status = data.venue.status;
+function WorkspaceSidebar({ base, data }: { base: string; data: WorkspaceData }) {
     return (
-        <header className="cb-workbar">
-            <NavLink to="/builder" className="cb-back">← Địa điểm</NavLink>
-            <span className="cb-venue-name" title={data.venue.name}>{data.venue.name}</span>
-            {status === "PUBLISHED" ? <Status kind="ok">Đã xuất bản</Status> : status === "HIDDEN" ? <Status kind="err">Bị ẩn</Status> : <Status kind="mut">Bản nháp</Status>}
-            <nav className="cb-tabs" aria-label="Các bước dựng bản đồ">
-                {TABS.map(([path, label]) => <NavLink key={path} to={`/builder/v/${venueId}/${path}`}>{label}</NavLink>)}
-            </nav>
-        </header>
+        <Sidebar label="Các bước dựng bản đồ">
+            <SideGroup>Dựng bản đồ</SideGroup>
+            {STEPS.map(([path, label, done], i) => (
+                <Fragment key={path}>
+                    <SideItem to={`${base}/${path}`} mark={<StepMark n={i + 1} done={done(data)} />} label={label} />
+                    {path === "editor" && <SideItem sub to={`${base}/import`} label="Nhập từ CSV, GeoJSON" />}
+                </Fragment>
+            ))}
+            <SideSep />
+            <SideGroup>Công cụ</SideGroup>
+            {TOOLS.map(([path, label, icon, badge]) => <SideItem key={path} to={`${base}/${path}`} icon={icon} label={label} count={badge} />)}
+        </Sidebar>
+    );
+}
+
+function WorkspaceRail({ base, data }: { base: string; data: WorkspaceData }) {
+    return (
+        <nav className="cs-rail" aria-label="Các bước dựng bản đồ (thu gọn)">
+            {STEPS.map(([path, label, done], i) => (
+                <NavLink key={path} to={`${base}/${path}`} title={label}><StepMark n={i + 1} done={done(data)} />{SHORT[path]}</NavLink>
+            ))}
+            <div className="cs-sep" role="separator" />
+            {TOOLS.map(([path, label, icon]) => <NavLink key={path} to={`${base}/${path}`} title={label}><Lc name={icon} />{SHORT[path]}</NavLink>)}
+        </nav>
+    );
+}
+
+function PublishChip({ status }: { status?: string }) {
+    if (status === "PUBLISHED") return <span className="cs-chip"><Lc name="circle-check" size={15} />Đang công khai</span>;
+    if (status === "HIDDEN") return <span className="cs-chip"><Lc name="eye-off" size={15} />Bị ẩn</span>;
+    return <span className="cs-chip" style={{ color: "var(--hud-muted)" }}>Bản nháp, chưa công khai</span>;
+}
+
+function WorkspaceFrame() {
+    const { data, venueId } = useWorkspace();
+    const { pathname } = useLocation();
+    const base = `/builder/v/${venueId}`;
+    const page = pathname.slice(base.length + 1).split("/")[0] ?? "";
+    const rail = RAIL.has(page);
+    return (
+        <ConsoleFrame
+            crumbs={[{ label: data.venue.name, to: `${base}/buildings` }, { label: LABEL[page] ?? "Dựng bản đồ" }]}
+            chip={<PublishChip status={data.venue.status} />}
+            nav={rail ? <WorkspaceRail base={base} data={data} /> : <WorkspaceSidebar base={base} data={data} />}
+            full={rail || page === "plan" || page === "test"}>
+            <Outlet />
+        </ConsoleFrame>
     );
 }
 
 export function WorkspaceLayout() {
     return (
         <WorkspaceProvider>
-            <Workbar />
-            <Outlet />
+            <WorkspaceFrame />
         </WorkspaceProvider>
     );
 }

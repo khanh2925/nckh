@@ -5,6 +5,8 @@ import { RequireAuth } from "./auth";
 // Tải sau theo từng trang: khách tham quan không phải tải mã của Builder/Admin
 const LoginPage = lazy(() => import("../builder/AuthPages").then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("../builder/AuthPages").then(m => ({ default: m.RegisterPage })));
+const ForgotPage = lazy(() => import("../builder/AuthPages").then(m => ({ default: m.ForgotPage })));
+const MaintenancePage = lazy(() => import("../builder/AuthPages").then(m => ({ default: m.MaintenancePage })));
 const BuilderShell = lazy(() => import("../builder/BuilderShell"));
 const WorkspaceLayout = lazy(() => import("../builder/Workspace").then(m => ({ default: m.WorkspaceLayout })));
 const VenuesPage = lazy(() => import("../builder/pages/VenuesPage"));
@@ -18,6 +20,11 @@ const TypesPage = lazy(() => import("../builder/pages/TypesPage"));
 const QrPage = lazy(() => import("../builder/pages/QrPage"));
 const TestPage = lazy(() => import("../builder/pages/TestPage"));
 const PublishPage = lazy(() => import("../builder/pages/PublishPage"));
+const JourneysPage = lazy(() => import("../builder/pages/JourneysPage"));
+const VenueSettingsPage = lazy(() => import("../builder/pages/VenueSettingsPage"));
+const DiffPage = lazy(() => import("../builder/pages/DiffPage"));
+const QrPrintPage = lazy(() => import("../builder/pages/QrPrintPage"));
+const NotificationsPage = lazy(() => import("../builder/pages/NotificationsPage"));
 const AccountPage = lazy(() => import("../builder/pages/SimplePages").then(m => ({ default: m.AccountPage })));
 const LandmarksPage = lazy(() => import("../builder/pages/SimplePages").then(m => ({ default: m.LandmarksPage })));
 const StatsPage = lazy(() => import("../builder/pages/SimplePages").then(m => ({ default: m.StatsPage })));
@@ -35,14 +42,17 @@ export default function consoleRoutes() {
         <>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/forgot" element={<ForgotPage />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/builder" element={<RequireAuth><BuilderShell /></RequireAuth>}>
                 <Route index element={<VenuesPage />} />
                 <Route path="new" element={<VenueCreatePage />} />
                 <Route path="stats" element={<StatsPage />} />
                 <Route path="account" element={<AccountPage />} />
+                <Route path="notifications" element={<NotificationsPage />} />
             </Route>
             <Route path="/builder/v/:venueId" element={<RequireAuth><WorkspaceLayout /></RequireAuth>}>
-                <Route index element={<Navigate to="editor" replace />} />
+                <Route index element={<Navigate to="buildings" replace />} />
                 <Route path="plan" element={<CalibratePage />} />
                 <Route path="buildings" element={<BuildingsPage />} />
                 <Route path="editor" element={<EditorPage />} />
@@ -53,6 +63,10 @@ export default function consoleRoutes() {
                 <Route path="landmarks" element={<LandmarksPage />} />
                 <Route path="test" element={<TestPage />} />
                 <Route path="publish" element={<PublishPage />} />
+                <Route path="journeys" element={<JourneysPage />} />
+                <Route path="settings" element={<VenueSettingsPage />} />
+                <Route path="diff" element={<DiffPage />} />
+                <Route path="qr-print" element={<QrPrintPage />} />
             </Route>
             <Route path="/admin" element={<RequireAuth role="SYSTEM_ADMIN"><AdminLayout /></RequireAuth>}>
                 <Route index element={<AdminDashboard />} />

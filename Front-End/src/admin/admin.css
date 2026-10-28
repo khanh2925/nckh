@@ -1,0 +1,64 @@
+/* Bố cục riêng các màn Quản trị hệ thống. Chỉ bố cục: chữ, màu, bo góc lấy từ lớp .k-* trong console.css. */
+.ka-flush { padding: 0; gap: 0; overflow: hidden; }
+.ka-hd { display: flex; align-items: center; gap: 8px; padding: 16px; border-bottom: 1px solid var(--rule); }
+.ka-hd > .end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.ka-sub { display: block; margin-top: 4px; }
+.ka-block { display: block; }
+.ka-acts { display: flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; }
+.ka-empty { padding: 48px 32px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.ka-empty.is-big { padding: 64px 32px; border-top: 1px solid var(--rule); }
+.ka-scroll { overflow-x: auto; }
+
+/* tổng quan */
+.ka-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+.ka-cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
+.ka-body { padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.ka-foot { padding: 8px; border-top: 1px solid var(--rule); }
+
+/* kiểm duyệt */
+.ka-split { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
+.ka-vl button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--rule); background: transparent; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--ink); }
+.ka-vl button:last-child { border-bottom: 0; }
+.ka-vl button:hover { background: var(--surface-2); }
+.ka-vl button[aria-current="true"] { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--graphite); }
+.ka-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ka-head { padding: 24px; display: flex; flex-direction: column; gap: 8px; }
+.ka-head > .k-line > .end { margin-left: auto; }
+.ka-facts { margin: 0; padding: 16px 24px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.ka-facts dd { margin: 0; }
+.ka-sec { padding: 16px 24px; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 16px; }
+.ka-dfoot { display: flex; align-items: center; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--rule); }
+.ka-dfoot > .start { display: flex; align-items: center; gap: 8px; margin-left: -12px; }
+.ka-dfoot > .end { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.ka-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.ka-dlg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.ka-dlg-foot > .left { margin-right: auto; }
+
+/* người dùng */
+.ka-toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ka-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ka-search { width: 280px; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.ka-search input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; color: var(--ink); outline-offset: 4px; }
+
+/* danh mục mẫu */
+.ka-tgrid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.ka-swatch { width: 24px; height: 24px; border-radius: 4px; color: var(--surface); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ka-edhead { padding: 16px; border-bottom: 1px solid var(--rule); }
+.ka-edform { padding: 16px; }
+.ka-edfoot { display: flex; align-items: center; gap: 8px; padding: 16px; border-top: 1px solid var(--rule); }
+.ka-edfoot > .end { margin-left: auto; display: flex; gap: 8px; }
+.ka-tab-btn { border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; }
+
+/* cấu hình, nhật ký */
+.ka-cfg-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.ka-cfg { margin: 0; }
+.ka-cfg dt { flex: 1; min-width: 0; }
+.ka-cfg dd { margin: 0; width: 240px; flex-shrink: 0; }
+.ka-flt { display: grid; grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr)); gap: 16px; }
+
+@media (max-width: 1200px) {
+    .ka-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .ka-cols, .ka-tgrid, .ka-cfg-cols { grid-template-columns: 1fr; }
+    .ka-split { grid-template-columns: 280px minmax(0, 1fr); }
+    .ka-flt { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

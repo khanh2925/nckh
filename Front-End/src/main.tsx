@@ -2,14 +2,11 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "bootstrap-icons/font/bootstrap-icons.css";
-// Phông chữ đi kèm website (không phụ thuộc Google Fonts, chạy được khi mạng trong toà nhà yếu)
-import "@fontsource/be-vietnam-pro/400.css";
-import "@fontsource/be-vietnam-pro/600.css";
-import "@fontsource/be-vietnam-pro/700.css";
-import "@fontsource/be-vietnam-pro/800.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
-import "@fontsource/jetbrains-mono/800.css";
+// Một phông đi kèm website (có bộ tiếng Việt, không phụ thuộc Google Fonts khi mạng trong toà nhà yếu)
+import "@fontsource/familjen-grotesk/400.css";
+import "@fontsource/familjen-grotesk/600.css";
+import "@fontsource/familjen-grotesk/700.css";
+import "./design/tokens.css";
 import "./styles/wayfind.css";
 import VenueLayout from "./viewer/VenueLayout";
 import HomePage from "./viewer/pages/HomePage";
@@ -19,6 +16,13 @@ import SearchPage from "./viewer/pages/SearchPage";
 import PlacePage from "./viewer/pages/PlacePage";
 import RoutePage from "./viewer/pages/RoutePage";
 import NavigatePage from "./viewer/pages/NavigatePage";
+import { PreviewPage } from "./viewer/pages/MapPage";
+import PermissionPage from "./viewer/pages/PermissionPage";
+import StridePage from "./viewer/pages/StridePage";
+import SharePage from "./viewer/pages/SharePage";
+import SharedRoutePage from "./viewer/pages/SharedRoutePage";
+import JourneysPage from "./viewer/pages/JourneysPage";
+import ReportPage from "./viewer/pages/ReportPage";
 
 import SettingsPage from "./viewer/pages/SettingsPage";
 import { Loading } from "./viewer/components/ui";
@@ -41,6 +45,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/" element={<HomePage />} />
                 <Route path="/scan" element={<GlobalScanPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/stride" element={<StridePage />} />
                 <Route path="/v/:slug" element={<VenueLayout />}>
                     <Route index element={<VenueInfoPage />} />
                     <Route path="map" element={<MapPage />} />
@@ -50,6 +55,14 @@ createRoot(document.getElementById("root")!).render(
                     <Route path="go" element={<NavigatePage />} />
                     <Route path="camera" element={<CameraPage />} />
                     <Route path="scan" element={<ScanPage />} />
+                    <Route path="permission" element={<PermissionPage />} />
+                    <Route path="stride" element={<StridePage />} />
+                    <Route path="share" element={<SharePage />} />
+                    <Route path="shared" element={<SharedRoutePage />} />
+                    <Route path="preview" element={<PreviewPage />} />
+                    <Route path="journeys" element={<JourneysPage />} />
+                    <Route path="journeys/:id" element={<JourneysPage />} />
+                    <Route path="report" element={<ReportPage />} />
                 </Route>
                 <Route path="/q/:slug" element={<VenueLayout />}>
                     <Route path=":code" element={<QrEntryPage />} />

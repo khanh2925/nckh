@@ -4,6 +4,8 @@ import type { VenueModel } from "@indoor-map/core";
 import L from "../lib/leaflet";
 import { api } from "../lib/data";
 import { buildPlanOverlay, parsePlanSvg, rasterAsSvg } from "../lib/planSvg";
+import { mapColors } from "./layers";
+import "./pages/workspace.css";
 
 // Bản đồ nền cho trình biên tập: nền ngoài trời + bản vẽ mặt bằng của tầng đang chọn.
 // Các lớp biên tập (điểm, vùng, lối đi...) là component con nhận "map" và tự vẽ bằng useEffect.
@@ -53,6 +55,10 @@ export default function EditorMap({ model, floorId, children, fitKey, className 
         m.getPane("planPane")!.style.pointerEvents = "none";
         planLayer.current = L.layerGroup().addTo(m);
         m.on("mousemove", e => moveRef.current?.(e.latlng));
+        // Phóng gần thì hiện nhãn tên cạnh ô biển (.ws-lbl)
+        const near = () => box.current?.classList.toggle("ws-near", m.getZoom() >= 19);
+        m.on("zoomend", near);
+        near();
         const observer = new ResizeObserver(() => m.invalidateSize({ pan: false }));
         observer.observe(box.current);
         setMap(m);
@@ -76,7 +82,7 @@ export default function EditorMap({ model, floorId, children, fitKey, className 
         if (!showPlan || !plan || !projection) return undefined;
         let alive = true;
         const bounds = L.latLngBounds(projection.bounds.map(p => L.latLng(p.lat, p.lng)));
-        group.addLayer(L.rectangle(bounds, { pane: "planPane", stroke: false, fillColor: "#FFFFFF", fillOpacity: 0.85, interactive: false }));
+        group.addLayer(L.rectangle(bounds, { pane: "planPane", stroke: false, fillColor: mapColors().surface, fillOpacity: 0.85, interactive: false }));
         void api.fetchPlanSvg(plan).then(text => {
             if (!alive) return;
             let svg: SVGSVGElement | null = null;

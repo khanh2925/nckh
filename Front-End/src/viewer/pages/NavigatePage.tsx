@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
-import { getSettings } from "../../lib/settings";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { formatMeters, type Trip } from "@indoor-map/core";
+import { formatMeters, searchPlaces, type Trip } from "@indoor-map/core";
+import Lc from "../../design/Lc";
+import { getSettings } from "../../lib/settings";
 import { useModel, useVenue } from "../VenueContext";
 import { useTripEngine, canSimulateByDefault, type TripEngine } from "../useTripEngine";
 import FloorMap from "../components/FloorMap";
-import Icon from "../components/Icon";
-import { Button, IconButton } from "../components/ui";
+import { Button, Hud, IconButton, Progress, Row, Sheet, Status } from "../components/ui";
+import { clean, decimal, floorInSentence, floorLabel, minutesOf, placeWhere, stepIcon } from "../format";
 
-// Đang đi (2D): banner lượt rẽ kế tiếp, bản đồ theo hướng đi, tiến độ.
-// Tới chỗ thang: màn Chuyển tầng. Tới nơi: màn Đã đến.
+// Đang đi (2D): HUD than chì có mũi tên lượt kế tiếp + quãng còn lại, bản đồ phẳng xoay theo hướng đi, bảng tiến độ.
+// Tới chỗ thang: Chuyển tầng. Tới nơi: Đã tới.
 export default function NavigatePage() {
     const { trip, slug } = useVenue();
     if (!trip) return <Navigate to={`/v/${slug}/map`} replace />;
@@ -23,31 +24,90 @@ function Navigating({ trip }: { trip: Trip }) {
     return <TwoD engine={engine} />;
 }
 
-export function SensorBar({ engine }: { engine: TripEngine }) {
+/** Chip trạng thái định vị: nguồn định vị + số bước + sai số; bật cảm biến; cảnh báo lệch */
+export function TripStatusChip({ engine, slug, then, prefix }: { engine: TripEngine; slug: string; then: "go" | "camera"; prefix?: string }) {
     if (engine.needPermission && !engine.simulating) {
         return (
-            <button type="button" className="wf-sensor-bar is-action" onClick={() => void engine.enableSensors()}>
-                <Icon name="compass" size={16} />Bật la bàn &amp; đếm bước chân
+            <button type="button" className="wf-chip wf-lift" onClick={() => void engine.enableSensors()}>
+                <Lc name="compass" size={20} /><span>Bật la bàn và đếm bước</span>
             </button>
         );
     }
+    if (engine.lost) {
+        return (
+            <Link to={`/v/${slug}/scan?then=${then}`} className="wf-chip wf-lift">
+                <Lc name="triangle-alert" size={20} color="var(--warn)" /><span>Có thể đã lệch ±{Math.round(engine.uncertainty)} m, quét QR</span>
+            </Link>
+        );
+    }
+    const source = engine.trip.lastFixSource;
+    const from = source === "qr" ? `QR ${engine.trip.from.nodeId ?? ""}`.trim() : source === "pick" ? "Chọn trên bản đồ" : clean(engine.trip.from.label) || "Địa điểm";
+    const text = engine.simulating
+        ? `Mô phỏng đi bộ ${decimal(1.3, 1)} m/s`
+        : `${from}${engine.stepsLive ? `, ${engine.steps} bước` : ""}, ±${Math.round(engine.uncertainty)} m`;
     return (
-        <div className="wf-sensor-bar">
-            <span className={`wf-dot${engine.lost ? " is-warn" : ""}`} />
-            {engine.simulating
-                ? "Mô phỏng đi bộ 1,3 m/s"
-                : `Định vị: ${engine.trip.lastFixSource === "qr" ? "QR" : engine.trip.lastFixSource === "pick" ? "chọn tay" : "địa điểm"}${engine.stepsLive ? ` + bước chân · ${engine.steps} bước × ${getSettings().stepLength.toFixed(2).replace(".", ",")} m` : ""} · ±${Math.round(engine.uncertainty)} m${engine.headingOffset ? ` · bù hướng ${engine.headingOffset > 0 ? "+" : ""}${engine.headingOffset}°` : ""}`}
-        </div>
+        <span className="wf-chip wf-lift" role="status">
+            {prefix ? <span className="wf-warn">{prefix}</span> : <Lc name={source === "qr" ? "qr-code" : "map-pin"} size={20} />}<span>{text}</span>
+        </span>
+    );
+}
+
+/** Menu "Thêm" + hộp xác nhận kết thúc, dùng chung cho Đang đi, Chuyển tầng, Camera */
+export function TripMenu({ engine, open, onClose, onAlign, showSimulate }: {
+    engine: TripEngine; open: boolean; onClose: () => void; onAlign?: () => void; showSimulate?: boolean;
+}) {
+    const { slug, endTrip } = useVenue();
+    const navigate = useNavigate();
+    const [confirm, setConfirm] = useState(false);
+    const { trip, view } = engine;
+    const here = view.here;
+    if (!open && !confirm) return null;
+    const close = () => {
+        setConfirm(false);
+        onClose();
+    };
+    return (
+        <>
+            <button type="button" className="wf-scrim" aria-label="Đóng" onClick={close} />
+            {confirm ? (
+                <div className="wf-dlg" role="alertdialog" aria-modal="true" aria-labelledby="kt-t" aria-describedby="kt-d">
+                    <h2 id="kt-t" className="wf-t22">Kết thúc chỉ đường?</h2>
+                    <p id="kt-d" className="wf-t15 wf-muted">Còn {formatMeters(view.remaining)} tới {trip.to.name}.</p>
+                    <div className="wf-acts">
+                        <Button variant="secondary" danger onClick={() => { endTrip(); navigate(`/v/${slug}/place/${trip.to.id}`, { replace: true }); }}>Kết thúc</Button>
+                        <Button onClick={close}>Tiếp tục đi</Button>
+                    </div>
+                </div>
+            ) : (
+                <div className="wf-menu" role="menu" aria-label="Thêm">
+                    <div className="wf-grab" aria-hidden="true" />
+                    <Link role="menuitem" className="wf-mi" to={`/v/${slug}/route?to=${trip.to.id}`}><Lc name="list" size={20} />Xem các bước</Link>
+                    {onAlign && engine.canAlign && (
+                        <button role="menuitem" type="button" className="wf-mi" onClick={() => { onClose(); onAlign(); }}><Lc name="compass" size={20} />Căn hướng la bàn</button>
+                    )}
+                    {showSimulate && (
+                        <button role="menuitem" type="button" className="wf-mi" onClick={() => { engine.setSimulating(!engine.simulating); onClose(); }}>
+                            <Lc name="footprints" size={20} />{engine.simulating ? "Dừng mô phỏng đi bộ" : "Mô phỏng đi bộ"}
+                        </button>
+                    )}
+                    <Link role="menuitem" className="wf-mi" to={`/v/${slug}/map?pick=position&floor=${here?.floorId ?? trip.to.floorId}&return=go`}><Lc name="map-pin" size={20} />Tôi không ở chỗ này</Link>
+                    <Link role="menuitem" className="wf-mi" to="/settings"><Lc name="settings" size={20} />Cài đặt chỉ đường</Link>
+                    <Link role="menuitem" className="wf-mi" to={`/v/${slug}/report`}><Lc name="flag" size={20} />Báo sai đường</Link>
+                    <button role="menuitem" type="button" className="wf-mi is-danger" onClick={() => setConfirm(true)}><Lc name="x" size={20} />Kết thúc chỉ đường…</button>
+                    <Button variant="secondary" block onClick={close}>Đóng</Button>
+                </div>
+            )}
+        </>
     );
 }
 
 function TwoD({ engine }: { engine: TripEngine }) {
     const model = useModel();
-    const { slug, endTrip } = useVenue();
-    const navigate = useNavigate();
+    const { slug } = useVenue();
     const { trip, view } = engine;
     const [headingUp, setHeadingUp] = useState(true);
     const [aligning, setAligning] = useState(false);
+    const [menu, setMenu] = useState(false);
     const [notice, setNotice] = useState<string | null>(null);
     useEffect(() => {
         if (!notice) return undefined;
@@ -55,141 +115,123 @@ function TwoD({ engine }: { engine: TripEngine }) {
         return () => window.clearTimeout(t);
     }, [notice]);
     const next = view.next;
+    const after = trip.route.steps[view.stepIndex + 2];
     const here = view.here;
     const floorId = here?.floorId ?? trip.route.legs[trip.activeLeg]!.floorId;
-    const percent = trip.route.distance > 0 ? Math.min(100, (trip.progress / trip.route.distance) * 100) : 100;
+    const percent = trip.route.distance > 0 ? (trip.progress / trip.route.distance) * 100 : 100;
+    const simulateInline = engine.simulating || canSimulateByDefault || !engine.stepsLive;
 
     return (
         <div className="wf-screen">
-            <div className="wf-turn-banner" aria-live="polite">
-                <div className="wf-turn-icon">
-                    <Icon name={next?.kind ?? "straight"} size={40} stroke={2.8} />
-                    <span>{next?.kind === "arrive" ? "ĐẾN NƠI" : next?.kind?.startsWith("floor") ? "ĐỔI TẦNG" : next ? next.title.split(" tại ")[0]!.toUpperCase() : "ĐI THẲNG"}</span>
-                </div>
-                <div className="wf-turn-text">
-                    <div className="wf-turn-dist">{Math.round(view.toNext)} <small>m</small></div>
-                    <div className="wf-turn-title">{next?.title.includes(" tại ") ? `tại ${next.title.split(" tại ")[1]}` : next?.title}</div>
-                    <div className="wf-turn-detail">{next?.detail}</div>
-                </div>
-                <Link to={`/v/${slug}/route?to=${trip.to.id}`} className="wf-turn-more" aria-label="Xem tất cả các bước"><Icon name="list" /></Link>
-            </div>
-
-            <div className="wf-map-area">
+            <div className="wf-maparea">
                 <FloorMap model={model} floorId={floorId} route={trip.route} activeLeg={trip.activeLeg} destination={trip.to}
-                    user={here} heading={engine.heading} headingUp={headingUp && engine.heading != null}
+                    user={here} accuracy={engine.uncertainty} heading={engine.heading} headingUp={headingUp && engine.heading != null}
                     focus={here ? { lat: here.lat, lng: here.lng, zoom: 20 } : "floor"} />
-                <div className="wf-map-badges">
-                    <SensorBar engine={engine} />
-                    {engine.canAlign && !aligning && (
-                        <button type="button" className="wf-sensor-bar is-action" onClick={() => setAligning(true)}>
-                            <Icon name="compass" size={16} />{engine.headingOffset ? "Căn lại hướng" : "Mũi tên lệch hướng? Căn hướng"}
-                        </button>
+                <Hud glyph={stepIcon(next?.kind)} num={Math.round(view.toNext)} unit="m" text={next?.title ?? "Đi thẳng"} />
+                <div className="wf-float-chip" style={{ top: 136 }}>
+                    {notice ? <span className="wf-chip wf-lift" role="status"><Lc name="check" size={20} /><span>{notice}</span></span> : <TripStatusChip engine={engine} slug={slug} then="go" />}
+                </div>
+                <div className="wf-side is-bottom">
+                    {engine.heading != null && (
+                        <IconButton kind="map-sm" icon="compass" on={headingUp} label={headingUp ? "Bản đồ theo hướng đi, bấm để quay về hướng Bắc" : "Bản đồ hướng Bắc, bấm để xoay theo hướng đi"}
+                            onClick={() => setHeadingUp(h => !h)} />
                     )}
-                    {notice && <div className="wf-sensor-bar" role="status">{notice}</div>}
-                    {engine.lost && (
-                        <Link to={`/v/${slug}/scan?then=go`} className="wf-sensor-bar is-warn">Vị trí có thể đã lệch — quét QR để căn lại</Link>
-                    )}
+                    <IconButton kind="map-sm" icon="camera" label="Chỉ đường bằng camera" to={`/v/${slug}/camera`} />
                 </div>
-                <div className="wf-map-tools is-right is-top">
-                    <IconButton icon="compass" label={headingUp ? "Bản đồ theo hướng Bắc" : "Bản đồ theo hướng đi"} onClick={() => setHeadingUp(h => !h)}
-                        variant={headingUp ? "is-ink" : ""} />
-                </div>
-                <div className="wf-map-tools is-right">
-                    <IconButton icon="qr" label="Định vị lại bằng mã QR" to={`/v/${slug}/scan?then=go`} size={48} />
-                    <IconButton icon="camera" label="Chỉ đường bằng camera" to={`/v/${slug}/camera`} variant="is-live" size={48} />
-                </div>
-                <div className="wf-floor-tag">{model.floorsById.get(floorId)?.buildingCode} · {model.floorsById.get(floorId)?.name.split(" · ")[0]}</div>
             </div>
 
-            {aligning && (
-                <div className="wf-sheet" role="dialog" aria-label="Căn hướng la bàn">
-                    <p style={{ margin: 0 }}><b>Căn hướng</b><br />Cầm máy thẳng trước ngực, quay người theo <b>hướng thật của đoạn đường đang đi</b> — đường xanh ngay trước chấm của bạn{next && next.kind !== "arrive" ? <>, trước khi tới lượt “{next.title}”</> : null} — rồi bấm Xong. Mũi tên của địa điểm này sẽ chỉnh theo hướng đó.</p>
-                    <div className="wf-row-actions">
-                        <Button variant="secondary" full={false} onClick={() => setAligning(false)}>Huỷ</Button>
-                        {engine.headingOffset !== 0 && <Button variant="secondary" full={false} onClick={() => { engine.resetHeading(); setAligning(false); setNotice("Đã bỏ bù hướng"); }}>Bỏ bù</Button>}
+            {aligning ? (
+                <Sheet labelledBy="al-t">
+                    <div>
+                        <h2 id="al-t" className="wf-t28">Căn hướng la bàn</h2>
+                        <p className="wf-t15 wf-muted" style={{ marginTop: 8 }}>
+                            Cầm máy thẳng trước ngực, quay người theo hướng thật của đoạn đường vàng ngay trước chấm của bạn, rồi bấm Xong.
+                        </p>
+                    </div>
+                    <div className="wf-acts">
+                        <Button variant="secondary" onClick={() => setAligning(false)}>Huỷ</Button>
+                        {engine.headingOffset !== 0 && <Button variant="secondary" onClick={() => { engine.resetHeading(); setAligning(false); setNotice("Đã bỏ bù hướng"); }}>Bỏ bù</Button>}
                         <Button icon="check" onClick={() => {
                             const offset = engine.alignHeading();
                             setAligning(false);
-                            setNotice(offset == null ? "Chưa có la bàn — thử lại sau vài giây" : `Đã căn hướng · bù ${offset > 0 ? "+" : ""}${offset}°`);
+                            setNotice(offset == null ? "Chưa có la bàn, thử lại sau vài giây" : `Đã căn hướng, bù ${offset > 0 ? "+" : ""}${offset}°`);
                         }}>Xong</Button>
                     </div>
-                </div>
+                </Sheet>
+            ) : (
+                <Sheet label="Tiến trình">
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                        <span className="wf-t28">{minutesOf(view.remainingSeconds)} phút</span>
+                        <span className="wf-t15 wf-muted">{Math.round(trip.progress)} / {Math.round(trip.route.distance)} m, tới {trip.to.name}</span>
+                    </div>
+                    <div>
+                        <Progress percent={percent} label="Đã đi" />
+                        {next?.detail && <p className="wf-t13" style={{ marginTop: 8 }}>{capitalize(clean(next.detail))}{after && after.kind === "arrive" ? `, tới ${trip.to.name}` : ""}</p>}
+                    </div>
+                    <div className="wf-acts">
+                        <Button variant="secondary" icon="scan-line" to={`/v/${slug}/scan?then=go`}>Quét QR</Button>
+                        {simulateInline && (
+                            <Button variant="secondary" icon="footprints" onClick={() => engine.setSimulating(!engine.simulating)}>{engine.simulating ? "Dừng" : "Mô phỏng"}</Button>
+                        )}
+                        {simulateInline
+                            ? <Button variant="secondary" square icon="ellipsis" label="Thêm" onClick={() => setMenu(true)} />
+                            : <Button variant="secondary" icon="ellipsis" onClick={() => setMenu(true)}>Thêm</Button>}
+                    </div>
+                </Sheet>
             )}
-            {!aligning && <div className="wf-sheet">
-                <div className="wf-progress-text">
-                    <span>Đã đi <b>{Math.round(trip.progress)} m</b> / {trip.route.distance} m</span>
-                    <span>còn <b>{Math.max(1, Math.round(view.remainingSeconds / 60))} phút</b> · {trip.to.name}</span>
-                </div>
-                <div className="wf-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><span style={{ width: `${percent}%` }} /></div>
-                <div className="wf-row-actions">
-                    <Button variant="secondary" full={false} onClick={() => { endTrip(); navigate(`/v/${slug}/place/${trip.to.id}`, { replace: true }); }}>Kết thúc</Button>
-                    {engine.simulating || canSimulateByDefault || !engine.stepsLive ? (
-                        <Button icon={engine.simulating ? "close" : "walk"} onClick={() => engine.setSimulating(!engine.simulating)}>
-                            {engine.simulating ? "Dừng mô phỏng" : "Mô phỏng đi bộ"}
-                        </Button>
-                    ) : (
-                        <Button icon="walk" variant="secondary" onClick={() => engine.trip && navigate(`/v/${slug}/map?pick=position&floor=${floorId}&return=go`)}>
-                            Tôi không ở đây
-                        </Button>
-                    )}
-                </div>
-            </div>}
+            <TripMenu engine={engine} open={menu} onClose={() => setMenu(false)} onAlign={() => setAligning(true)} showSimulate={!simulateInline} />
         </div>
     );
 }
+
+const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 function FloorChange({ engine }: { engine: TripEngine }) {
     const model = useModel();
     const { slug, confirmFloorChange } = useVenue();
     const { trip, view } = engine;
+    const [menu, setMenu] = useState(false);
     const step = view.step;
     const leg = trip.route.legs[trip.activeLeg]!;
     const nextLeg = trip.route.legs[trip.activeLeg + 1];
     const fromFloor = model.floorsById.get(leg.floorId);
     const toFloor = nextLeg ? model.floorsById.get(nextLeg.floorId) : undefined;
     const end = leg.points[leg.points.length - 1]!;
-    const up = step?.kind === "floor-up";
-    const lift = model.locations
-        .filter(l => l.floorId === leg.floorId && l.type === "elevator")
-        .map(l => ({ l, d: Math.hypot(l.lat - end.lat, l.lng - end.lng) * 111_000 }))
-        .sort((a, b) => a.d - b.d)[0];
+    const up = step?.kind !== "floor-down";
+    const connector = leg.connector ?? "Thang";
+    const endCode = end.id && model.nodesById.get(end.id)?.connector ? end.id : null;
 
     return (
         <div className="wf-screen">
-            <header className="wf-topbar">
-                <IconButton icon="back" label="Về bản đồ" to={`/v/${slug}/route?to=${trip.to.id}`} />
-                <div className="wf-topbar-text">
-                    <div className="wf-kicker">CHẶNG {trip.activeLeg + 1} → {trip.activeLeg + 2} · {trip.to.name.toUpperCase()}</div>
-                    <h1 className="wf-title">Chuyển tầng</h1>
-                </div>
-            </header>
-            <div className="wf-route-map is-short">
-                <FloorMap model={model} floorId={leg.floorId} route={trip.route} activeLeg={trip.activeLeg} user={view.here} focus={{ lat: end.lat, lng: end.lng, zoom: 20.5 }} showMarkers={false} />
-                <div className="wf-leg-badge"><span>{fromFloor?.name.split(" · ")[0]?.toUpperCase()}</span><b>→ {toFloor?.name.split(" · ")[0]?.toUpperCase()}</b></div>
+            <div className="wf-maparea">
+                <FloorMap model={model} floorId={leg.floorId} route={trip.route} activeLeg={trip.activeLeg} user={view.here} accuracy={engine.uncertainty}
+                    heading={engine.heading} focus={{ lat: end.lat, lng: end.lng, zoom: 20.5 }} showMarkers={false} />
+                <Hud glyph="arrow-up-down" num={floorLabel(toFloor)} text={step?.title ?? `${connector} ${up ? "lên" : "xuống"}`}
+                    sub={nextLeg ? `Chặng ${trip.activeLeg + 2}/${trip.route.legs.length}, rồi đi ${formatMeters(nextLeg.distance)}` : undefined} />
             </div>
-            <main className="wf-body">
-                <div className="wf-ink-card">
-                    <span className="wf-ink-icon"><Icon name={up ? "floor-up" : "floor-down"} size={34} stroke={2.6} /></span>
-                    <span><b>{step?.title}</b><small>{leg.connector ?? "Thang"} · {up ? "lên" : "xuống"} {toFloor?.name}</small></span>
-                </div>
-                <div className="wf-fromto-floors">
-                    <div><small>ĐANG Ở</small><b>{fromFloor?.name}</b></div>
-                    <Icon name="straight" size={18} style={{ transform: "rotate(90deg)" }} />
-                    <div className="is-next"><small>SAU KHI {up ? "LÊN" : "XUỐNG"}</small><b>{toFloor?.name}</b></div>
-                </div>
-                <p className="wf-muted">Bản đồ chuyển sang tầng mới khi bạn bấm xác nhận hoặc quét mã QR ở đầu thang. Sau đó đi tiếp {formatMeters(nextLeg?.distance)} tới {trip.to.name}.</p>
-                {leg.connector !== "Thang máy" && lift && (
-                    <div className="wf-note is-row">
-                        <Icon name="walk" />
-                        <span>Không dùng được {leg.connector?.toLowerCase()}? Bật “Tránh thang cuốn &amp; thang bộ” để đi bằng thang máy ({lift.l.name}).</span>
-                        <Link to="/settings" className="wf-link">Cài đặt</Link>
+            <Sheet labelledBy="fc-t">
+                <div className="wf-sheet-head">
+                    <div>
+                        <h1 id="fc-t" className="wf-t28">{up ? "Lên" : "Xuống"} {floorInSentence(toFloor)}</h1>
+                        <p className="wf-t13" style={{ marginTop: 4 }}>Dùng {connector.toLowerCase()}</p>
                     </div>
+                    <IconButton icon="ellipsis" label="Thêm" popup="menu" onClick={() => setMenu(true)} />
+                </div>
+                <div className="wf-card" style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}><p className="wf-t13">Đang ở</p><p className="wf-t17">{floorLabel(fromFloor)}</p></div>
+                    <Lc name="arrow-right" size={20} color="var(--muted)" />
+                    <div style={{ flex: 1, minWidth: 0 }}><p className="wf-t13">{up ? "Lên" : "Xuống"}</p><p className="wf-t17">{floorLabel(toFloor)}</p></div>
+                </div>
+                {connector !== "Thang máy" && !getSettings().avoidStairs && (
+                    <Row title={`Không đi được ${connector.toLowerCase()}?`} sub="Bật Chỉ dùng thang máy trong Cài đặt" to="/settings" chevron />
                 )}
-            </main>
-            <footer className="wf-actions">
-                <Button to={`/v/${slug}/scan?then=go`} variant="secondary" full={false} icon="qr">Quét QR</Button>
-                <Button icon="check" onClick={confirmFloorChange}>Tôi đã {up ? "lên" : "xuống"} {toFloor?.name.split(" · ")[0]}</Button>
-            </footer>
+                <p className="wf-t13" style={{ textAlign: "center" }}>Xác nhận tay chỉ đổi tầng, sai số ±{Math.round(engine.uncertainty)} m ước tính</p>
+                <div className="wf-stack">
+                    <Button variant="secondary" icon="scan-line" to={`/v/${slug}/scan?then=go`}>{endCode ? `Quét mã ${endCode} ở cửa thang` : "Quét mã QR ở cửa thang"}</Button>
+                    <Button icon="check" onClick={confirmFloorChange}>Tôi đã {up ? "lên" : "xuống"} {floorInSentence(toFloor)}</Button>
+                </div>
+            </Sheet>
+            <TripMenu engine={engine} open={menu} onClose={() => setMenu(false)} />
         </div>
     );
 }
@@ -198,8 +240,13 @@ function Arrived({ trip }: { trip: Trip }) {
     const model = useModel();
     const { slug, endTrip, setPosition } = useVenue();
     const navigate = useNavigate();
-    const seconds = Math.round(((trip.arrivedAt ?? trip.startedAt) - trip.startedAt) / 1000);
+    const [shared, setShared] = useState(false);
+    const seconds = Math.max(0, Math.round(((trip.arrivedAt ?? trip.startedAt) - trip.startedAt) / 1000));
     const floor = model.floorsById.get(trip.to.floorId);
+    const nearby = useMemo(() => {
+        const hits = searchPlaces(model, "", { near: trip.to, floorId: trip.to.floorId, limit: 12 }).filter(h => h.place.id !== trip.to.id);
+        return hits.find(h => h.place.type === "restroom") ?? hits[0] ?? null;
+    }, [model, trip.to]);
     const finish = (to: string) => {
         setPosition({ floorId: trip.to.floorId, lat: trip.to.lat, lng: trip.to.lng, source: "place", label: trip.to.name, placeId: trip.to.id });
         endTrip();
@@ -209,7 +256,10 @@ function Arrived({ trip }: { trip: Trip }) {
         const url = `${window.location.origin}/v/${slug}/place/${trip.to.id}`;
         try {
             if (navigator.share) await navigator.share({ title: trip.to.name, url });
-            else await navigator.clipboard.writeText(url);
+            else {
+                await navigator.clipboard.writeText(url);
+                setShared(true);
+            }
         } catch {
             // huỷ
         }
@@ -217,25 +267,28 @@ function Arrived({ trip }: { trip: Trip }) {
 
     return (
         <div className="wf-screen">
-            <div className="wf-route-map is-short">
+            <div className="wf-maparea">
                 <FloorMap model={model} floorId={trip.to.floorId} selectedId={trip.to.id} user={trip.to} focus={{ lat: trip.to.lat, lng: trip.to.lng, zoom: 20.5 }} />
+                <Hud glyph="circle-check" num="Đã tới" text={`${trip.to.name}, ${floor?.buildingCode ?? ""} ${floorLabel(floor)}`.trim()} />
             </div>
-            <div className="wf-arrived">
-                <span className="wf-arrived-check"><Icon name="check" size={32} stroke={3} /></span>
-                <div><small>ĐÃ ĐẾN NƠI</small><h1>{trip.to.name}</h1><span>{floor?.buildingCode} · {floor?.name}</span></div>
-            </div>
-            <div className="wf-figures is-light">
-                <div><b>{Math.round(trip.progress)}</b><span>mét đã đi</span></div>
-                <div><b>{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</b><span>phút</span></div>
-                <div><b>{trip.qrFixes}</b><span>lần quét QR</span></div>
-            </div>
-            <main className="wf-body">
-                <button type="button" className="wf-choice" onClick={() => finish(`/v/${slug}/search`)}><Icon name="search" size={22} /><span><b>Tìm nơi khác gần đây</b><small>Xếp theo khoảng cách từ {trip.to.name}</small></span></button>
-                <button type="button" className="wf-choice" onClick={() => void share()}><Icon name="share" size={22} /><span><b>Chia sẻ địa điểm này</b><small>Gửi liên kết cho người đi cùng</small></span></button>
-            </main>
-            <footer className="wf-actions">
-                <Button icon="check" onClick={() => finish(`/v/${slug}/map?floor=${trip.to.floorId}`)}>Xong</Button>
-            </footer>
+            <Sheet labelledBy="ar-t">
+                <div>
+                    <Status icon="circle-check" tone="ok">Đã tới</Status>
+                    <h1 id="ar-t" className="wf-t28" style={{ marginTop: 4 }}>{trip.to.name}</h1>
+                    <p className="wf-t13" style={{ marginTop: 4 }}>{placeWhere(model, trip.to)}</p>
+                </div>
+                <div className="wf-stats">
+                    <div><p className="wf-t17">{formatMeters(trip.progress)}</p><p className="wf-t13">đã đi</p></div>
+                    <div><p className="wf-t17">{seconds < 60 ? `${seconds} giây` : `${minutesOf(seconds)} phút`}</p><p className="wf-t13">thời gian</p></div>
+                    <div><p className="wf-t17">{trip.qrFixes}</p><p className="wf-t13">lần quét QR</p></div>
+                </div>
+                <section aria-labelledby="ar-next">
+                    <h2 id="ar-next" className="wf-sec">Tiếp theo</h2>
+                    <Row title="Tìm nơi khác gần đây" sub={nearby ? `${nearby.place.name} ${formatMeters(nearby.meters)}` : undefined} onClick={() => finish(`/v/${slug}/search`)} chevron />
+                    <Row title={shared ? "Đã sao chép liên kết" : "Chia sẻ vị trí này"} onClick={() => void share()} />
+                </section>
+                <div className="wf-acts"><Button onClick={() => finish(`/v/${slug}/map?floor=${trip.to.floorId}`)}>Xong, về bản đồ</Button></div>
+            </Sheet>
         </div>
     );
 }

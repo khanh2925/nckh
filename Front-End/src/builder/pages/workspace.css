@@ -1,0 +1,221 @@
+/* Bố cục riêng các màn trong workspace Builder (bổ sung console.css, không đổi bộ quy tắc):
+   chữ 12/14/16/20/24/28 · đậm 400/600 · bo 4/6/12/999 · cao 32/40 · viền --rule · không mã màu cứng. */
+
+/* ---------------------------------------------------------------- trang */
+.ws-fill { flex: 1; min-height: 0; }
+.ws-page-full { height: 100%; min-height: 0; }
+.ws-col { display: flex; flex-direction: column; min-height: 0; }
+.ws-row { display: flex; gap: 24px; min-height: 0; }
+.ws-split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+.ws-split.is-280 { grid-template-columns: 280px minmax(0, 1fr); }
+.ws-split.is-aside { grid-template-columns: minmax(0, 1fr) 360px; }
+.ws-split.is-aside-400 { grid-template-columns: minmax(0, 1fr) 400px; }
+.ws-split.is-help { grid-template-columns: minmax(0, 1fr) 380px; }
+.ws-scroll { min-height: 100%; display: flex; flex-direction: column; }
+.ws-scroll > .k-page { flex: 1; }
+.ws-stickyfoot { position: sticky; bottom: 0; z-index: 5; flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--rule); }
+.ws-stickyfoot > div, .ws-foot > div { max-width: 1280px; padding: 16px 32px; display: flex; align-items: center; gap: 16px; }
+.ws-foot { flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--rule); }
+.ws-back { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 4px; }
+.ws-sep { width: 1px; height: 16px; background: var(--rule); margin: 0 4px; flex-shrink: 0; }
+.ws-grow { flex: 1; min-width: 0; }
+.ws-right { margin-left: auto; }
+.ws-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-center { align-items: center; justify-content: center; text-align: center; }
+.ws-empty { padding: 64px 32px; align-items: center; text-align: center; gap: 8px; }
+.ws-empty > p { max-width: 440px; }
+.ws-mt8 { margin-top: 8px; }
+.ws-fs0 { margin: 0; padding: 0; border: 0; min-width: 0; }
+.ws-fs0 > legend { padding: 0; margin-bottom: 8px; }
+.ws-list { list-style: none; margin: 0; padding: 0; }
+.ws-card0 { padding: 0; gap: 0; overflow: hidden; }
+.ws-cardhead { display: flex; align-items: center; gap: 8px; padding: 16px; border-bottom: 1px solid var(--rule); flex-shrink: 0; min-height: 64px; }
+.ws-cardhead.is-24 { padding: 16px 24px; }
+.ws-cardfoot { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--rule); flex-shrink: 0; }
+.ws-cardfoot.is-24 { padding: 12px 24px; }
+.ws-tblwrap { overflow: auto; min-height: 0; }
+.ws-tbl-grp th { background: var(--surface-2); font-size: 12px; line-height: 16px; font-weight: 600; color: var(--muted); text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
+.k-tbl.is-dense td { padding-top: 8px; padding-bottom: 8px; }
+.k-tbl tr.is-click { cursor: pointer; }
+.k-tbl tr.is-click:hover td { background: var(--surface-2); }
+.k-tbl td.is-act { text-align: right; white-space: nowrap; width: 1%; }
+.k-tbl .is-nowrap { white-space: nowrap; }
+.ws-kv { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; }
+.ws-kv dt, .ws-kv dd { margin: 0; }
+.ws-kvrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.ws-kvrow:last-child { border-bottom: 0; }
+.ws-swatch { display: inline-block; flex-shrink: 0; width: 12px; height: 12px; border-radius: 4px; }
+.ws-suffix { position: relative; }
+.ws-suffix > .k-input { padding-right: 40px; }
+.ws-suffix > span { position: absolute; right: 12px; top: 10px; }
+.ws-slug { display: flex; align-items: center; gap: 0; background: var(--surface-2); }
+.ws-slug input { flex: 1; min-width: 0; border: 0; padding: 0; background: transparent; font-family: inherit; font-size: 14px; color: var(--ink); }
+.ws-slug input:focus { outline: 0; }
+.ws-danger-zone { padding: 0 24px; gap: 0; }
+.ws-danger-zone .k-row { padding: 16px 0; }
+
+/* bước 1 · 2 · 3 */
+.ws-steps { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ws-steps li { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ws-steps .sep { width: 24px; height: 1px; background: var(--rule); }
+
+/* chip lọc cảnh báo */
+.k-chip.is-warn { color: var(--warn); }
+.k-chip:disabled { opacity: .55; cursor: not-allowed; }
+.k-ib[aria-pressed="true"] { border-color: var(--graphite); box-shadow: inset 0 0 0 1px var(--graphite); }
+.ws-seg { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------------- màn biên tập: panel trái / canvas / panel phải */
+.ws-work { display: flex; height: 100%; min-height: 0; }
+.ws-panel { background: var(--surface); display: flex; flex-direction: column; min-height: 0; flex-shrink: 0; }
+.ws-panel.is-left { width: 256px; border-right: 1px solid var(--rule); padding: 16px; gap: 24px; overflow-y: auto; }
+.ws-panel.is-right { width: 320px; border-left: 1px solid var(--rule); }
+.ws-phead { padding: 16px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.ws-pbody { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.ws-pbody.is-24 { gap: 24px; }
+.ws-pfoot { padding: 12px 16px; border-top: 1px solid var(--rule); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.ws-pidle { margin: auto 0; padding: 0 32px; text-align: center; display: flex; flex-direction: column; gap: 16px; }
+.ws-grp { display: flex; flex-direction: column; gap: 8px; }
+.ws-name { width: 100%; border: 0; padding: 0; background: transparent; font-family: inherit; font-size: 16px; line-height: 24px; font-weight: 600; color: var(--ink); }
+.ws-name:focus { outline: 2px solid var(--graphite); outline-offset: 2px; border-radius: 4px; }
+.ws-tl {
+    width: 100%; border: 0; border-bottom: 1px solid var(--rule); background: transparent; font-family: inherit; font-size: 14px; line-height: 20px;
+    color: var(--ink); text-align: left; cursor: pointer; padding: 8px; display: flex; align-items: center; gap: 8px; min-height: 44px;
+}
+.ws-tl:last-child { border-bottom: 0; }
+.ws-tl:hover { background: var(--surface-2); }
+.ws-tl:disabled { color: var(--muted); cursor: not-allowed; background: transparent; }
+.ws-tl .n, .ws-tl kbd { margin-left: auto; font-family: inherit; }
+.ws-tl[aria-pressed="true"], .ws-tl[aria-current="true"] { background: var(--graphite); color: var(--hud-ink); font-weight: 600; border-radius: 6px; border-bottom-color: transparent; }
+.ws-tl[aria-pressed="true"] .k-m, .ws-tl[aria-current="true"] .k-m { color: var(--hud-muted); }
+.ws-tl[draggable="true"] { cursor: grab; }
+.ws-tile { width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--surface); font-size: 12px; }
+.ws-search { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.ws-search input { border: 0; min-width: 0; flex: 1; padding: 0; background: transparent; font-family: inherit; font-size: 14px; color: var(--ink); }
+.ws-search input:focus { outline: 0; }
+.ws-search:focus-within { outline: 2px solid var(--graphite); outline-offset: -1px; border-color: var(--graphite); }
+.ws-legend { display: inline-block; width: 16px; flex-shrink: 0; }
+.ws-stats { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ws-stats > div { display: flex; flex-direction: column; }
+
+.ws-canvas { flex: 1; min-width: 0; position: relative; overflow: hidden; background: var(--paper); display: flex; flex-direction: column; }
+.ws-canvas > .cb-map { flex: 1; min-height: 0; }
+.ws-float { position: absolute; z-index: 800; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-float); display: flex; align-items: center; gap: 4px; padding: 8px; }
+.ws-float.is-tl { left: 16px; top: 16px; }
+.ws-float.is-tr { right: 16px; top: 16px; }
+.ws-float.is-bc { left: 50%; transform: translateX(-50%); bottom: 16px; }
+.ws-float.is-br { right: 16px; bottom: 16px; }
+.ws-float.is-bar { left: 16px; right: 16px; bottom: 16px; min-height: 48px; padding: 4px 16px; gap: 24px; flex-wrap: wrap; font-size: 14px; line-height: 20px; }
+.ws-float.is-col { flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 12px; font-size: 12px; line-height: 16px; }
+.ws-float.is-hint { left: 50%; top: 16px; transform: translateX(-50%); background: var(--graphite); color: var(--hud-ink); border-color: var(--graphite); font-size: 12px; line-height: 16px; padding: 8px 12px; gap: 8px; white-space: nowrap; }
+.ws-float.is-hint.is-low { top: auto; bottom: 88px; }
+.ws-float .k-ib[aria-pressed="true"] { background: var(--graphite); border-color: var(--graphite); color: var(--hud-ink); box-shadow: none; }
+.ws-overcard { position: absolute; z-index: 850; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 360px; max-width: calc(100% - 32px); box-shadow: var(--shadow-float); gap: 8px; align-items: flex-start; }
+.ws-overcard.is-400 { width: 400px; }
+.ws-badgepin { width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--surface); flex-shrink: 0; }
+.ws-badgepin.is-danger { background: var(--danger); }
+.ws-badgepin.is-warn { background: var(--warn); }
+
+/* Leaflet trong canvas */
+.cb-map .leaflet-bar { border: 1px solid var(--rule); border-radius: 6px; box-shadow: var(--shadow-float); }
+.cb-map .leaflet-bar a { width: 32px; height: 32px; line-height: 32px; color: var(--ink); border-bottom-color: var(--rule); }
+.cb-map .leaflet-bar a:first-child { border-top-left-radius: 6px; border-top-right-radius: 6px; }
+.cb-map .leaflet-bar a:last-child { border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; }
+.cb-map .leaflet-tooltip { font-family: var(--font); font-size: 12px; line-height: 16px; border-radius: 4px; border: 1px solid var(--rule); box-shadow: var(--shadow-float); color: var(--ink); }
+
+/* ký hiệu trên bản đồ: ô biển 4px theo màu loại, nhãn chữ than chì có viền sáng */
+.ws-mk { position: relative; width: 100%; height: 100%; }
+.ws-pin { width: 100%; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--surface); font-size: 12px; line-height: 16px; font-weight: 600; box-shadow: 0 0 0 1.5px var(--surface), 0 1px 3px color-mix(in srgb, var(--graphite) 30%, transparent); cursor: pointer; }
+.ws-pin.is-plate { background: var(--graphite); color: var(--signal); padding: 0 4px; width: auto; min-width: 100%; }
+.ws-pin.is-light { background: var(--surface); color: var(--graphite); box-shadow: inset 0 0 0 1.5px var(--graphite), 0 0 0 1.5px var(--surface); }
+.ws-mk.is-selected .ws-pin { outline: 2px solid var(--graphite); outline-offset: 2px; }
+.ws-lbl { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font-size: 12px; line-height: 16px; font-weight: 600; color: var(--graphite); white-space: nowrap; pointer-events: none; display: none;
+    text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface), 0 0 3px var(--surface); }
+.ws-near .ws-lbl, .ws-mk.is-selected .ws-lbl, .ws-mk.is-tag .ws-lbl, .ws-mk.is-lbl .ws-lbl { display: block; }
+.ws-mk.is-tag .ws-lbl { height: 24px; padding: 0 8px; border-radius: 4px; background: var(--surface); box-shadow: var(--shadow-float); text-shadow: none; display: inline-flex; align-items: center; }
+.ws-qr { width: 100%; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; line-height: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 0 0 2px var(--surface); }
+.ws-qr.is-pasted { background: var(--graphite); color: var(--surface); }
+.ws-qr.is-printed { background: var(--surface); color: var(--ink); border: 2px solid var(--graphite); }
+.ws-qr.is-created { background: var(--surface); color: var(--muted); border: 2px dashed var(--muted); }
+.ws-qr.is-lost { background: var(--surface); color: var(--danger); border: 2px solid var(--danger); }
+.ws-qr.is-sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--graphite); }
+.ws-qr.is-lg { width: 14px; height: 14px; box-shadow: none; display: inline-block; cursor: default; }
+
+/* menu thao tác (⋯) */
+.ws-menuwrap { position: relative; display: inline-flex; }
+.ws-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 50; min-width: 200px; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 8px; box-shadow: var(--shadow-float); display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.ws-menu a, .ws-menu button { height: 40px; padding: 0 12px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 14px; border: 0; background: transparent; cursor: pointer; width: 100%; color: var(--ink); font-family: inherit; text-align: left; white-space: nowrap; }
+.ws-menu a:hover, .ws-menu button:hover { background: var(--surface-2); }
+.ws-menu .is-danger { color: var(--danger); }
+
+/* danh sách toà nhà */
+.ws-bl { display: flex; align-items: center; gap: 4px; border-radius: 6px; padding-right: 4px; }
+.ws-bl[aria-current="true"] { background: var(--surface-2); }
+.ws-bl > button:first-child { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; padding: 0 8px; display: flex; align-items: center; gap: 8px; cursor: pointer; text-align: left; font-family: inherit; font-size: 14px; color: var(--ink); }
+.ws-box { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+
+/* căn chỉnh mặt bằng: hai khung bản đồ trong thẻ */
+.ws-calib { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 304px; gap: 16px; }
+.ws-mapcard { position: relative; padding: 0; gap: 0; overflow: hidden; background: var(--paper); }
+.ws-mapcard > .cb-map { flex: 1; min-height: 0; }
+.ws-tag { position: absolute; z-index: 900; left: 16px; top: 16px; height: 32px; padding: 0 12px; border-radius: 6px; background: var(--surface); border: 1px solid var(--rule); box-shadow: var(--shadow-float); display: inline-flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; }
+.ws-tag.is-left56 { left: 56px; }
+.ws-tools { position: absolute; z-index: 900; right: 16px; top: 16px; display: flex; gap: 8px; }
+.ws-tools .k-btn { box-shadow: var(--shadow-float); }
+
+/* thả tệp */
+.ws-drop { min-height: 360px; border-style: dashed; align-items: center; justify-content: center; text-align: center; gap: 8px; }
+.ws-drop.is-over { border-color: var(--graphite); background: var(--surface-2); }
+.ws-drop.is-bad { border-color: var(--danger); }
+.ws-drop > p { max-width: 420px; }
+
+/* thử chỉ đường */
+.ws-mapwrap { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--paper); border-top: 1px solid var(--rule); display: flex; }
+.ws-mapwrap > .cb-map { flex: 1; min-height: 0; }
+.ws-pr { width: 100%; border: 0; border-bottom: 1px solid var(--rule); background: transparent; font-family: inherit; font-size: 14px; line-height: 20px; color: var(--ink); text-align: left; cursor: pointer; padding: 8px 24px; min-height: 56px; display: flex; align-items: center; gap: 16px; }
+.ws-pr:hover, .ws-pr[aria-pressed="true"] { background: var(--surface-2); }
+.ws-picker { position: relative; }
+.ws-turns { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+.ws-turns li { align-items: flex-start; gap: 8px; }
+.ws-turns li > svg { flex-shrink: 0; margin-top: 2px; color: var(--muted); }
+
+/* mã QR */
+.ws-qrmap { position: relative; height: 240px; flex-shrink: 0; display: flex; }
+.ws-qrmap > .cb-map { flex: 1; min-height: 0; }
+.ws-qrfig { margin: 0; align-self: center; width: 200px; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; text-align: center; background: var(--surface); }
+.ws-qrfig > .band { height: 28px; background: var(--hud); color: var(--hud-ink); display: flex; align-items: center; justify-content: center; }
+.ws-qrsvg { display: flex; justify-content: center; }
+.ws-qrsvg svg { display: block; width: 100%; height: 100%; }
+.ws-bulk { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--surface-2); border-bottom: 1px solid var(--rule); flex-shrink: 0; }
+
+/* in tem: xem trước + bản in */
+.ws-opt { padding: 16px; border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: 8px; }
+.ws-opt:first-child { border-top: 0; }
+.ws-preview { flex: 1; min-width: 0; background: var(--surface-2); align-items: center; justify-content: center; overflow: auto; }
+.ws-sheet { width: 467px; height: 660px; flex-shrink: 0; background: var(--surface); box-shadow: var(--shadow-float); display: grid; padding: 12px; }
+.ws-sheet.is-2 { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+.ws-sheet.is-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.ws-sheet.is-8 { grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr); }
+.ws-tem { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 16px; margin: -0.5px; min-width: 0; min-height: 0; overflow: hidden; color: var(--graphite); }
+.ws-tem.is-cut { border: 1px dashed var(--rule-2); }
+.ws-tem > .band { align-self: stretch; height: 32px; border-radius: 4px; background: var(--hud); color: var(--hud-ink); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ws-tem .ws-qrsvg { width: 124px; height: 124px; margin-top: 12px; flex-shrink: 0; }
+.ws-sheet.is-8 .ws-tem { padding: 8px; }
+.ws-sheet.is-8 .ws-tem .ws-qrsvg { width: 64px; height: 64px; margin-top: 4px; }
+.ws-sheet.is-8 .ws-tem > .band { height: 24px; }
+.ws-tem .foot { margin-top: auto; }
+.ws-print { display: none; }
+@media print {
+    @page { size: A4; margin: 0; }
+    body * { visibility: hidden !important; }
+    .ws-print, .ws-print * { visibility: visible !important; }
+    .ws-print { display: block !important; position: absolute; left: 0; top: 0; width: 210mm; }
+    .ws-print .ws-sheet { width: 210mm; height: 297mm; box-shadow: none; padding: 6mm; break-after: page; }
+    .ws-print .ws-tem .ws-qrsvg { width: 40mm; height: 40mm; }
+    .ws-print .ws-sheet.is-2 .ws-tem .ws-qrsvg { width: 60mm; height: 60mm; }
+    .ws-print .ws-sheet.is-8 .ws-tem .ws-qrsvg { width: 24mm; height: 24mm; }
+}
+
+/* quy trình: khung trống */
+.ws-dots { background-image: radial-gradient(var(--rule-2) 1px, transparent 1px); background-size: 16px 16px; }
+.ws-mapcard .leaflet-tile-pane { filter: grayscale(1); opacity: .8; }

@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type * as Leaflet from "leaflet";
-import { anchorsFromTwoPoints, controlDistance, createProjection, describeProjection, svgPixelsPerMeter, withMeasuredDistance, type ControlPoint, type FloorDto, type PlanDto } from "@indoor-map/core";
+import { anchorsFromTwoPoints, controlDistance, createProjection, describeProjection, svgPixelsPerMeter, withMeasuredDistance, type ControlPoint, type FloorDto, type PlanDto, type VenueDto } from "@indoor-map/core";
 import L from "../../lib/leaflet";
 import { api } from "../../lib/data";
 import { buildPlanOverlay, parsePlanSvg, rasterAsSvg } from "../../lib/planSvg";
 import { planApi } from "../../console/api";
-import { Button, Status, useAction, useFeedback } from "../../console/ui";
+import { HeaderActions, HeaderStatus, SaveState } from "../../console/Shell";
+import { Button, useAction, useFeedback } from "../../console/ui";
+import Lc from "../../design/Lc";
+import { GuestLink } from "../FloorList";
+import { mapColors, signIcon } from "../layers";
 import { useWorkspace } from "../Workspace";
+import "./workspace.css";
 
 // Tải bản vẽ mặt bằng và chấm 2 cặp điểm mốc: bấm trên bản vẽ (pixel), rồi bấm điểm tương ứng trên bản đồ (lat/lng).
 type Pick = "a-img" | "a-map" | "b-img" | "b-map" | null;
@@ -74,10 +79,20 @@ export default function CalibratePage() {
     const floor = floors.find(f => f.id === floorId);
 
     if (!floor) {
-        return <div className="cb-main"><div className="cb-empty"><div className="cb-h3">Chưa có tầng</div><p className="cb-muted">Thêm toà nhà và tầng trước.</p><Button to={`/builder/v/${venueId}/buildings`} variant="primary">Toà nhà & tầng →</Button></div></div>;
+        return (
+            <div className="k-page">
+                <HeaderActions><GuestLink venue={data.venue} /></HeaderActions>
+                <h1 className="k24">Căn chỉnh mặt bằng</h1>
+                <section className="k-card ws-empty">
+                    <h2 className="k16">Chưa có tầng</h2>
+                    <p className="k14 k-m">Thêm toà nhà và tầng trước, rồi tải bản vẽ cho từng tầng.</p>
+                    <div className="ws-mt8"><Button to={`/builder/v/${venueId}/buildings`} variant="primary">Thêm toà nhà và tầng</Button></div>
+                </section>
+            </div>
+        );
     }
     return <Calibrator key={floor.id} floor={floor} floors={floors} onFloor={id => setParams({ floor: String(id) })}
-        busy={busy} model={model} save={async plan => {
+        busy={busy} model={model} venue={data.venue} venueId={venueId} save={async plan => {
             const saved = await run(() => planApi.setPlan(venueId, floor.id, plan), plan ? "Đã lưu mặt bằng và điểm mốc" : "Đã gỡ mặt bằng");
             if (saved) await reload("floors");
             return Boolean(saved);
@@ -90,13 +105,15 @@ interface CalibratorProps {
     onFloor(id: number): void;
     busy: boolean;
     model: ReturnType<typeof useWorkspace>["model"];
+    venue: VenueDto;
+    venueId: number;
     save(plan: PlanDto | null): Promise<boolean>;
     toast(text: string, kind?: "ok" | "err"): void;
     confirm: ReturnType<typeof useFeedback>["confirm"];
     buildingCode(id: number): string;
 }
 
-function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm, buildingCode }: CalibratorProps) {
+function Calibrator({ floor, floors, onFloor, busy, model, venue, venueId, save, toast, confirm, buildingCode }: CalibratorProps) {
     const [source, setSource] = useState<Source | null>(() => sourceFromPlan(floor.plan));
     const [svgText, setSvgText] = useState<string | null>(null);
     const [a, setA] = useState<Mark>(() => (floor.plan?.anchor ? { image: floor.plan.anchor.image, latlng: floor.plan.anchor.latlng } : {}));
@@ -105,7 +122,6 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
     const [pick, setPick] = useState<Pick>(() => (floor.plan?.anchor ? null : "a-img"));
     const [opacity, setOpacity] = useState(0.6);
     const [dirty, setDirty] = useState(false);
-    const [panelOpen, setPanelOpen] = useState(true);
     // Khoảng cách thật giữa 2 mốc (m), người dùng gõ; trống = tự lấy từ tỉ lệ khai trong SVG, hoặc theo bản đồ
     const [measured, setMeasured] = useState("");
     const fileInput = useRef<HTMLInputElement>(null);
@@ -151,7 +167,7 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
             setMeasured("");
             setPick("a-img");
             setDirty(true);
-            toast(`Đã tải ${file.name} · ${Math.round(next.width)}×${Math.round(next.height)}. Chấm 2 điểm mốc.`);
+            toast(`Đã tải ${file.name}, ${Math.round(next.width)}×${Math.round(next.height)}. Chấm 2 cặp mốc.`);
         } catch (err) {
             toast((err as Error).message, "err");
         }
@@ -173,103 +189,147 @@ function Calibrator({ floor, floors, onFloor, busy, model, save, toast, confirm,
         }
     };
 
-    const stepState = (done: boolean, active: boolean) => (done ? "is-done" : active ? "is-active" : "");
     const hasA = Boolean(a.image && a.latlng);
     const hasB = Boolean(b.image && b.latlng);
+    const pairs = Number(hasA) + Number(hasB);
+    const step = !source ? 0 : pairs < 2 ? 1 : 2;
+    const mpp = info ? (info.metersPerPixel < 0.1 ? `${(info.metersPerPixel * 100).toFixed(2).replace(".", ",")} cm/px` : `${info.metersPerPixel.toFixed(3).replace(".", ",")} m/px`) : "—";
+    const gap = typed > 0 && mapMeters != null ? Math.abs(mapMeters - typed) : null;
+    const canSave = Boolean(source) && (dirty || !floor.plan);
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 56px)" }}>
-            <div className="cb-calib-steps">
-                <select className="cb-input" style={{ width: 260 }} aria-label="Tầng" value={floor.id} onChange={e => onFloor(Number(e.target.value))}>
-                    {floors.map(f => <option key={f.id} value={f.id}>{buildingCode(f.buildingId)} · {f.name}{f.plan?.anchor ? " ✓" : ""}</option>)}
-                </select>
-                <span className={`cb-step ${stepState(Boolean(source), !source)}`}><b>1</b>Tải bản vẽ (SVG/PNG/JPG){source && <span className="cb-mono"> · {source.fileName ?? "đã có"} · {Math.round(source.width)}×{Math.round(source.height)}</span>}</span>
-                <span className={`cb-step ${stepState(hasA && hasB, Boolean(source) && !(hasA && hasB))}`}><b>2</b>Chấm 2 cặp điểm mốc</span>
-                <span className={`cb-step ${stepState(!dirty && Boolean(floor.plan?.anchor), hasA && hasB)}`}><b>3</b>Kiểm tra lớp chồng, lưu</span>
-                <div className="cb-actions" style={{ marginLeft: "auto" }}>
-                    <input ref={fileInput} type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden onChange={e => void onFile(e)} />
-                    <Button icon="bi-upload" onClick={() => fileInput.current?.click()}>{source ? "Thay bản vẽ" : "Tải bản vẽ"}</Button>
+        <div className="ws-col" style={{ height: "100%" }}>
+            <HeaderStatus><SaveState state={busy ? "saving" : dirty ? "dirty" : "saved"} /></HeaderStatus>
+            <HeaderActions><GuestLink venue={venue} /></HeaderActions>
+            <input ref={fileInput} type="file" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" hidden onChange={e => void onFile(e)} />
+            <div className="k-page ws-fill">
+                <div className="k-title">
+                    <h1 className="k24">Căn chỉnh mặt bằng</h1>
+                    <div className="k-acts">
+                        <label htmlFor="cal-floor" className="sr-only">Toà và tầng</label>
+                        <select id="cal-floor" className="k-input" style={{ width: 240 }} value={floor.id} onChange={e => onFloor(Number(e.target.value))}>
+                            {floors.map(f => <option key={f.id} value={f.id}>{buildingCode(f.buildingId)} – {f.name}{f.plan?.anchor ? " ✓" : ""}</option>)}
+                        </select>
+                    </div>
+                </div>
+                <Steps labels={["Tải bản vẽ", "Chấm 2 cặp mốc", "Đo và lưu"]} current={step} />
+
+                {!source ? (
+                    <section className="k-card ws-drop ws-fill">
+                        <h2 className="k16 k-line"><Lc name="upload" size={18} color="var(--muted)" />{floor.name} chưa có bản vẽ</h2>
+                        <p className="k14 k-m">SVG, PNG, JPG hoặc WebP, tối đa 8 MB. Bản vẽ không cần đúng hướng bắc, hệ thống tự xoay theo 2 cặp mốc.</p>
+                        <div className="ws-mt8"><Button variant="primary" icon="upload" onClick={() => fileInput.current?.click()}>Chọn tệp bản vẽ</Button></div>
+                    </section>
+                ) : (
+                    <div className="ws-calib">
+                        <section aria-label="Bản vẽ mặt bằng" className="k-card ws-mapcard">
+                            <ImagePane source={source} url={sourceUrl(source, svgText)} a={a.image} b={b.image}
+                                picking={pick === "a-img" || pick === "b-img"}
+                                onPick={xy => {
+                                    setDirty(true);
+                                    if (pick === "a-img") { setA(m => ({ ...m, image: xy })); setPick("a-map"); }
+                                    else if (pick === "b-img") { setB(m => ({ ...m, image: xy })); setPick("b-map"); }
+                                }} />
+                            <div className="ws-tag is-left56"><span className="k-b">Bản vẽ</span><span className="k-m">pixel</span></div>
+                            <div className="ws-tools">
+                                <button type="button" className="k-btn sm" onClick={() => fileInput.current?.click()}>Thay bản vẽ</button>
+                                <button type="button" className="k-btn sm" onClick={() => { setA({}); setB({}); setPick("a-img"); setDirty(true); }}>Chấm lại mốc</button>
+                            </div>
+                            {(pick === "a-img" || pick === "b-img") && <div className="cb-hint">Bấm mốc {pick === "a-img" ? "A" : "B"} trên bản vẽ: góc tường, cột hoặc cửa dễ nhận ra</div>}
+                        </section>
+                        <section aria-label="Bản đồ nền" className="k-card ws-mapcard">
+                            <WorldPane model={model} floor={floor} a={a.latlng} b={fixedB?.latlng ?? b.latlng} picking={pick === "a-map" || pick === "b-map"}
+                                overlay={overlay}
+                                onPick={ll => {
+                                    setDirty(true);
+                                    if (pick === "a-map") { setA(m => ({ ...m, latlng: ll })); setPick(b.image && b.latlng ? null : "b-img"); }
+                                    else if (pick === "b-map") { setB(m => ({ ...m, latlng: ll })); setPick(null); }
+                                }} />
+                            <div className="ws-tag is-left56"><span className="k-b">Bản đồ nền</span><span className="k-m">lat/lng</span></div>
+                            {(pick === "a-map" || pick === "b-map") && <div className="cb-hint">Bấm vị trí {pick === "a-map" ? "A" : "B"} trên bản đồ</div>}
+                        </section>
+                        <aside aria-labelledby="res-title" className="k-card" style={{ overflowY: "auto" }}>
+                            <h2 id="res-title" className="k16">Kết quả</h2>
+                            <div>
+                                <div className="ws-kvrow k14"><span className="k-m">Cặp mốc</span><span className={`k-b ${pairs === 2 ? "k-ok" : "k-warn"}`}>{pairs}/2</span></div>
+                                <div className="ws-kvrow k14"><span className="k-m">Góc xoay</span><span className="k-b">{info ? `${String(info.rotation).replace(".", ",").replace("-", "−")}°` : "—"}</span></div>
+                                <div className="ws-kvrow k14"><span className="k-m">Tỉ lệ</span><span className="k-b">{mpp}</span></div>
+                            </div>
+                            <div className="k-line">
+                                <button type="button" className="k-btn sm" onClick={() => setPick("a-img")}>Chấm lại A</button>
+                                <button type="button" className="k-btn sm" onClick={() => setPick("b-img")}>Chấm lại B</button>
+                            </div>
+                            <div className="k-field">
+                                <label htmlFor="measured">Khoảng cách thật A–B</label>
+                                <div className="ws-suffix">
+                                    <input id="measured" className="k-input" inputMode="decimal" autoComplete="off"
+                                        placeholder={autoMeters ? autoMeters.toFixed(2).replace(".", ",") : "vd. 22,3"} value={measured}
+                                        onChange={e => { setMeasured(e.target.value.replace(/[^\d.,]/g, "")); setDirty(true); }} />
+                                    <span className="k14 k-m">m</span>
+                                </div>
+                                <span className="k-hint">
+                                    {typed > 0
+                                        ? "Tỉ lệ theo số đo, bản đồ chỉ quyết định vị trí và hướng."
+                                        : autoMeters
+                                            ? `Bản vẽ khai ${pxPerMeter} px = 1 m, đã tự áp dụng.`
+                                            : "Đo bằng thước, máy laser hoặc app Đo. Để trống thì tỉ lệ ước theo bản đồ."}
+                                </span>
+                            </div>
+                            <div role="status" className="k-kpi">
+                                <span className="k12 k-m">Chênh với bản đồ</span>
+                                {gap != null
+                                    ? <span className="k28">{gap.toFixed(1).replace(".", ",")} m</span>
+                                    : <span className="k14 k-m" style={{ lineHeight: "32px" }}>{pairs < 2 ? "Cần đủ 2 cặp mốc" : "Nhập khoảng cách thật để so"}</span>}
+                            </div>
+                            {measured && <div><button type="button" className="k-btn t sm" style={{ paddingLeft: 0 }} onClick={() => { setMeasured(""); setDirty(true); }}>Xoá số đo</button></div>}
+                            <div className="k-field" style={{ marginTop: "auto" }}>
+                                <label htmlFor="depth" style={{ display: "flex", justifyContent: "space-between" }}>Co giãn chiều sâu <span style={{ fontWeight: 400 }}>{depthScale.toFixed(2).replace(".", ",")}</span></label>
+                                <input id="depth" type="range" min={0.3} max={1.6} step={0.01} value={depthScale} style={{ width: "100%", margin: 0 }} onChange={e => { setDepthScale(Number(e.target.value)); setDirty(true); }} />
+                            </div>
+                            <div className="k-field">
+                                <label htmlFor="op" style={{ display: "flex", justifyContent: "space-between" }}>Độ trong lớp chồng <span style={{ fontWeight: 400 }}>{Math.round(opacity * 100)}%</span></label>
+                                <input id="op" type="range" min={0} max={1} step={0.05} value={opacity} style={{ width: "100%", margin: 0 }} onChange={e => setOpacity(Number(e.target.value))} />
+                            </div>
+                        </aside>
+                    </div>
+                )}
+            </div>
+            <div className="ws-foot">
+                <div>
+                    <Button to={`/builder/v/${venueId}/buildings`}>Quay lại</Button>
                     {floor.plan && <Button variant="danger" onClick={() => void removePlan()}>Gỡ mặt bằng</Button>}
-                    <Button variant="primary" busy={busy} disabled={!source || (!dirty && Boolean(floor.plan))} onClick={() => void doSave()}>{anchors ? "Lưu căn chỉnh" : "Lưu bản vẽ (chưa chấm mốc)"}</Button>
+                    <div className="k-line ws-right" style={{ gap: 16 }}>
+                        {source && (pairs === 2
+                            ? <span className="k12 k-m">2/2 cặp mốc{info ? `, ${mpp}` : ""}</span>
+                            : <span id="save-reason" className="k12 k-warn">Cần thêm {2 - pairs} cặp mốc để căn chỉnh</span>)}
+                        <Button variant="primary" busy={busy} disabled={!canSave} onClick={() => void doSave()}>{anchors || !source ? "Lưu căn chỉnh" : "Lưu bản vẽ"}</Button>
+                    </div>
                 </div>
             </div>
-
-            {!source ? (
-                <div className="cb-main"><div className="cb-empty">
-                    <div className="cb-h3">Tầng này chưa có bản vẽ</div>
-                    <p className="cb-muted">Tải bản vẽ mặt bằng (SVG từ AutoCAD/CorelDRAW/Illustrator, hoặc ảnh PNG/JPG chụp thẳng). Tối đa 8 MB. Bản vẽ không cần đúng hướng Bắc — hệ thống tự xoay theo 2 điểm mốc.</p>
-                    <Button variant="primary" icon="bi-upload" onClick={() => fileInput.current?.click()}>Chọn tệp bản vẽ</Button>
-                </div></div>
-            ) : (
-                <div className="cb-calib">
-                    <section className="cb-calib-pane" aria-label="Bản vẽ mặt bằng">
-                        <div className="cb-pane-label">Bản vẽ · pixel</div>
-                        <ImagePane source={source} url={sourceUrl(source, svgText)} a={a.image} b={b.image}
-                            picking={pick === "a-img" || pick === "b-img"}
-                            onPick={xy => {
-                                setDirty(true);
-                                if (pick === "a-img") { setA(m => ({ ...m, image: xy })); setPick("a-map"); }
-                                else if (pick === "b-img") { setB(m => ({ ...m, image: xy })); setPick("b-map"); }
-                            }} />
-                        {(pick === "a-img" || pick === "b-img") && <div className="cb-hint">Bấm điểm mốc {pick === "a-img" ? "A" : "B"} trên bản vẽ (góc tường, cột, cửa dễ nhận ra)</div>}
-                    </section>
-                    <section className="cb-calib-pane" aria-label="Bản đồ nền">
-                        <div className="cb-pane-label">Bản đồ nền · lat/lng</div>
-                        <WorldPane model={model} floor={floor} a={a.latlng} b={fixedB?.latlng ?? b.latlng} picking={pick === "a-map" || pick === "b-map"}
-                            overlay={overlay}
-                            onPick={ll => {
-                                setDirty(true);
-                                if (pick === "a-map") { setA(m => ({ ...m, latlng: ll })); setPick(b.image && b.latlng ? null : "b-img"); }
-                                else if (pick === "b-map") { setB(m => ({ ...m, latlng: ll })); setPick(null); }
-                            }} />
-                        {(pick === "a-map" || pick === "b-map") && <div className="cb-hint">Bấm đúng điểm {pick === "a-map" ? "A" : "B"} đó trên bản đồ thật</div>}
-                        <div className={`cb-calib-panel${panelOpen ? "" : " is-collapsed"}`}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <div className="cb-h3">Tham số chiếu</div>
-                                <button type="button" className="cb-btn cb-btn-ghost is-small" aria-expanded={panelOpen} onClick={() => setPanelOpen(o => !o)}>{panelOpen ? "Thu gọn" : "Mở"}</button>
-                            </div>
-                            <div className="cb-kv">
-                                <span>Mốc A</span>{hasA ? <Status kind="ok">đã chấm</Status> : <Status kind="warn">{pick?.startsWith("a") ? "đang chấm" : "chưa"}</Status>}
-                                <span>Mốc B</span>{hasB ? <Status kind="ok">đã chấm</Status> : <Status kind="warn">{pick?.startsWith("b") ? "đang chấm" : "chưa"}</Status>}
-                                <span>Góc xoay</span><b className="cb-mono">{info ? `${info.rotation}°` : "—"}</b>
-                                <span>Tỉ lệ</span><b className="cb-mono">{info ? (info.metersPerPixel < 0.1 ? `${(info.metersPerPixel * 100).toFixed(2)} cm/px` : `${info.metersPerPixel.toFixed(3)} m/px`) : "—"}</b>
-                            </div>
-                            <div className="cb-field" style={{ gap: 4 }}>
-                                <label className="cb-label" htmlFor="measured">Khoảng cách thật A–B</label>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <input id="measured" className="cb-input" inputMode="decimal" style={{ width: 110, fontFamily: "var(--mono)" }}
-                                        placeholder={autoMeters ? autoMeters.toFixed(2) : "vd. 22,3"} value={measured}
-                                        onChange={e => { setMeasured(e.target.value.replace(/[^\d.,]/g, "")); setDirty(true); }} />
-                                    <span className="cb-muted">m</span>
-                                    {measured && <button type="button" className="cb-btn cb-btn-ghost is-small" onClick={() => { setMeasured(""); setDirty(true); }}>Xoá</button>}
-                                </div>
-                                <div className="cb-field-help" style={{ fontSize: 12 }}>
-                                    {typed > 0
-                                        ? <>Tỉ lệ theo số đo. {mapMeters != null && <>Bạn chấm trên bản đồ: <b className="cb-mono">{mapMeters.toFixed(1)} m</b> → B đã được kéo về đúng {typed} m.</>}</>
-                                        : autoMeters
-                                            ? <>Bản vẽ khai tỉ lệ <b className="cb-mono">{pxPerMeter} px = 1 m</b> → A–B = <b className="cb-mono">{autoMeters.toFixed(2)} m</b>, đã tự áp dụng.</>
-                                            : <>Đo bằng thước dây, máy laser hoặc app Đo trên iPhone. Để trống thì tỉ lệ lấy theo bản đồ (chỉ ước lượng{mapMeters != null ? `, hiện ${mapMeters.toFixed(1)} m` : ""}).</>}
-                                </div>
-                            </div>
-                            <label className="cb-label" htmlFor="depth" style={{ display: "flex", justifyContent: "space-between" }}>Co giãn chiều sâu <span className="cb-mono">{depthScale.toFixed(2)}</span></label>
-                            <input id="depth" type="range" min={0.3} max={1.6} step={0.01} value={depthScale} onChange={e => { setDepthScale(Number(e.target.value)); setDirty(true); }} />
-                            <label className="cb-label" htmlFor="op" style={{ display: "flex", justifyContent: "space-between" }}>Độ trong lớp chồng <span className="cb-mono">{Math.round(opacity * 100)}%</span></label>
-                            <input id="op" type="range" min={0} max={1} step={0.05} value={opacity} onChange={e => setOpacity(Number(e.target.value))} />
-                            <div className="cb-actions">
-                                <Button small onClick={() => setPick("a-img")}>Chấm lại A</Button>
-                                <Button small onClick={() => setPick("b-img")}>Chấm lại B</Button>
-                            </div>
-                            <p className="cb-muted" style={{ fontSize: 12 }}>Chọn 2 mốc càng xa nhau càng chính xác. Có số đo thật thì bản đồ chỉ còn quyết định vị trí và hướng. Bản vẽ bị kéo giãn theo chiều sâu thì chỉnh “co giãn” tới khi tường khớp đường phố.</p>
-                        </div>
-                    </section>
-                </div>
-            )}
         </div>
     );
 }
 
-function anchorIcon(label: "A" | "B") {
-    return L.divIcon({ className: "", html: `<span class="cb-anchor is-${label.toLowerCase()}"><span>${label}</span></span>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+/** Thanh bước 1 · 2 · 3 (dùng chung với Nhập CSV) */
+export function Steps({ labels, current }: { labels: string[]; current: number }) {
+    return (
+        <ol aria-label="Các bước" className="ws-steps k14">
+            {labels.map((t, i) => (
+                <Fragment key={t}>
+                    {i > 0 && <li aria-hidden="true" className="sep" />}
+                    {i < current
+                        ? <li className="k-m"><Lc name="check" size={16} color="var(--ok)" />{t}<span className="sr-only">(xong)</span></li>
+                        : <li aria-current={i === current ? "step" : undefined} className={i === current ? "k-b" : "k-m"}>{i + 1}. {t}</li>}
+                </Fragment>
+            ))}
+        </ol>
+    );
+}
+
+/** Mốc A ô than chì, mốc B ô vàng (như bản thiết kế), nhãn ghi toạ độ của khung đó */
+function anchorIcon(label: "A" | "B", coords: string) {
+    const c = mapColors();
+    return signIcon({ inner: label, label: `${label} (${coords})`, color: label === "A" ? c.graphite : c.signal, ink: label === "A" ? c.surface : c.graphite, showLabel: true });
 }
 
 /** Bản vẽ trong hệ toạ độ phẳng: pixel (x, y) <-> L.latLng(−y, x) */
@@ -307,8 +367,8 @@ function ImagePane({ source, url, a, b, picking, onPick }: { source: Source; url
         const group = marks.current;
         if (!group) return;
         group.clearLayers();
-        if (a) group.addLayer(L.marker([-a[1], a[0]], { icon: anchorIcon("A"), interactive: false }));
-        if (b) group.addLayer(L.marker([-b[1], b[0]], { icon: anchorIcon("B"), interactive: false }));
+        if (a) group.addLayer(L.marker([-a[1], a[0]], { icon: anchorIcon("A", `${Math.round(a[0])}, ${Math.round(a[1])}`), interactive: false }));
+        if (b) group.addLayer(L.marker([-b[1], b[0]], { icon: anchorIcon("B", `${Math.round(b[0])}, ${Math.round(b[1])}`), interactive: false }));
     }, [a, b, url]);
 
     return <div ref={box} className={`cb-map${picking ? " is-picking" : ""}`} />;
@@ -355,8 +415,8 @@ function WorldPane({ model, floor, a, b, picking, overlay, onPick }: {
         const group = marks.current;
         if (!group) return;
         group.clearLayers();
-        if (a) group.addLayer(L.marker(a, { icon: anchorIcon("A"), interactive: false, zIndexOffset: 1000 }));
-        if (b) group.addLayer(L.marker(b, { icon: anchorIcon("B"), interactive: false, zIndexOffset: 1000 }));
+        if (a) group.addLayer(L.marker(a, { icon: anchorIcon("A", `${a[0].toFixed(6)}, ${a[1].toFixed(6)}`), interactive: false, zIndexOffset: 1000 }));
+        if (b) group.addLayer(L.marker(b, { icon: anchorIcon("B", `${b[0].toFixed(6)}, ${b[1].toFixed(6)}`), interactive: false, zIndexOffset: 1000 }));
     }, [a, b]);
 
     useEffect(() => {

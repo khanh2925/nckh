@@ -2,12 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Navigate, useLocation } from "react-router-dom";
 import type { Role, UserDto } from "@indoor-map/core";
 import { authApi } from "./api";
-import { getToken, setToken, setUnauthorizedHandler } from "./http";
+import { ApiError, getToken, setToken, setUnauthorizedHandler } from "./http";
 
 interface AuthState {
     user: UserDto | null;
     /** Đang kiểm tra token đã lưu */
     checking: boolean;
+    /** Phiên vừa hết hạn (API trả 401 khi đang đăng nhập): trang đăng nhập báo "Phiên đăng nhập đã kết thúc" */
+    expired: boolean;
     login(email: string, password: string): Promise<UserDto>;
     logout(): void;
     setUser(user: UserDto): void;
@@ -18,6 +20,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<UserDto | null>(null);
     const [checking, setChecking] = useState(() => Boolean(getToken()));
+    const [expired, setExpired] = useState(false);
 
     const logout = useCallback(() => {
         setToken(null);
@@ -25,11 +28,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     useEffect(() => {
-        setUnauthorizedHandler(logout);
+        setUnauthorizedHandler(() => {
+            setExpired(true);
+            logout();
+        });
         if (getToken()) {
             authApi.me()
                 .then(setUser)
-                .catch(() => setToken(null))
+                .catch(err => {
+                    setToken(null);
+                    if (err instanceof ApiError && err.status === 401) setExpired(true);
+                })
                 .finally(() => setChecking(false));
         }
         return () => setUnauthorizedHandler(null);
@@ -39,10 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await authApi.login(email, password);
         setToken(result.token);
         setUser(result.user);
+        setExpired(false);
         return result.user;
     }, []);
 
-    const value = useMemo(() => ({ user, checking, login, logout, setUser }), [user, checking, login, logout]);
+    const value = useMemo(() => ({ user, checking, expired, login, logout, setUser }), [user, checking, expired, login, logout]);
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -55,10 +65,10 @@ export function useAuth(): AuthState {
 
 /** Chỉ cho vào khi đã đăng nhập (và đúng vai trò, nếu có yêu cầu) */
 export function RequireAuth({ role, children }: { role?: Role; children: ReactNode }) {
-    const { user, checking } = useAuth();
+    const { user, checking, expired } = useAuth();
     const location = useLocation();
     if (checking) return <div className="cb-center"><div className="cb-spinner" aria-label="Đang kiểm tra đăng nhập" /></div>;
-    if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+    if (!user) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}${expired ? "&expired=1" : ""}`} replace />;
     if (role && user.role !== role) {
         return (
             <div className="cb-center">

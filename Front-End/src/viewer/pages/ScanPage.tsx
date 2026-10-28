@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { findNodeByCode, parseQrPayload, type VenueModel } from "@indoor-map/core";
+import Lc from "../../design/Lc";
 import { cameraErrorMessage, openRearCamera, startQrScan, stopStream } from "../../lib/camera";
 import { useVenue } from "../VenueContext";
-import Icon from "../components/Icon";
-import { Button, IconButton } from "../components/ui";
+import { MapSkeleton } from "../VenueLayout";
+import { Button, IconButton, Sheet } from "../components/ui";
+import MapPage from "./MapPage";
 
 // Quét mã QR định vị (hoặc gõ mã in dưới QR). Mỗi mã gắn với một nút lối đi: quét xong là biết vị trí tới ~1 m.
 // ?then=go | camera | map | search | <đường dẫn con, ví dụ route?to=12>: quét xong đi đâu.
@@ -13,6 +15,7 @@ import { Button, IconButton } from "../components/ui";
 function useCameraScan(onCode: (text: string) => void) {
     const video = useRef<HTMLVideoElement>(null);
     const [error, setError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
     const [torch, setTorch] = useState<{ on: boolean; track: MediaStreamTrack } | null>(null);
     const callback = useRef(onCode);
     useEffect(() => {
@@ -27,6 +30,7 @@ function useCameraScan(onCode: (text: string) => void) {
             .then(async s => {
                 if (!alive) return stopStream(s);
                 stream = s;
+                setError(null);
                 const el = video.current;
                 if (!el) return;
                 el.srcObject = s;
@@ -42,7 +46,7 @@ function useCameraScan(onCode: (text: string) => void) {
             stop?.();
             stopStream(stream);
         };
-    }, []);
+    }, [attempt]);
 
     const toggleTorch = async () => {
         if (!torch) return;
@@ -53,11 +57,12 @@ function useCameraScan(onCode: (text: string) => void) {
             // không hỗ trợ
         }
     };
-    return { video, error, canTorch: Boolean(torch), torchOn: torch?.on ?? false, toggleTorch };
+    return { video, error, retry: () => setAttempt(a => a + 1), canTorch: Boolean(torch), torchOn: torch?.on ?? false, toggleTorch };
 }
 
-function ScanScreen({ onCode, model, backTo, message }: { onCode: (text: string) => void; model: VenueModel | null; backTo: string; message: string | null }) {
-    const { video, error, canTorch, torchOn, toggleTorch } = useCameraScan(onCode);
+function ScanScreen({ onCode, model, backTo, message, pickTo }: { onCode: (text: string) => void; model: VenueModel | null; backTo: string; message: string | null; pickTo?: string }) {
+    const navigate = useNavigate();
+    const { video, error, retry, canTorch, torchOn, toggleTorch } = useCameraScan(onCode);
     const [code, setCode] = useState("");
     const sample = model?.walkways.nodes.find(n => n.connector)?.id ?? model?.walkways.nodes[0]?.id;
     const submit = (e: FormEvent) => {
@@ -66,27 +71,49 @@ function ScanScreen({ onCode, model, backTo, message }: { onCode: (text: string)
     };
 
     return (
-        <div className="wf-screen is-dark">
+        <div className="wf-screen wf-dark">
             <div className="wf-camera">
                 <video ref={video} playsInline muted aria-label="Hình từ camera sau" />
-                {error && <div className="wf-camera-error"><Icon name="camera" size={32} /><p>{error}</p><p>Bạn vẫn có thể gõ mã in dưới QR ở bên dưới.</p></div>}
-                <div className="wf-viewfinder" aria-hidden="true"><i /><i /><i /><i /><span /></div>
-                <div className="wf-camera-top">
-                    <IconButton icon="close" label="Đóng" to={backTo} />
-                    <div className="wf-camera-title">QUÉT MÃ QR ĐỊNH VỊ</div>
-                    {canTorch ? <IconButton icon="torch" label={torchOn ? "Tắt đèn" : "Bật đèn"} onClick={() => void toggleTorch()} variant={torchOn ? "is-live" : "is-ghost"} /> : <span style={{ width: 44 }} />}
+                {!error && <div className="wf-viewfinder" aria-hidden="true"><i /><i /><i /><i /><span /></div>}
+                <div className="wf-cam-top">
+                    <IconButton icon="x" label="Đóng" to={backTo} />
+                    <div>
+                        <h1 className="wf-t17">Quét mã QR</h1>
+                        <p className="wf-t13" style={{ color: "color-mix(in srgb, var(--surface) 72%, var(--graphite))" }}>Mã dán trên cột hoặc biển chỉ dẫn</p>
+                    </div>
+                    {canTorch && (
+                        <button type="button" className="wf-chip is-text" onClick={() => void toggleTorch()}>{torchOn ? "Tắt đèn" : "Đèn"}</button>
+                    )}
                 </div>
-                <p className="wf-camera-help">Hướng camera vào mã QR dán trên <b>cột</b> hoặc <b>biển chỉ dẫn</b>. Mỗi mã gắn với một điểm trên bản đồ — vị trí của bạn sẽ chính xác tới ~1 m.</p>
-                {message && <div className="wf-camera-toast" role="alert">{message}</div>}
+                {error && (
+                    <div className="wf-cam-msg">
+                        <div className="wf-card is-white" role="alert" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                            <Lc name="camera-off" size={24} />
+                            <div>
+                                <h2 className="wf-t22">Chưa mở được camera</h2>
+                                <p className="wf-t15 wf-muted" style={{ marginTop: 8 }}>{error} Bạn vẫn có thể nhập mã in dưới QR.</p>
+                            </div>
+                            <Button variant="secondary" icon="refresh-cw" onClick={retry}>Thử lại</Button>
+                        </div>
+                    </div>
+                )}
+                {message && (
+                    <div className="wf-cam-msg is-top">
+                        <div className="wf-card is-white" role="alert"><p className="wf-t15 wf-status wf-warn"><Lc name="triangle-alert" size={20} />{message}</p></div>
+                    </div>
+                )}
             </div>
-            <form className="wf-sheet" onSubmit={submit}>
-                <label htmlFor="qr-code" className="wf-kicker">HOẶC NHẬP MÃ IN DƯỚI QR</label>
-                <div className="wf-row-actions">
-                    <input id="qr-code" className="wf-code-input" value={code} onChange={e => setCode(e.target.value.toUpperCase())}
-                        placeholder={sample ? `Ví dụ ${sample}` : "Mã vị trí"} autoCapitalize="characters" autoComplete="off" spellCheck={false} />
-                    <button type="submit" className="wf-btn wf-btn-primary" disabled={!code.trim()}>Định vị</button>
-                </div>
-            </form>
+            <Sheet label="Nhập mã">
+                <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <label htmlFor="qr-code" className="wf-t17">Nhập mã in dưới QR</label>
+                    <div className="wf-acts">
+                        <input id="qr-code" className="wf-input" style={{ flex: 1, minWidth: 0 }} value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+                            placeholder={sample ? `VD: ${sample}` : "Mã vị trí"} autoCapitalize="characters" autoComplete="off" spellCheck={false} enterKeyHint="go" />
+                        <Button type="submit" disabled={!code.trim()}>Đặt vị trí</Button>
+                    </div>
+                </form>
+                {pickTo && <Button variant="text" onClick={() => navigate(pickTo, { replace: true })}>Không thấy mã? Chọn trên bản đồ</Button>}
+            </Sheet>
         </div>
     );
 }
@@ -101,7 +128,7 @@ export default function ScanPage() {
     const [message, setMessage] = useState<string | null>(null);
     const handled = useRef(false);
 
-    const backTo = then === "go" || then === "camera" ? `/v/${slug}/${then}` : then.startsWith("route") ? `/v/${slug}/${then}` : `/v/${slug}/map`;
+    const backTo = then === "go" || then === "camera" || then.startsWith("route") || then.startsWith("place") || then.startsWith("share") ? `/v/${slug}/${then}` : `/v/${slug}/map`;
 
     const onCode = (text: string) => {
         if (handled.current || !model) return;
@@ -127,7 +154,9 @@ export default function ScanPage() {
         else navigate(`/v/${slug}/${then}`, { replace: true });
     };
 
-    return <ScanScreen onCode={onCode} model={model} backTo={backTo} message={message} />;
+    const floorId = trip?.route.legs[trip.activeLeg]?.floorId ?? model?.defaultFloor?.id ?? "";
+    return <ScanScreen onCode={onCode} model={model} backTo={backTo} message={message}
+        pickTo={`/v/${slug}/map?pick=position&floor=${floorId}&return=${encodeURIComponent(then)}`} />;
 }
 
 /** /scan — ngoài trang địa điểm: mã phải có slug (URL /q/<slug>/<mã> hoặc <slug>:<mã>) */
@@ -145,10 +174,10 @@ export function GlobalScanPage() {
     return <ScanScreen onCode={onCode} model={null} backTo="/" message={message} />;
 }
 
-/** /q/:slug/:code — mở từ app camera của điện thoại: định vị rồi mở bản đồ */
+/** /q/:slug/:code — mở từ app camera của điện thoại (Viewer-QRLanding): định vị rồi hiện "Bạn đang ở đây" trên bản đồ */
 export function QrEntryPage() {
     const { code = "" } = useParams();
-    const { slug, model, trip: anyTrip, fixPosition, setPosition } = useVenue();
+    const { model, position, trip: anyTrip, fixPosition, setPosition } = useVenue();
     const trip = anyTrip && !anyTrip.arrived ? anyTrip : null;
     const node = model ? findNodeByCode(model, code) : null;
     useEffect(() => {
@@ -158,23 +187,8 @@ export function QrEntryPage() {
         else setPosition(point);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [node]);
-    if (!node) {
-        return (
-            <div className="wf-screen wf-center">
-                <div className="wf-error"><div className="wf-error-title">Mã “{code}” không có trên bản đồ</div><p>Có thể mã đã bị thay. Mở bản đồ và chọn vị trí bằng tay.</p>
-                    <Button to={`/v/${slug}/map`} variant="secondary">Mở bản đồ</Button></div>
-            </div>
-        );
-    }
-    return (
-        <div className="wf-screen wf-center">
-            <div className="wf-qr-ok">
-                <Icon name="check" size={40} stroke={3} />
-                <h1 className="wf-h1">Bạn đang ở {model?.floorsById.get(node.floorId)?.buildingCode} · {model?.floorsById.get(node.floorId)?.name}</h1>
-                <p className="wf-muted">Mã {node.id}</p>
-                <Button to={trip ? `/v/${slug}/go` : `/v/${slug}/map?floor=${node.floorId}`} replace icon="layers">{trip ? "Tiếp tục chỉ đường" : "Mở bản đồ"}</Button>
-                {!trip && <Link className="wf-link" to={`/v/${slug}/search`}>Tìm nơi cần đến →</Link>}
-            </div>
-        </div>
-    );
+    if (!node) return <MapPage mode="landing" landingCode={code} landingMissing />;
+    // Chờ vị trí mới vào state để bản đồ mở đúng tầng, đúng chỗ
+    if (position?.nodeId !== node.id) return <MapSkeleton text="Đang đặt vị trí của bạn…" />;
+    return <MapPage mode="landing" landingCode={code} />;
 }
