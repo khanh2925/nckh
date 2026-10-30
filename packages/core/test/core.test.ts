@@ -237,6 +237,11 @@ describe("chỉ đường trong không gian nhỏ (căn hộ quét LiDAR)", () =
         expect(r.distance).toBeLessThan(15);
         expect(r.steps.map(s => s.title)).toEqual(["Đi thẳng 4 m", "Rẽ phải tại Cửa căn hộ", "Rẽ phải tại Phòng ăn", "Đến Phòng khách"]);
         expect(r.steps.some(s => s.detail?.includes("qua Bếp"))).toBe(false);
+
+        // Đi từ góc hành lang (tuyến dài hơn, ngưỡng gộp rẽ lớn hơn): hai lượt rẽ phải gần nhau không được gộp thành "Quay lại"
+        const corner = findNodeByCode(model, "nha-c9")!;
+        const far = planRoute(model, { floorId: corner.floorId, lat: corner.lat, lng: corner.lng }, to) as { steps: { title: string }[] };
+        expect(far.steps.map(s => s.title)).toEqual(["Đi thẳng 24 m", "Rẽ phải tại Cửa căn hộ", "Rẽ phải tại Phòng ăn", "Đến Phòng khách"]);
     });
 });
 

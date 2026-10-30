@@ -132,9 +132,11 @@ export function buildDirections(route: Route, { locations = [], floorsById = new
                 let delta = angleDiff(bearing(a, b), bearing(pts[i - 1]!, a));
                 let at = offset + along[i]! * scale;
                 let distanceAfter = segLen;
-                // Hai lượt rẽ cùng phía cách nhau chưa tới 10 m: gộp thành một ("chếch phải" + "chếch phải" = "rẽ phải")
+                // Hai lượt rẽ cùng phía cách nhau chưa tới 10 m: gộp thành một ("chếch phải" + "chếch phải" = "rẽ phải").
+                // Không gộp hai lượt rẽ hẳn (rẽ phải vào cửa rồi rẽ phải vào phòng): cộng lại thành "quay lại" là sai.
                 const prev = steps[steps.length - 1] as (Step & { delta?: number }) | undefined;
-                if (prev && prev.legIndex === legIndex && prev.delta != null && prev.distance < mergeTurns && Math.sign(prev.delta) === Math.sign(delta)) {
+                if (prev && prev.legIndex === legIndex && prev.delta != null && prev.distance < mergeTurns && Math.sign(prev.delta) === Math.sign(delta)
+                    && (Math.abs(prev.delta) < SHARP || Math.abs(delta) < SHARP) && Math.abs(prev.delta + delta) < UTURN) {
                     steps.pop();
                     delta = prev.delta + delta;
                     at = prev.at;
