@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { ConsoleFrame, GlobalSidebar, type Crumb } from "../console/Shell";
+import { ConsoleFrame, GlobalNav, type Crumb } from "../console/Shell";
 
 // Breadcrumb các trang Builder ngoài một địa điểm (cha / trang)
 const CRUMBS: Record<string, Crumb[]> = {
@@ -15,8 +15,8 @@ export default function BuilderShell() {
     const { pathname } = useLocation();
     const path = pathname.replace(/\/$/, "");
     return (
-        <ConsoleFrame crumbs={CRUMBS[path] ?? [{ label: "Builder" }]} nav={<GlobalSidebar />}>
-            <div className="k-page"><Outlet /></div>
+        <ConsoleFrame crumbs={CRUMBS[path] ?? [{ label: "Builder" }]} nav={<GlobalNav />}>
+            <Outlet />
         </ConsoleFrame>
     );
 }

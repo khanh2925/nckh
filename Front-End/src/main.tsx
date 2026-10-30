@@ -3,9 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import "bootstrap-icons/font/bootstrap-icons.css";
 // Một phông đi kèm website (có bộ tiếng Việt, không phụ thuộc Google Fonts khi mạng trong toà nhà yếu)
-import "@fontsource/familjen-grotesk/400.css";
-import "@fontsource/familjen-grotesk/600.css";
-import "@fontsource/familjen-grotesk/700.css";
+import "@fontsource-variable/inter";
 import "./design/tokens.css";
 import "./styles/wayfind.css";
 import VenueLayout from "./viewer/VenueLayout";

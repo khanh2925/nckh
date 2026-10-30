@@ -3,17 +3,41 @@ import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
 import QRCode from "qrcode";
 import { qrUrl, type WalkwayNodeDto } from "@indoor-map/core";
-import { HeaderActions } from "../../console/Shell";
-import { Button } from "../../console/ui";
-import Lc from "../../design/Lc";
-import { Dialog, floorLabel, GuestLink } from "../FloorList";
+import { ChevronLeft, ChevronRight, Printer, QrCode } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { EmptyState, Page } from "../../console/page";
+import { floorLabel } from "../FloorList";
 import { useWorkspace } from "../Workspace";
 import { QR_STATUS_LABEL, qrPlaceText, qrStatus, readQrState, withQrStatus, writeQrState, type QrState } from "./qrLayer";
-import "./workspace.css";
 
 const PER_PAGE = [2, 4, 8] as const;
 type PerPage = (typeof PER_PAGE)[number];
 const TEM_SIZE: Record<PerPage, string> = { 2: "A5, 148 × 210 mm", 4: "A6, 105 × 148 mm", 8: "A7, 74 × 105 mm" };
+const SHEET_GRID: Record<PerPage, string> = { 2: "grid-cols-1 grid-rows-2", 4: "grid-cols-2 grid-rows-2", 8: "grid-cols-2 grid-rows-4" };
+
+// Bản in: khung app cao 100dvh, ẩn tràn, nên bản in gắn thẳng vào body (portal) và chỉ hiện khi in.
+// Kích thước theo mm chỉ có ở @media print, nên giữ ở đây thay vì lớp tiện ích.
+const PRINT_CSS = `
+.qr-print-root { display: none; }
+@media print {
+    @page { size: A4; margin: 0; }
+    body * { visibility: hidden !important; }
+    .qr-print-root, .qr-print-root * { visibility: visible !important; }
+    .qr-print-root { display: block !important; position: absolute; left: 0; top: 0; width: 210mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .qr-print-root .qr-sheet { width: 210mm; height: 297mm; aspect-ratio: auto; box-shadow: none; border: 0; padding: 6mm; break-after: page; }
+    .qr-print-root .qr-code { width: 40mm; height: 40mm; }
+    .qr-print-root .qr-sheet[data-per="2"] .qr-code { width: 60mm; height: 60mm; }
+    .qr-print-root .qr-sheet[data-per="8"] .qr-code { width: 24mm; height: 24mm; }
+}`;
 
 // In tem mã QR: mã lấy từ ?codes= (chọn ở màn Mã QR), mặc định mọi mã đã tạo. Xem trước theo trang A4, in bằng trình duyệt.
 export default function QrPrintPage() {
@@ -57,78 +81,93 @@ export default function QrPrintPage() {
         setAfterPrint(null);
     };
 
+    const small = per === 8;
     const tem = (n: WalkwayNodeDto) => (
-        <div key={n.id} className={`ws-tem${opts.cut ? " is-cut" : ""}`}>
-            {opts.guide && <div className="band k12 k-b">Quét để biết bạn đang ở đâu</div>}
-            <div className="ws-qrsvg" dangerouslySetInnerHTML={svgs[n.id] ? { __html: svgs[n.id]! } : undefined} />
-            <div className={per === 8 ? "k16" : "k20"} style={{ marginTop: 8 }}>{n.id}</div>
-            {opts.english && <div className="k12 k-m">Scan to see where you are</div>}
-            {opts.place && <div className="k12" style={{ marginTop: per === 8 ? 4 : 8 }}>{qrPlaceText(model, n)}</div>}
-            <div className="k12 k-m foot">{data.venue.name}<br />{floorLabel(model, model.floorsById.get(n.floorId))}</div>
+        <div key={n.id} className={`flex min-h-0 min-w-0 flex-col items-center overflow-hidden text-center text-foreground ${small ? "p-2" : "p-4"} ${opts.cut ? "border border-dashed" : ""}`}>
+            {opts.guide && (
+                <div className={`flex shrink-0 items-center justify-center self-stretch rounded bg-foreground text-xs font-medium text-background ${small ? "h-6" : "h-8"}`}>Quét để biết bạn đang ở đâu</div>
+            )}
+            <div className={`qr-code shrink-0 [&_svg]:block [&_svg]:size-full ${small ? "mt-1 size-16" : "mt-3 size-31"}`}
+                dangerouslySetInnerHTML={svgs[n.id] ? { __html: svgs[n.id]! } : undefined} />
+            <p className={`mt-2 font-semibold ${small ? "text-base" : "text-lg"}`}>{n.id}</p>
+            {opts.english && <p className="text-xs text-muted-foreground">Scan to see where you are</p>}
+            {opts.place && <p className={`text-xs ${small ? "mt-1" : "mt-2"}`}>{qrPlaceText(model, n)}</p>}
+            <p className="mt-auto text-xs text-muted-foreground">{data.venue.name}<br />{floorLabel(model, model.floorsById.get(n.floorId))}</p>
         </div>
     );
+    const sheetClass = `qr-sheet grid aspect-[210/297] shrink-0 bg-background p-3 ${SHEET_GRID[per]}`;
     const sheets = Array.from({ length: pages }, (_, i) => nodes.slice(i * per, i * per + per));
 
+    const printButton = <Button disabled={!nodes.length} onClick={print}><Printer />{nodes.length ? `In ${nodes.length} tem` : "In tem"}</Button>;
+
     return (
-        <div className="k-page ws-page-full" style={{ minHeight: 640 }}>
-            <HeaderActions><GuestLink venue={data.venue} /></HeaderActions>
-            <div className="k-title">
-                <h1 className="k24">In tem</h1>
-                <div className="k-acts"><Button variant="primary" disabled={!nodes.length} onClick={print}>{nodes.length ? `In ${nodes.length} tem` : "In tem"}</Button></div>
-            </div>
+        <Page actions={printButton}>
+            <style>{PRINT_CSS}</style>
 
             {!nodes.length ? (
-                <section className="k-card ws-empty ws-fill" style={{ justifyContent: "center" }}>
-                    <h2 className="k16">Chưa có mã nào để in</h2>
-                    <p className="k14 k-m">Tạo mã ở màn Mã QR định vị, chọn các mã cần in rồi quay lại đây.</p>
-                    <div className="ws-mt8"><Button to={`/builder/v/${venueId}/qr`}>Mở Mã QR định vị</Button></div>
-                </section>
+                <EmptyState icon={<QrCode />} title="Chưa có mã nào để in" description="Tạo mã ở màn Mã QR định vị, chọn các mã cần in rồi quay lại đây."
+                    action={<Button asChild variant="outline" size="sm"><Link to={`/builder/v/${venueId}/qr`}>Mở Mã QR định vị</Link></Button>} />
             ) : (
-                <div className="ws-row ws-fill">
-                    <aside aria-label="Tuỳ chọn in" className="k-card ws-card0" style={{ width: 360, flexShrink: 0, minHeight: 0, display: "flex" }}>
-                        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-                            <div className="ws-opt">
-                                <div className="k-field"><label htmlFor="paper">Khổ giấy</label><select id="paper" className="k-input" defaultValue="a4"><option value="a4">A4, 210 × 297 mm</option></select></div>
+                <div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+                    <aside aria-label="Tuỳ chọn in" className="flex flex-col overflow-hidden rounded-xl border bg-card">
+                        <div className="space-y-4 p-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="paper">Khổ giấy</Label>
+                                <Select defaultValue="a4">
+                                    <SelectTrigger id="paper" className="w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent><SelectItem value="a4">A4, 210 × 297 mm</SelectItem></SelectContent>
+                                </Select>
                             </div>
-                            <div className="ws-opt">
-                                <span className="k-label" id="per-l">Số tem mỗi trang</span>
-                                <div className="k-line" role="group" aria-labelledby="per-l">
-                                    {PER_PAGE.map(n => <button key={n} type="button" className="k-chip" aria-pressed={per === n} onClick={() => { setPer(n); setPage(0); }}>{n}</button>)}
+                            <div className="grid gap-2">
+                                <Label id="per-l">Số tem mỗi trang</Label>
+                                <ToggleGroup type="single" variant="outline" size="sm" value={String(per)} aria-labelledby="per-l" className="w-full"
+                                    onValueChange={v => { if (v) { setPer(Number(v) as PerPage); setPage(0); } }}>
+                                    {PER_PAGE.map(n => (
+                                        <ToggleGroupItem key={n} value={String(n)} className="flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{n}</ToggleGroupItem>
+                                    ))}
+                                </ToggleGroup>
+                                <div className="flex items-center justify-between text-xs">
+                                    <span className="text-muted-foreground">Cỡ tem</span><span>{TEM_SIZE[per]}</span>
                                 </div>
-                                <div className="k-line k14" style={{ justifyContent: "space-between" }}><span className="k-m">Cỡ tem</span><span>{TEM_SIZE[per]}</span></div>
                             </div>
-                            <div className="ws-opt" style={{ gap: 0 }}>
-                                <span className="k-label" style={{ marginBottom: 4 }}>Nội dung tem</span>
+                            <div className="grid gap-3">
+                                <p className="text-sm leading-none font-medium">Nội dung tem</p>
                                 {([["guide", "Hướng dẫn quét"], ["english", "Tiếng Anh"], ["place", "Mô tả vị trí dán"], ["cut", "Đường cắt"]] as const).map(([k, label]) => (
-                                    <label key={k} className="k-line k14" style={{ minHeight: 32, cursor: "pointer" }}>
-                                        <input type="checkbox" className="k-check" checked={opts[k]} onChange={e => setOpts(o => ({ ...o, [k]: e.target.checked }))} />{label}
-                                    </label>
+                                    <div key={k} className="flex items-center gap-2">
+                                        <Checkbox id={`opt-${k}`} checked={opts[k]} onCheckedChange={v => setOpts(o => ({ ...o, [k]: v === true }))} />
+                                        <Label htmlFor={`opt-${k}`} className="font-normal">{label}</Label>
+                                    </div>
                                 ))}
                             </div>
-                            <div className="ws-opt" style={{ paddingBottom: 8 }}>
-                                <div className="k-line"><span className="k-label">{nodes.length} tem, {pages} trang</span><Link to={`/builder/v/${venueId}/qr`} className="k-btn t sm ws-right" style={{ marginRight: -12 }}>Đổi danh sách</Link></div>
-                            </div>
-                            <table className="k-tbl is-dense">
-                                <tbody>
+                        </div>
+                        <Separator />
+                        <div className="flex items-center justify-between px-4 pt-3 pb-1">
+                            <span className="text-xs font-medium text-muted-foreground">{nodes.length} tem, {pages} trang</span>
+                            <Button asChild variant="link" size="sm" className="h-auto px-0"><Link to={`/builder/v/${venueId}/qr`}>Đổi danh sách</Link></Button>
+                        </div>
+                        <div className="max-h-72 overflow-y-auto">
+                            <Table>
+                                <TableBody>
                                     {nodes.map(n => (
-                                        <tr key={n.id}>
-                                            <td className="k-b is-nowrap" style={{ width: "1%" }}>{n.id}</td>
-                                            <td className="ws-ellipsis" style={{ maxWidth: 150 }}>{qrPlaceText(model, n)}</td>
-                                            <td className="k-m is-nowrap" style={{ textAlign: "right" }}>{QR_STATUS_LABEL[qrStatus(state, n.id)]}</td>
-                                        </tr>
+                                        <TableRow key={n.id}>
+                                            <TableCell className="w-0 pl-4 font-medium">{n.id}</TableCell>
+                                            <TableCell className="max-w-36 truncate text-muted-foreground">{qrPlaceText(model, n)}</TableCell>
+                                            <TableCell className="pr-4 text-right text-xs text-muted-foreground">{QR_STATUS_LABEL[qrStatus(state, n.id)]}</TableCell>
+                                        </TableRow>
                                     ))}
-                                </tbody>
-                            </table>
+                                </TableBody>
+                            </Table>
                         </div>
                     </aside>
-                    <section aria-label="Xem trước trang in" className="k-card ws-preview">
-                        <div className={`ws-sheet is-${per}`} role="img" aria-label={`Trang ${shownPage + 1}: ${sheets[shownPage]?.length ?? 0} tem mã QR trên giấy A4`}>
+
+                    <section aria-label="Xem trước trang in" className="flex min-w-0 flex-col items-center gap-4 overflow-x-auto rounded-xl border bg-muted/40 p-6">
+                        <div className={`${sheetClass} w-116 rounded-sm shadow-md`} data-per={per} role="img" aria-label={`Trang ${shownPage + 1}: ${sheets[shownPage]?.length ?? 0} tem mã QR trên giấy A4`}>
                             {sheets[shownPage]?.map(tem)}
                         </div>
-                        <div className="k-line k14">
-                            <button type="button" className="k-ib sm" aria-label="Trang trước" title="Trang trước" disabled={shownPage === 0} onClick={() => setPage(shownPage - 1)}><Lc name="chevron-left" size={16} /></button>
-                            <span>Trang {shownPage + 1} / {pages}</span>
-                            <button type="button" className="k-ib sm" aria-label="Trang sau" title="Trang sau" disabled={shownPage >= pages - 1} onClick={() => setPage(shownPage + 1)}><Lc name="chevron-right" size={16} /></button>
+                        <div className="flex items-center gap-2 text-sm">
+                            <Button variant="outline" size="icon" className="size-8" aria-label="Trang trước" title="Trang trước" disabled={shownPage === 0} onClick={() => setPage(shownPage - 1)}><ChevronLeft /></Button>
+                            <span className="tabular-nums">Trang {shownPage + 1} / {pages}</span>
+                            <Button variant="outline" size="icon" className="size-8" aria-label="Trang sau" title="Trang sau" disabled={shownPage >= pages - 1} onClick={() => setPage(shownPage + 1)}><ChevronRight /></Button>
                         </div>
                     </section>
                 </div>
@@ -136,29 +175,39 @@ export default function QrPrintPage() {
 
             {/* Bản in gắn thẳng vào body: khung app cao 100dvh, ẩn tràn, sẽ cắt mất trang 2 trở đi */}
             {createPortal(
-                <div className="ws-print" aria-hidden="true">
-                    {sheets.map((list, i) => <div key={i} className={`ws-sheet is-${per}`}>{list.map(tem)}</div>)}
+                <div className="qr-print-root" aria-hidden="true">
+                    {sheets.map((list, i) => <div key={i} className={sheetClass} data-per={per}>{list.map(tem)}</div>)}
                 </div>,
                 document.body
             )}
 
-            {afterPrint && (
-                <Dialog title={`Đánh dấu ${afterPrint.size} tem là Đã in?`} onClose={() => setAfterPrint(null)}
-                    actions={<><Button onClick={() => setAfterPrint(null)}>Để sau</Button><Button variant="primary" disabled={!afterPrint.size} onClick={markPrinted}>Đánh dấu Đã in</Button></>}>
-                    <fieldset className="ws-fs0">
-                        <legend className="k-label">Bỏ chọn tem in hỏng để in lại</legend>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 16, maxHeight: 280, overflowY: "auto" }}>
-                            {nodes.map(n => (
-                                <label key={n.id} className="k-line k14" style={{ minHeight: 32, cursor: "pointer" }}>
-                                    <input type="checkbox" className="k-check" checked={afterPrint.has(n.id)}
-                                        onChange={() => setAfterPrint(s => { const next = new Set(s); if (next.has(n.id)) next.delete(n.id); else next.add(n.id); return next; })} />{n.id}
-                                </label>
-                            ))}
-                        </div>
-                    </fieldset>
-                    {nodes.some(n => qrStatus(state, n.id) === "pasted") && <p className="k12 k-m">Có tem đang dán: gỡ tem cũ khi dán tem mới.</p>}
-                </Dialog>
-            )}
-        </div>
+            <Dialog open={afterPrint !== null} onOpenChange={open => !open && setAfterPrint(null)}>
+                <DialogContent className="sm:max-w-md">
+                    {afterPrint && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Đánh dấu {afterPrint.size} tem là Đã in?</DialogTitle>
+                                <DialogDescription>Bỏ chọn tem in hỏng để in lại.</DialogDescription>
+                            </DialogHeader>
+                            <fieldset className="grid max-h-72 grid-cols-2 gap-x-4 gap-y-2 overflow-y-auto">
+                                <legend className="sr-only">Tem đã in</legend>
+                                {nodes.map(n => (
+                                    <div key={n.id} className="flex items-center gap-2">
+                                        <Checkbox id={`printed-${n.id}`} checked={afterPrint.has(n.id)}
+                                            onCheckedChange={() => setAfterPrint(s => { const next = new Set(s); if (next.has(n.id)) next.delete(n.id); else next.add(n.id); return next; })} />
+                                        <Label htmlFor={`printed-${n.id}`} className="font-normal">{n.id}</Label>
+                                    </div>
+                                ))}
+                            </fieldset>
+                            {nodes.some(n => qrStatus(state, n.id) === "pasted") && <p className="text-xs text-muted-foreground">Có tem đang dán: gỡ tem cũ khi dán tem mới.</p>}
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setAfterPrint(null)}>Để sau</Button>
+                                <Button disabled={!afterPrint.size} onClick={markPrinted}>Đánh dấu Đã in</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </Page>
     );
 }

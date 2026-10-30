@@ -16,6 +16,14 @@ export interface QrState {
 }
 // eslint-disable-next-line react-refresh/only-export-components
 export const QR_STATUS_LABEL: Record<QrStatus, string> = { created: "Đã tạo", printed: "Đã in", pasted: "Đã dán" };
+/** Kiểu ô biển theo trạng thái tem (dùng chung cho marker trên bản đồ và chú giải) */
+// eslint-disable-next-line react-refresh/only-export-components
+export const QR_MARK_CLASS: Record<QrStatus | "lost", string> = {
+    pasted: "bg-foreground text-background",
+    printed: "border-2 border-foreground bg-background text-foreground",
+    created: "border-2 border-dashed border-muted-foreground bg-background text-muted-foreground",
+    lost: "border-2 border-destructive bg-background text-destructive"
+};
 
 const key = (venueId: number) => `indoor-map.qr.${venueId}`;
 // eslint-disable-next-line react-refresh/only-export-components
@@ -93,7 +101,8 @@ export function QrNodesLayer({ map, nodes, state, current, onPick }: {
         const selected = new Set(state.selected);
         for (const n of nodes) {
             if (selected.has(n.id)) {
-                const cls = `ws-qr is-${qrStatus(state, n.id)}${n.id === current ? " is-sel" : ""}`;
+                const ring = n.id === current ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "ring-2 ring-background";
+                const cls = `flex size-full cursor-pointer items-center justify-center rounded text-xs font-semibold ${ring} ${QR_MARK_CLASS[qrStatus(state, n.id)]}`;
                 const m = L.marker([n.lat, n.lng], {
                     icon: L.divIcon({ className: "", html: `<span class="${cls}">${shortCode(n.id)}</span>`, iconSize: [24, 24], iconAnchor: [12, 12] }),
                     title: n.id, zIndexOffset: n.id === current ? 2000 : 1000

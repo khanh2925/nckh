@@ -1,13 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { groupLabel, type LocationTypeDto, type UserDto, type UserStatus, type VenueDto, type VenueStatus } from "@indoor-map/core";
+import {
+    Activity, AlertCircle, Building2, Check, Clock, Download, ExternalLink, Eye, EyeOff, FileText, Layers, LayoutDashboard, List, Lock,
+    MapPin, MoreHorizontal, MousePointer2, Plus, Search, Settings, ShieldCheck, Trash2, TriangleAlert, UserPlus, Users, Workflow, X, type LucideIcon
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { adminApi } from "../console/api";
-import { ConsoleFrame, HeaderActions, SideGroup, SideItem, Sidebar } from "../console/Shell";
 import { useAuth } from "../console/auth";
-import Lc, { type LucideName } from "../design/Lc";
-import { Button, COLORS, ColorPicker, IconPicker, useAction, useFeedback } from "../console/ui";
+import { EmptyState, ErrorState, Page, Section, Stat } from "../console/page";
+import { ConsoleFrame, NavGroup, NavItem } from "../console/Shell";
+import { COLORS, ICONS, useAction, useFeedback } from "../console/ui";
 import { KIND_LABEL } from "../builder/pages/VenuesPage";
-import "./admin.css";
 
 // ---------------------------------------------------------------- dữ liệu dùng chung
 function useAdminData() {
@@ -38,9 +58,9 @@ function useAdminData() {
     return { users, venues, error, reload, setUsers, setVenues };
 }
 
-const ADMIN_PAGES: [string, string, LucideName][] = [
-    ["", "Tổng quan", "layout-dashboard"], ["review", "Kiểm duyệt", "shield-check"], ["users", "Người dùng", "users"],
-    ["templates", "Danh mục mẫu", "list"], ["settings", "Cấu hình", "settings"], ["logs", "Nhật ký", "file-text"]
+const ADMIN_PAGES: [string, string, LucideIcon][] = [
+    ["", "Tổng quan", LayoutDashboard], ["review", "Kiểm duyệt", ShieldCheck], ["users", "Người dùng", Users],
+    ["templates", "Danh mục mẫu", List], ["settings", "Cấu hình", Settings], ["logs", "Nhật ký", FileText]
 ];
 
 export function AdminLayout() {
@@ -54,96 +74,65 @@ export function AdminLayout() {
     return (
         <ConsoleFrame area="admin" crumbs={[{ label: "Quản trị hệ thống", to: "/admin" }, { label: current }]}
             nav={(
-                <Sidebar label="Quản trị hệ thống">
-                    <SideGroup>Quản trị hệ thống</SideGroup>
+                <NavGroup label="Quản trị hệ thống">
                     {ADMIN_PAGES.map(([path, label, icon]) => (
-                        <SideItem key={path} to={path ? `/admin/${path}` : "/admin"} end={!path} icon={icon} label={label}
-                            count={path === "users" && pending ? `${pending} chờ` : undefined} />
+                        <NavItem key={path} to={path ? `/admin/${path}` : "/admin"} end={!path} icon={icon} label={label}
+                            badge={path === "users" && pending ? pending : undefined} />
                     ))}
-                </Sidebar>
+                </NavGroup>
             )}>
-            <div className="k-page"><Outlet /></div>
+            <Outlet />
         </ConsoleFrame>
     );
 }
 
 // ---------------------------------------------------------------- thành phần nhỏ
-type Tone = "ok" | "warn" | "danger" | "";
-const TONE_COLOR: Record<Tone, string> = { ok: "var(--ok)", warn: "var(--warn)", danger: "var(--danger)", "": "var(--muted)" };
+const DOT = "size-1.5 rounded-full";
 
-function Badge({ children, tone = "", icon }: { children: ReactNode; tone?: Tone; icon?: LucideName }) {
-    return <span className={`k-badge ${tone ? `k-${tone}` : "k-m"}`}>{icon && <Lc name={icon} size={14} color={TONE_COLOR[tone]} />}{children}</span>;
-}
-
-function Skel({ w, h = 12 }: { w: number | string; h?: number }) {
-    return <span className="k-skel" style={{ width: w, height: h }} />;
-}
-
-function Title({ children, after }: { children: string; after?: ReactNode }) {
-    return <div className="k-title"><h1 className="k24">{children}</h1>{after}</div>;
-}
-
-function Kpi({ value, label, sub }: { value: ReactNode; label: string; sub?: ReactNode }) {
+/** Nút bị vô hiệu kèm lý do (nút disabled không nhận chuột nên bọc trong span để hiện tooltip) */
+function WithReason({ reason, children }: { reason?: string; children: ReactNode }) {
+    if (!reason) return <>{children}</>;
     return (
-        <div className="k-card tight">
-            <div className="k-kpi"><span className="k28">{value}</span><span className="k12 k-m">{label}</span>{sub && <span className="k12">{sub}</span>}</div>
-        </div>
-    );
-}
-const NA = <span className="k-m" aria-label="Không có số liệu">—</span>;
-
-function LoadError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-    return (
-        <div className="k-note" role="alert" style={{ alignItems: "center" }}>
-            <Lc name="circle-alert" size={16} color="var(--danger)" />
-            <div><span className="k-b k-danger">Không tải được dữ liệu.</span> <span className="k-m">{(error as Error)?.message}</span></div>
-            <div style={{ marginLeft: "auto" }}><Button small icon="refresh-cw" onClick={onRetry}>Thử lại</Button></div>
-        </div>
+        <Tooltip>
+            <TooltipTrigger asChild><span tabIndex={0} className="inline-flex">{children}</span></TooltipTrigger>
+            <TooltipContent>{reason}</TooltipContent>
+        </Tooltip>
     );
 }
 
-function Chips<T extends string>({ items, value, onChange, label }: { items: [T, string, number | null][]; value: T; onChange: (v: T) => void; label: string }) {
+/** Bộ lọc trạng thái dạng nút bật, kèm số đếm */
+function FilterGroup<T extends string>({ label, items, value, onChange }: { label: string; items: [T, string, number | null][]; value: T; onChange: (v: T) => void }) {
     return (
-        <div role="group" aria-label={label} className="ka-chips">
+        <ToggleGroup type="single" variant="outline" size="sm" value={value} onValueChange={v => v && onChange(v as T)} aria-label={label}>
             {items.map(([key, text, n]) => (
-                <button key={key} type="button" className="k-chip" aria-pressed={value === key} onClick={() => onChange(key)}>
-                    {text}{n != null && <span className={value === key ? undefined : "k-m"}>{n}</span>}
-                </button>
+                <ToggleGroupItem key={key} value={key} className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                    {text}{n != null && <span className="text-xs tabular-nums opacity-70">{n}</span>}
+                </ToggleGroupItem>
             ))}
-        </div>
+        </ToggleGroup>
     );
 }
 
-/** Hộp thoại theo bản thiết kế: tiêu đề 20, nội dung, chân có ghi chú trái + nút phải. Esc hoặc bấm nền để đóng. */
-function Dialog({ title, children, note, actions, onClose }: { title: string; children: ReactNode; note?: string; actions: ReactNode; onClose: () => void }) {
-    const ref = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        ref.current?.querySelector<HTMLElement>("select, textarea, input, button")?.focus();
-        const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [onClose]);
-    return (
-        <div className="k-scrim" onClick={onClose}>
-            <div ref={ref} className="k-dlg" role="dialog" aria-modal="true" aria-labelledby="ka-dlg-t" onClick={e => e.stopPropagation()}>
-                <h2 id="ka-dlg-t" className="k20">{title}</h2>
-                {children}
-                <div className="ka-dlg-foot">{note && <span className="k12 k-m left">{note}</span>}{actions}</div>
-            </div>
-        </div>
-    );
-}
-
-function DangerButton({ children, onClick, busy, disabled, title }: { children: ReactNode; onClick: () => void; busy?: boolean; disabled?: boolean; title?: string }) {
-    return (
-        <button type="button" className="k-btn d" style={{ borderColor: "var(--rule)" }} onClick={onClick} disabled={disabled || busy} title={title} aria-busy={busy || undefined}>
-            {busy && <span className="cb-spinner is-inline" aria-hidden="true" />}{children}
-        </button>
-    );
+function NotAvailable() {
+    return <Badge variant="outline" className="text-muted-foreground">Chưa khả dụng</Badge>;
 }
 
 function Who({ user, extra }: { user: UserDto; extra?: string }) {
-    return <div><span className="k14 k-b ka-block">{user.fullName}</span><span className="k12 k-m">{user.email}{extra ? `, ${extra}` : ""}</span></div>;
+    return (
+        <div className="rounded-lg border px-4 py-3">
+            <p className="text-sm font-medium">{user.fullName}</p>
+            <p className="text-xs text-muted-foreground">{user.email}{extra ? `, ${extra}` : ""}</p>
+        </div>
+    );
+}
+
+function StatSkeleton() {
+    return (
+        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-10" /><Skeleton className="h-3 w-28" /></div>
+        </div>
+    );
 }
 
 /** "3 giờ", "2 ngày"… tính từ thời điểm tạo */
@@ -173,80 +162,107 @@ export function AdminDashboard() {
     const emailOf = (id?: number) => users?.find(u => u.id === id)?.email ?? "";
     const jobs = pending.length + orphaned.length;
 
-    const kpiLabels = ["Địa điểm", "Chủ bị khoá", "Tài khoản chờ duyệt"];
     return (
-        <>
-            <HeaderActions><Button to="/admin/logs">Nhật ký</Button></HeaderActions>
-            <Title>Tổng quan hệ thống</Title>
-            {error ? <LoadError error={error} onRetry={reload} /> : null}
-            <section aria-label="Số liệu chính" className="ka-kpis" aria-busy={!ready && !error ? true : undefined}>
+        <Page actions={<Button variant="outline" asChild><Link to="/admin/logs"><FileText />Nhật ký</Link></Button>}>
+            {error ? <ErrorState error={error} onRetry={reload} /> : null}
+            <section aria-label="Số liệu chính" aria-busy={!ready && !error ? true : undefined} className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
                 {ready ? (
                     <>
-                        <Kpi value={venues.length} label="Địa điểm" sub={`${count("PUBLISHED")} công khai, ${count("DRAFT")} nháp, ${count("HIDDEN")} ẩn`} />
-                        <Kpi value={orphaned.length} label="Chủ bị khoá" sub="địa điểm cần chuyển chủ" />
-                        <Kpi value={pending.length} label="Tài khoản chờ duyệt" sub={oldest ? `lâu nhất ${oldest.text}` : "không có"} />
+                        <Stat icon={<Building2 />} tone="blue" label="Địa điểm" value={venues.length}
+                            hint={`${count("PUBLISHED")} công khai, ${count("DRAFT")} nháp, ${count("HIDDEN")} ẩn`} />
+                        <Stat icon={<UserPlus />} tone="amber" label="Tài khoản chờ duyệt" value={pending.length} hint={oldest ? `Lâu nhất ${oldest.text}` : "Không có"} />
+                        <Stat icon={<Lock />} tone="amber" label="Chủ bị khoá" value={orphaned.length} hint="Địa điểm cần chuyển chủ" />
                     </>
-                ) : kpiLabels.map(label => (
-                    <div key={label} className="k-card tight">
-                        <div className="k-kpi">{error ? NA : <Skel w={48} h={32} />}<span className="k12 k-m">{label}</span>{error ? <span className="k12 k-danger">Không tải được</span> : <Skel w={140} />}</div>
-                    </div>
-                ))}
-                <Kpi value={NA} label="Lượt mở bản đồ" sub={<span className="k-m">Chưa khả dụng</span>} />
-                <Kpi value={NA} label="Lỗi API 24 giờ" sub={<span className="k-m">Chưa khả dụng</span>} />
+                ) : error ? (
+                    <>
+                        <Stat icon={<Building2 />} tone="blue" label="Địa điểm" value="—" hint="Không tải được" />
+                        <Stat icon={<UserPlus />} tone="amber" label="Tài khoản chờ duyệt" value="—" hint="Không tải được" />
+                        <Stat icon={<Lock />} tone="amber" label="Chủ bị khoá" value="—" hint="Không tải được" />
+                    </>
+                ) : [0, 1, 2].map(i => <StatSkeleton key={i} />)}
+                <Stat icon={<Eye />} tone="muted" label="Lượt mở bản đồ" value="—" hint="Chưa khả dụng" />
+                <Stat icon={<Activity />} tone="muted" label="Lỗi API 24 giờ" value="—" hint="Chưa khả dụng" />
             </section>
-            <div className="ka-cols">
-                <section className="k-card ka-flush" aria-labelledby="q-title" aria-busy={!ready && !error ? true : undefined}>
-                    <div className="ka-hd"><h2 id="q-title" className="k16">Hàng đợi cần xử lý</h2><div className="end">{ready ? <span className="k14 k-m">{jobs} việc</span> : !error && <Skel w={40} />}</div></div>
-                    {error ? <div className="ka-empty"><p className="k14 k-m">Không tải được hàng đợi.</p></div> : ready && jobs === 0 ? (
-                        <div className="ka-empty"><h3 className="k16">Không có việc chờ xử lý</h3><p className="k14 k-m">Tài khoản mới và địa điểm có chủ bị khoá sẽ hiện ở đây.</p></div>
+
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <Section title="Hàng đợi cần xử lý" flush
+                    actions={ready ? <span className="text-sm text-muted-foreground tabular-nums">{jobs} việc</span> : !error && <Skeleton className="h-4 w-12" />}>
+                    {error ? (
+                        <p className="px-6 py-10 text-center text-sm text-muted-foreground">Không tải được hàng đợi.</p>
+                    ) : ready && jobs === 0 ? (
+                        <p className="px-6 py-10 text-center text-sm text-muted-foreground">Không có việc chờ xử lý.</p>
                     ) : (
-                        <div className="ka-scroll">
-                            <table className="k-tbl">
-                                <thead><tr><th scope="col">Việc</th><th scope="col">Đối tượng</th><th scope="col">Chờ</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead>
-                                <tbody>
-                                    {!ready ? [128, 112, 112].map((w, i) => (
-                                        <tr key={i}><td><Skel w={w} /></td><td><div className="k-stack" style={{ gap: 8 }}><Skel w={110} h={16} /><Skel w={140} /></div></td><td><Skel w={40} /></td><td><div className="ka-acts"><Skel w={64} h={32} /></div></td></tr>
-                                    )) : (
-                                        <>
-                                            {pending.map(u => {
-                                                const wait = since(u.createdAt);
-                                                return (
-                                                    <tr key={`u${u.id}`}>
-                                                        <td>Duyệt tài khoản</td>
-                                                        <td><span className="k-b">{u.fullName}</span><span className="k12 k-m ka-block">{u.email}</span></td>
-                                                        <td>{wait ? (wait.late ? <Badge tone="warn" icon="clock">{wait.text}</Badge> : wait.text) : "—"}</td>
-                                                        <td><div className="ka-acts"><Button small to="/admin/users">Xử lý</Button></div></td>
-                                                    </tr>
-                                                );
-                                            })}
-                                            {orphaned.map(v => (
-                                                <tr key={`v${v.id}`}>
-                                                    <td>Chuyển chủ địa điểm</td>
-                                                    <td><span className="k-b">{v.name}</span><span className="k12 k-m ka-block">Chủ bị khoá: {emailOf(v.ownerId) || v.ownerName}</span></td>
-                                                    <td>—</td>
-                                                    <td><div className="ka-acts"><Button small to="/admin/review">Xử lý</Button></div></td>
-                                                </tr>
-                                            ))}
-                                        </>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                        <Table aria-busy={!ready || undefined}>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-6">Việc</TableHead>
+                                    <TableHead>Đối tượng</TableHead>
+                                    <TableHead>Chờ</TableHead>
+                                    <TableHead className="w-0"><span className="sr-only">Thao tác</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {!ready ? [0, 1, 2].map(i => (
+                                    <TableRow key={i}>
+                                        <TableCell className="pl-6"><Skeleton className="h-4 w-32" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-28" /><Skeleton className="mt-2 h-3 w-36" /></TableCell>
+                                        <TableCell><Skeleton className="h-4 w-10" /></TableCell>
+                                        <TableCell className="pr-6"><Skeleton className="ml-auto h-8 w-16" /></TableCell>
+                                    </TableRow>
+                                )) : (
+                                    <>
+                                        {pending.map(u => {
+                                            const wait = since(u.createdAt);
+                                            return (
+                                                <TableRow key={`u${u.id}`}>
+                                                    <TableCell className="pl-6">Duyệt tài khoản</TableCell>
+                                                    <TableCell>
+                                                        <p className="font-medium">{u.fullName}</p>
+                                                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {wait ? (wait.late ? <Badge className="bg-warning/10 text-warning"><Clock />{wait.text}</Badge> : <span className="tabular-nums">{wait.text}</span>)
+                                                            : <span className="text-muted-foreground">—</span>}
+                                                    </TableCell>
+                                                    <TableCell className="pr-6 text-right"><Button asChild variant="outline" size="sm"><Link to="/admin/users">Xử lý</Link></Button></TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                        {orphaned.map(v => (
+                                            <TableRow key={`v${v.id}`}>
+                                                <TableCell className="pl-6">Chuyển chủ địa điểm</TableCell>
+                                                <TableCell>
+                                                    <p className="font-medium">{v.name}</p>
+                                                    <p className="text-xs text-muted-foreground">Chủ bị khoá: {emailOf(v.ownerId) || v.ownerName}</p>
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground">—</TableCell>
+                                                <TableCell className="pr-6 text-right"><Button asChild variant="outline" size="sm"><Link to="/admin/review">Xử lý</Link></Button></TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </>
+                                )}
+                            </TableBody>
+                        </Table>
                     )}
-                </section>
-                <div className="k-stack" style={{ gap: 24 }}>
-                    <section className="k-card ka-flush" aria-labelledby="h-title">
-                        <div className="ka-hd"><h2 id="h-title" className="k16">Sức khoẻ hệ thống</h2><div className="end"><Badge>Chưa khả dụng</Badge></div></div>
-                        <div className="ka-body"><p className="k14 k-b">Chưa kết nối giám sát</p><p className="k12 k-m">API, cơ sở dữ liệu, lưu trữ mặt bằng, email</p></div>
-                    </section>
-                    <section className="k-card ka-flush" aria-labelledby="a-title">
-                        <div className="ka-hd"><h2 id="a-title" className="k16">Hoạt động gần đây</h2><div className="end"><Badge>Chưa khả dụng</Badge></div></div>
-                        <div className="ka-body"><p className="k14 k-b">Chưa ghi nhật ký hoạt động</p><p className="k12 k-m">Đăng nhập, duyệt tài khoản, xuất bản, nhập dữ liệu</p></div>
-                        <div className="ka-foot"><Button small variant="ghost" to="/admin/logs">Xem nhật ký</Button></div>
-                    </section>
+                </Section>
+
+                <div className="flex flex-col gap-6">
+                    <Section title="Sức khoẻ hệ thống" actions={<NotAvailable />}>
+                        <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
+                            {["API", "Cơ sở dữ liệu", "Lưu trữ mặt bằng", "Email"].map(k => (
+                                <div key={k} className="contents"><dt>{k}</dt><dd className="text-right text-muted-foreground">—</dd></div>
+                            ))}
+                        </dl>
+                    </Section>
+                    <Section title="Hoạt động gần đây" actions={<NotAvailable />}>
+                        <div className="flex flex-col items-start gap-3">
+                            <p className="text-sm text-muted-foreground">Chưa ghi nhật ký hoạt động.</p>
+                            <Button asChild variant="outline" size="sm"><Link to="/admin/logs">Xem nhật ký</Link></Button>
+                        </div>
+                    </Section>
                 </div>
             </div>
-        </>
+        </Page>
     );
 }
 
@@ -254,11 +270,30 @@ export function AdminDashboard() {
 type ReviewFilter = "ALL" | "PUBLISHED" | "DRAFT" | "LOCKED_OWNER" | "HIDDEN";
 type ReviewDialog = "hide" | "unhide" | "owner" | null;
 
-function venueBadge(v: VenueDto, ownerLocked: boolean) {
-    if (v.status === "HIDDEN") return <Badge tone="danger" icon="eye-off">Đã ẩn</Badge>;
-    if (ownerLocked) return <Badge tone="danger" icon="lock">Chủ bị khoá</Badge>;
-    if (v.status === "PUBLISHED") return <Badge tone="ok">Công khai</Badge>;
-    return <Badge>Bản nháp</Badge>;
+function VenueBadge({ status }: { status?: string }) {
+    if (status === "HIDDEN") return <Badge className="bg-destructive/10 text-destructive"><EyeOff />Đã ẩn</Badge>;
+    if (status === "PUBLISHED") return <Badge className="gap-1.5 bg-success/10 text-success"><span className={`${DOT} bg-success`} aria-hidden="true" />Công khai</Badge>;
+    return <Badge className="gap-1.5 bg-warning/10 text-warning"><span className={`${DOT} bg-warning`} aria-hidden="true" />Bản nháp</Badge>;
+}
+
+const LockedOwnerBadge = () => <Badge className="bg-destructive/10 text-destructive"><Lock />Chủ bị khoá</Badge>;
+
+function ReviewSkeleton() {
+    return (
+        <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]" aria-busy="true">
+            <span className="sr-only" role="status">Đang tải địa điểm cần kiểm duyệt</span>
+            <div className="flex flex-col gap-1 rounded-xl border bg-card p-1">
+                {[0, 1, 2, 3].map(i => (
+                    <div key={i} className="space-y-2 px-3 py-2"><Skeleton className="h-4 w-40" /><Skeleton className="h-3 w-28" /></div>
+                ))}
+            </div>
+            <div className="flex flex-col gap-6">
+                <div className="space-y-2"><Skeleton className="h-6 w-64" /><Skeleton className="h-3 w-48" /></div>
+                <div className="grid grid-cols-3 gap-4">{[0, 1, 2].map(i => <StatSkeleton key={i} />)}</div>
+                <Skeleton className="h-28 w-full rounded-xl" />
+            </div>
+        </div>
+    );
 }
 
 export function AdminReview() {
@@ -269,7 +304,6 @@ export function AdminReview() {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [dialog, setDialog] = useState<ReviewDialog>(null);
     const [ownerId, setOwnerId] = useState<number | "">("");
-    const closeDialog = useCallback(() => setDialog(null), []);
 
     const lockedOwners = useMemo(() => new Set((users ?? []).filter(u => u.status === "LOCKED").map(u => u.id)), [users]);
     const isOwnerLocked = (v: VenueDto) => v.ownerId != null && lockedOwners.has(v.ownerId);
@@ -278,6 +312,7 @@ export function AdminReview() {
     const list = all.filter(v => matches(v, filter));
     const selected = list.find(v => v.id === selectedId) ?? list[0];
     const owner = users?.find(u => u.id === selected?.ownerId);
+    const loaded = !!venues && !!users;
 
     const patch = (saved: VenueDto | null) => {
         if (saved && venues) setVenues(venues.map(x => (x.id === saved.id ? { ...x, ...saved } : x)));
@@ -303,138 +338,189 @@ export function AdminReview() {
         ["HIDDEN", "Đã ẩn", venues ? all.filter(v => matches(v, "HIDDEN")).length : null]
     ];
 
-    return (
+    const actions = loaded && selected ? (
         <>
-            <Title>Kiểm duyệt địa điểm</Title>
-            <Chips label="Lọc theo trạng thái" items={chips} value={filter} onChange={f => { setFilter(f); setSelectedId(null); }} />
-            {error ? <LoadError error={error} onRetry={reload} /> : !venues || !users ? (
-                <div className="ka-split" aria-busy="true">
-                    <span className="sr-only" role="status">Đang tải địa điểm cần kiểm duyệt</span>
-                    <div className="k-card ka-flush">
-                        {[196, 168, 152, 140].map((w, i) => (
-                            <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "8px 12px", padding: "12px 16px", borderTop: i ? "1px solid var(--rule)" : undefined }}>
-                                <Skel w={w} h={16} /><Skel w={72} /><Skel w={w - 40} />
-                            </div>
-                        ))}
-                    </div>
-                    <section className="k-card ka-flush">
-                        <div className="ka-head"><div className="k-line" style={{ gap: 12 }}><Skel w={260} h={24} /><Skel w={72} /></div><Skel w={220} /></div>
-                        <div className="ka-facts">{[0, 1, 2].map(i => <div key={i} className="k-stack" style={{ gap: 8 }}><Skel w={48} /><Skel w={64} h={16} /></div>)}</div>
-                        <div className="ka-sec"><Skel w={120} h={16} /><Skel w="55%" /><Skel w="100%" h={64} /></div>
-                    </section>
-                </div>
-            ) : !selected ? (
-                <section className="k-card ka-empty">
-                    <h2 className="k16">Không có địa điểm cần kiểm duyệt</h2>
-                    <p className="k14 k-m">Địa điểm công khai, bị ẩn hoặc có chủ bị khoá sẽ hiện ở đây.</p>
-                    {filter !== "ALL" && <div style={{ marginTop: 8 }}><Button onClick={() => setFilter("ALL")}>Xem tất cả</Button></div>}
-                </section>
+            <Button variant="outline" onClick={() => { setOwnerId(""); setDialog("owner"); }}>Chuyển chủ…</Button>
+            {selected.status === "HIDDEN"
+                ? <Button onClick={() => setDialog("unhide")}>Hiện lại về Nháp…</Button>
+                : <Button asChild><Link to={`/builder/v/${selected.id}/buildings`}>Mở trong Builder</Link></Button>}
+        </>
+    ) : undefined;
+    const close = (open: boolean) => !open && setDialog(null);
+
+    return (
+        <Page actions={actions}>
+            <div className="flex items-center gap-2">
+                <FilterGroup label="Lọc theo trạng thái" items={chips} value={filter} onChange={f => { setFilter(f); setSelectedId(null); }} />
+            </div>
+            {error ? <ErrorState error={error} onRetry={reload} /> : !loaded ? <ReviewSkeleton /> : !selected ? (
+                <EmptyState icon={<ShieldCheck />} title="Không có địa điểm cần kiểm duyệt" description="Địa điểm công khai, bị ẩn hoặc có chủ bị khoá sẽ hiện ở đây."
+                    action={filter !== "ALL" ? <Button variant="outline" onClick={() => setFilter("ALL")}>Xem tất cả</Button> : undefined} />
             ) : (
-                <div className="ka-split">
-                    <nav aria-label="Địa điểm cần xem" className="k-card ka-flush ka-vl">
-                        {list.map(v => (
-                            <button key={v.id} type="button" aria-current={v.id === selected.id} onClick={() => setSelectedId(v.id)}>
-                                <span className="k14 k-b ka-ellipsis">{v.name}</span>{venueBadge(v, isOwnerLocked(v))}
-                                <span className="k12 k-m ka-ellipsis">Chủ: {v.ownerName ?? "—"}</span>
-                            </button>
-                        ))}
+                <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                    <nav aria-label="Địa điểm cần xem" className="flex flex-col gap-0.5 rounded-xl border bg-card p-1">
+                        {list.map(v => {
+                            const cur = v.id === selected.id;
+                            return (
+                                <button key={v.id} type="button" aria-current={cur} onClick={() => setSelectedId(v.id)}
+                                    className={`flex w-full flex-col items-start gap-1 rounded-lg px-3 py-2 text-left ${cur ? "bg-primary/10" : "hover:bg-muted/60"}`}>
+                                    <span className="flex w-full min-w-0 items-center gap-2">
+                                        <span className={`min-w-0 flex-1 truncate text-sm ${cur ? "font-medium text-primary" : ""}`}>{v.name}</span>
+                                        {isOwnerLocked(v) && v.status !== "HIDDEN" ? <LockedOwnerBadge /> : <VenueBadge status={v.status} />}
+                                    </span>
+                                    <span className="w-full truncate text-xs text-muted-foreground">Chủ: {v.ownerName ?? "—"}</span>
+                                </button>
+                            );
+                        })}
                     </nav>
-                    <section className="k-card ka-flush" aria-label="Chi tiết địa điểm">
-                        <div className="ka-head">
-                            <div className="k-line" style={{ gap: 16 }}>
-                                <h2 className="k16">{selected.name}</h2>
-                                <div className="k-line" style={{ gap: 16 }}>
-                                    {selected.status === "PUBLISHED" ? <Badge tone="ok">Công khai</Badge> : selected.status === "HIDDEN" ? <Badge tone="danger" icon="eye-off">Đã ẩn</Badge> : <Badge>Bản nháp</Badge>}
-                                    {isOwnerLocked(selected) && <Badge tone="danger" icon="lock">Chủ bị khoá</Badge>}
+
+                    <section className="flex min-w-0 flex-col gap-6" aria-label="Chi tiết địa điểm">
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="truncate text-lg font-semibold">{selected.name}</h2>
+                                    <VenueBadge status={selected.status} />
+                                    {isOwnerLocked(selected) && <LockedOwnerBadge />}
                                 </div>
-                                {selected.status === "PUBLISHED" && <span className="end"><a href={`/v/${selected.slug}`} target="_blank" rel="noreferrer" className="k-btn sm">Xem như khách</a></span>}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                    <span>/v/{selected.slug}</span>
+                                    <span>{KIND_LABEL[selected.kind ?? "other"] ?? selected.kind}</span>
+                                    <span>Chủ: {selected.ownerName ?? "—"}{isOwnerLocked(selected) ? " (bị khoá)" : ""}</span>
+                                </div>
                             </div>
-                            <div className="k12 k-m k-line" style={{ gap: 16 }}>
-                                <span>/v/{selected.slug}</span>
-                                <span>{KIND_LABEL[selected.kind ?? "other"] ?? selected.kind}</span>
-                                <span>Chủ: {selected.ownerName ?? "—"}{isOwnerLocked(selected) ? " (bị khoá)" : ""}</span>
-                            </div>
+                            {selected.status === "PUBLISHED" && (
+                                <Button asChild variant="outline" size="sm"><a href={`/v/${selected.slug}`} target="_blank" rel="noreferrer"><ExternalLink />Xem như khách</a></Button>
+                            )}
                         </div>
-                        <dl className="ka-facts">
-                            <div><dt className="k12 k-m">Toà nhà</dt><dd className="k16">{selected.buildingCount ?? 0}</dd></div>
-                            <div><dt className="k12 k-m">Tầng</dt><dd className="k16">{selected.floorCount ?? 0}</dd></div>
-                            <div><dt className="k12 k-m">Điểm</dt><dd className="k16">{selected.locationCount ?? 0}</dd></div>
-                        </dl>
+
+                        <div className="grid grid-cols-3 gap-4">
+                            <Stat icon={<Building2 />} tone="blue" label="Toà nhà" value={selected.buildingCount ?? 0} />
+                            <Stat icon={<Layers />} tone="green" label="Tầng" value={selected.floorCount ?? 0} />
+                            <Stat icon={<MapPin />} tone="amber" label="Điểm" value={(selected.locationCount ?? 0).toLocaleString("vi-VN")} />
+                        </div>
+
                         {isOwnerLocked(selected) && selected.status !== "HIDDEN" && (
-                            <div className="ka-sec">
-                                <div className="k-note" role="note">
-                                    <Lc name="triangle-alert" size={16} color="var(--warn)" />
-                                    <div><span className="k-b">Chủ {selected.ownerName} đang bị khoá, địa điểm vẫn {selected.status === "PUBLISHED" ? "công khai" : "ở bản nháp"}.</span> <span className="k-m">Không ai sửa được cho tới khi bạn chuyển chủ.</span></div>
-                                </div>
-                            </div>
+                            <Alert className="border-warning/30 [&>svg]:text-warning">
+                                <TriangleAlert />
+                                <AlertTitle>Chủ {selected.ownerName} đang bị khoá, địa điểm vẫn {selected.status === "PUBLISHED" ? "công khai" : "ở bản nháp"}</AlertTitle>
+                                <AlertDescription>Không ai sửa được cho tới khi bạn chuyển chủ.</AlertDescription>
+                            </Alert>
                         )}
+
                         {selected.status === "HIDDEN" && (
-                            <div className="ka-sec">
-                                <h3 className="k14 k-b">Chủ địa điểm thấy địa điểm bị ẩn và được</h3>
-                                <dl className="k-line k14" style={{ gap: 24, margin: 0 }}>
+                            <Section title="Quyền của chủ khi bị ẩn">
+                                <dl className="grid grid-cols-3 gap-4">
                                     {[["Xem", "Được"], ["Sửa nháp", "Được"], ["Xuất bản", "Không"]].map(([k, v]) => (
-                                        <div key={k}><dt className="k12 k-m">{k}</dt><dd className={`k-b${v === "Không" ? " k-danger" : ""}`} style={{ margin: 0 }}>{v}</dd></div>
+                                        <div key={k} className="space-y-1">
+                                            <dt className="text-xs text-muted-foreground">{k}</dt>
+                                            <dd className={`text-sm font-medium ${v === "Không" ? "text-destructive" : ""}`}>{v}</dd>
+                                        </div>
                                     ))}
                                 </dl>
+                            </Section>
+                        )}
+
+                        <Section title="Lịch sử kiểm duyệt" actions={<NotAvailable />}>
+                            <p className="text-sm text-muted-foreground">Cập nhật lần cuối {selected.updatedAt ? new Date(selected.updatedAt).toLocaleString("vi-VN") : "—"}</p>
+                        </Section>
+
+                        {selected.status !== "HIDDEN" && (
+                            <div className="flex items-center justify-between gap-4 rounded-xl border border-destructive/30 px-6 py-4">
+                                <div className="min-w-0">
+                                    <p className="text-sm font-medium">{selected.status === "PUBLISHED" ? "Gỡ xuất bản hoặc ẩn địa điểm" : "Ẩn địa điểm"}</p>
+                                    <p className="text-sm text-muted-foreground">Khách không mở được cho tới khi xuất bản hoặc hiện lại.</p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    {selected.status === "PUBLISHED" && (
+                                        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={busy} onClick={() => void unpublish(selected)}>Gỡ xuất bản…</Button>
+                                    )}
+                                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDialog("hide")}><EyeOff />Ẩn địa điểm…</Button>
+                                </div>
                             </div>
                         )}
-                        <div className="ka-sec">
-                            <div className="k-line"><h3 className="k14 k-b">Lịch sử kiểm duyệt</h3><Badge>Chưa khả dụng</Badge></div>
-                            <p className="k12 k-m">Cập nhật lần cuối {selected.updatedAt ? new Date(selected.updatedAt).toLocaleString("vi-VN") : "—"}</p>
-                        </div>
-                        <div className="ka-dfoot">
-                            <div className="start">
-                                {selected.status === "PUBLISHED" && <Button variant="danger" disabled={busy} onClick={() => void unpublish(selected)}>Gỡ xuất bản…</Button>}
-                                {selected.status !== "HIDDEN" && <Button variant="danger" onClick={() => setDialog("hide")}>Ẩn địa điểm…</Button>}
-                            </div>
-                            <div className="end">
-                                <Button onClick={() => { setOwnerId(""); setDialog("owner"); }}>Chuyển chủ…</Button>
-                                {selected.status === "HIDDEN"
-                                    ? <Button variant="primary" onClick={() => setDialog("unhide")}>Hiện lại về Nháp…</Button>
-                                    : <Button variant="primary" to={`/builder/v/${selected.id}/buildings`}>Mở trong Builder</Button>}
-                            </div>
-                        </div>
                     </section>
                 </div>
             )}
 
-            {dialog === "hide" && selected && (
-                <Dialog title={`Ẩn ${selected.name}?`} onClose={closeDialog} note="Hiện lại được bất cứ lúc nào"
-                    actions={<><Button onClick={closeDialog}>Huỷ</Button><DangerButton busy={busy} onClick={() => void setStatus(selected, "HIDDEN", "Đã ẩn địa điểm")}>Ẩn địa điểm</DangerButton></>}>
-                    <ul className="ka-list k14">
-                        <li>Khách không mở được <span className="k-b">/v/{selected.slug}</span> và các mã QR đã dán.</li>
-                        <li>Chủ vẫn sửa nháp, nhưng không xuất bản được tới khi bạn hiện lại.</li>
-                    </ul>
-                </Dialog>
-            )}
-            {dialog === "unhide" && selected && (
-                <Dialog title={`Hiện lại ${selected.name}?`} onClose={closeDialog}
-                    actions={<><Button onClick={closeDialog}>Huỷ</Button><Button variant="primary" busy={busy} onClick={() => void setStatus(selected, "DRAFT", "Đã đưa về bản nháp")}>Hiện lại về Nháp</Button></>}>
-                    <ul className="ka-list k14">
-                        <li>Địa điểm về <span className="k-b">Nháp</span>, khách vẫn chưa thấy.</li>
-                        <li>Chủ {selected.ownerName ?? ""} sửa rồi <span className="k-b">tự xuất bản lại</span>.</li>
-                    </ul>
-                </Dialog>
-            )}
-            {dialog === "owner" && selected && (
-                <Dialog title={`Chuyển chủ ${selected.name}?`} onClose={closeDialog}
-                    actions={<><Button onClick={closeDialog}>Huỷ</Button><button type="submit" form="ka-owner" className="k-btn p" disabled={!ownerId || busy} aria-busy={busy || undefined}>Chuyển chủ</button></>}>
-                    <div className="k14"><span className="k12 k-m ka-block">Chủ hiện tại</span><span className="k-b">{selected.ownerName ?? "—"}</span>{owner?.status === "LOCKED" && <span className="k-danger"> (bị khoá)</span>}</div>
-                    <form id="ka-owner" onSubmit={saveOwner} className="k-field">
-                        <label htmlFor="own-new">Chủ mới</label>
-                        <select id="own-new" className="k-input" required value={ownerId} onChange={e => setOwnerId(e.target.value ? Number(e.target.value) : "")}>
-                            <option value="">Chọn tài khoản…</option>
-                            {users?.filter(u => u.status === "ACTIVE" && u.id !== selected.ownerId).map(u => <option key={u.id} value={u.id}>{u.fullName}, {u.email}</option>)}
-                        </select>
-                        <span className="k-hint">Chỉ tài khoản đã duyệt, đang hoạt động.</span>
-                    </form>
-                    <ul className="ka-list k14">
-                        <li>Chủ mới sửa và xuất bản được ngay; chủ cũ mất quyền với địa điểm này.</li>
-                        <li>Đường dẫn và mã QR giữ nguyên.</li>
-                    </ul>
-                </Dialog>
-            )}
-        </>
+            <Dialog open={dialog === "hide" && !!selected} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {dialog === "hide" && selected && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Ẩn {selected.name}?</DialogTitle>
+                                <DialogDescription>Hiện lại được bất cứ lúc nào.</DialogDescription>
+                            </DialogHeader>
+                            <ul className="list-disc space-y-1 pl-5 text-sm">
+                                <li>Khách không mở được <span className="font-medium">/v/{selected.slug}</span> và các mã QR đã dán.</li>
+                                <li>Chủ vẫn sửa nháp, nhưng không xuất bản được tới khi bạn hiện lại.</li>
+                            </ul>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setDialog(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy} onClick={() => void setStatus(selected, "HIDDEN", "Đã ẩn địa điểm")}>Ẩn địa điểm</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialog === "unhide" && !!selected} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {dialog === "unhide" && selected && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Hiện lại {selected.name}?</DialogTitle>
+                                <DialogDescription>Địa điểm về Nháp, khách vẫn chưa thấy.</DialogDescription>
+                            </DialogHeader>
+                            <ul className="list-disc space-y-1 pl-5 text-sm">
+                                <li>Chủ {selected.ownerName ?? ""} sửa rồi <span className="font-medium">tự xuất bản lại</span>.</li>
+                            </ul>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setDialog(null)}>Huỷ</Button>
+                                <Button disabled={busy} onClick={() => void setStatus(selected, "DRAFT", "Đã đưa về bản nháp")}>Hiện lại về Nháp</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialog === "owner" && !!selected} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {dialog === "owner" && selected && (
+                        <form onSubmit={e => void saveOwner(e)} className="grid gap-4">
+                            <DialogHeader>
+                                <DialogTitle>Chuyển chủ {selected.name}?</DialogTitle>
+                                <DialogDescription>Đường dẫn và mã QR giữ nguyên.</DialogDescription>
+                            </DialogHeader>
+                            <dl className="grid grid-cols-[1fr_auto] gap-x-4 rounded-lg border px-4 py-3 text-sm">
+                                <dt className="text-muted-foreground">Chủ hiện tại</dt>
+                                <dd className="text-right font-medium">
+                                    {selected.ownerName ?? "—"}{owner?.status === "LOCKED" && <span className="text-destructive"> (bị khoá)</span>}
+                                </dd>
+                            </dl>
+                            <div className="grid gap-2">
+                                <Label htmlFor="own-new">Chủ mới</Label>
+                                <Select value={ownerId === "" ? "" : String(ownerId)} onValueChange={v => setOwnerId(v ? Number(v) : "")}>
+                                    <SelectTrigger id="own-new" className="w-full"><SelectValue placeholder="Chọn tài khoản đang hoạt động" /></SelectTrigger>
+                                    <SelectContent>
+                                        {users?.filter(u => u.status === "ACTIVE" && u.id !== selected.ownerId).map(u => (
+                                            <SelectItem key={u.id} value={String(u.id)}>{u.fullName}, {u.email}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <ul className="list-disc space-y-1 pl-5 text-sm">
+                                <li>Chủ mới sửa và xuất bản được ngay.</li>
+                                <li>Chủ cũ mất quyền với địa điểm này.</li>
+                            </ul>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setDialog(null)}>Huỷ</Button>
+                                <Button type="submit" disabled={!ownerId || busy}>Chuyển chủ</Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </Page>
     );
 }
 
@@ -442,10 +528,10 @@ export function AdminReview() {
 type UserFilter = "ALL" | UserStatus;
 const ROLE_LABEL = { VENUE_ADMIN: "Quản trị địa điểm", SYSTEM_ADMIN: "Quản trị hệ thống" } as const;
 
-function userBadge(u: UserDto) {
-    if (u.status === "PENDING") return <Badge tone="warn">Chờ duyệt</Badge>;
-    if (u.status === "LOCKED") return <Badge tone="danger" icon="lock">Bị khoá</Badge>;
-    return <Badge tone="ok">Hoạt động</Badge>;
+function UserBadge({ status }: { status: UserStatus }) {
+    if (status === "PENDING") return <Badge className="gap-1.5 bg-warning/10 text-warning"><span className={`${DOT} bg-warning`} aria-hidden="true" />Chờ duyệt</Badge>;
+    if (status === "LOCKED") return <Badge className="bg-destructive/10 text-destructive"><Lock />Bị khoá</Badge>;
+    return <Badge className="gap-1.5 bg-success/10 text-success"><span className={`${DOT} bg-success`} aria-hidden="true" />Hoạt động</Badge>;
 }
 
 export function AdminUsers() {
@@ -456,7 +542,6 @@ export function AdminUsers() {
     const [filter, setFilter] = useState<UserFilter>("ALL");
     const [query, setQuery] = useState("");
     const [dialog, setDialog] = useState<{ kind: "reject" | "lock"; user: UserDto } | null>(null);
-    const closeDialog = useCallback(() => setDialog(null), []);
 
     const all = users ?? [];
     const q = query.trim().toLowerCase();
@@ -480,115 +565,154 @@ export function AdminUsers() {
         ["ALL", "Tất cả", users ? all.length : null], ["PENDING", "Chờ duyệt", users ? all.filter(u => u.status === "PENDING").length : null],
         ["ACTIVE", "Hoạt động", users ? all.filter(u => u.status === "ACTIVE").length : null], ["LOCKED", "Bị khoá", users ? all.filter(u => u.status === "LOCKED").length : null]
     ];
-    const head = (
-        <colgroup><col /><col style={{ width: 160 }} /><col style={{ width: 240 }} /><col style={{ width: 220 }} /><col style={{ width: 200 }} /></colgroup>
-    );
-    const thead = (
-        <thead><tr><th scope="col">Người dùng</th><th scope="col">Vai trò</th><th scope="col">Trạng thái</th><th scope="col">Địa điểm</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead>
-    );
+    const dialogOwned = dialog ? ownedBy(dialog.user) : [];
+    const close = (open: boolean) => !open && setDialog(null);
 
     return (
-        <>
-            <Title>Người dùng</Title>
-            <div className="ka-toolbar">
-                <Chips label="Lọc theo trạng thái" items={chips} value={filter} onChange={setFilter} />
-                <label className="k-input ka-search">
-                    <Lc name="search" size={16} color="var(--muted)" />
-                    <input type="search" value={query} onChange={e => setQuery(e.target.value)} aria-label="Tìm tên hoặc email" placeholder="Tìm tên hoặc email" />
-                </label>
+        <Page>
+            <div className="flex items-center gap-2">
+                <div className="relative w-full max-w-sm">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Tìm tên hoặc email" aria-label="Tìm tên hoặc email" className="pl-9" />
+                </div>
+                <FilterGroup label="Lọc theo trạng thái" items={chips} value={filter} onChange={setFilter} />
             </div>
-            <section className="k-card ka-flush ka-scroll" aria-label="Danh sách người dùng" aria-busy={!users && !error ? true : undefined}>
-                {!users && !error && <span className="sr-only" role="status">Đang tải danh sách người dùng</span>}
-                <table className="k-tbl">
-                    {head}{thead}
-                    {users && !error && (
-                        <tbody>
-                            {list.map(u => {
+
+            {error ? <ErrorState error={error} onRetry={reload} /> : (
+                <div className="overflow-hidden rounded-xl border">
+                    <Table aria-label="Danh sách người dùng" aria-busy={!users || undefined}>
+                        <TableHeader className="bg-muted/50">
+                            <TableRow>
+                                <TableHead className="pl-4">Người dùng</TableHead>
+                                <TableHead>Vai trò</TableHead>
+                                <TableHead>Trạng thái</TableHead>
+                                <TableHead>Địa điểm</TableHead>
+                                <TableHead className="w-0"><span className="sr-only">Thao tác</span></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {!users ? [0, 1, 2, 3, 4].map(i => (
+                                <TableRow key={i}>
+                                    <TableCell className="pl-4"><Skeleton className="h-4 w-36" /><Skeleton className="mt-2 h-3 w-44" /></TableCell>
+                                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                                    <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                                    <TableCell className="pr-4"><Skeleton className="ml-auto h-8 w-24" /></TableCell>
+                                </TableRow>
+                            )) : list.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                        {q ? `Không có người dùng khớp “${query.trim()}”.` : "Không có người dùng."}
+                                        {(q || filter !== "ALL") && (
+                                            <Button variant="link" size="sm" className="ml-1 h-auto px-0" onClick={() => { setQuery(""); setFilter("ALL"); }}>Xoá tìm kiếm</Button>
+                                        )}
+                                    </TableCell>
+                                </TableRow>
+                            ) : list.map(u => {
                                 const owned = ownedBy(u);
                                 const isMe = u.id === me?.id;
                                 const lastAdmin = u.role === "SYSTEM_ADMIN" && u.status === "ACTIVE" && activeAdmins <= 1;
                                 const wait = u.status === "PENDING" ? since(u.createdAt) : null;
+                                const lockReason = isMe ? "Không tự khoá tài khoản của mình" : lastAdmin ? "Không khoá được quản trị hệ thống cuối cùng" : undefined;
                                 return (
-                                    <tr key={u.id}>
-                                        <td><span className="k-b">{u.fullName}{isMe ? " (bạn)" : ""}</span><span className="k12 k-m ka-block">{u.email}</span></td>
-                                        <td>{ROLE_LABEL[u.role]}</td>
-                                        <td>
-                                            {userBadge(u)}
-                                            {u.status === "PENDING" && u.createdAt && <span className="k12 k-m ka-sub">{wait?.late ? `chờ ${wait.text}` : `đăng ký ${dateTime(u.createdAt)}`}</span>}
-                                            {lastAdmin && <span className="k12 k-m ka-sub">Quản trị cuối cùng</span>}
-                                        </td>
-                                        <td>
-                                            {owned.length ? owned.map(v => v.name).join(", ") : <span className="k-m">—</span>}
-                                            {u.status === "LOCKED" && owned.length > 0 && <Link to="/admin/review" className="k12 k-b ka-block" style={{ marginTop: 4, textDecoration: "underline", textUnderlineOffset: 2 }}>Chuyển chủ ở Kiểm duyệt</Link>}
-                                        </td>
-                                        <td>
-                                            <div className="ka-acts">
+                                    <TableRow key={u.id}>
+                                        <TableCell className="pl-4">
+                                            <p className="font-medium">{u.fullName}{isMe ? " (bạn)" : ""}</p>
+                                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                                        </TableCell>
+                                        <TableCell>{ROLE_LABEL[u.role]}</TableCell>
+                                        <TableCell>
+                                            <UserBadge status={u.status} />
+                                            {u.status === "PENDING" && u.createdAt && (
+                                                <p className={`mt-1 text-xs ${wait?.late ? "text-warning" : "text-muted-foreground"}`}>{wait?.late ? `Chờ ${wait.text}` : `Đăng ký ${dateTime(u.createdAt)}`}</p>
+                                            )}
+                                            {lastAdmin && <p className="mt-1 text-xs text-muted-foreground">Quản trị cuối cùng</p>}
+                                        </TableCell>
+                                        <TableCell className="whitespace-normal">
+                                            {owned.length ? owned.map(v => v.name).join(", ") : <span className="text-muted-foreground">—</span>}
+                                            {u.status === "LOCKED" && owned.length > 0 && (
+                                                <Link to="/admin/review" className="mt-1 block text-xs font-medium text-primary underline-offset-4 hover:underline">Chuyển chủ ở Kiểm duyệt</Link>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="pr-4">
+                                            <div className="flex items-center justify-end gap-1">
                                                 {u.status === "PENDING" ? (
                                                     <>
-                                                        <Button small busy={busy} onClick={() => void setStatus(u, "ACTIVE", `Đã duyệt ${u.email}`)}>Duyệt</Button>
-                                                        <Button small variant="ghost" onClick={() => setDialog({ kind: "reject", user: u })}>Từ chối…</Button>
+                                                        <Button variant="outline" size="sm" disabled={busy} onClick={() => void setStatus(u, "ACTIVE", `Đã duyệt ${u.email}`)}>Duyệt</Button>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="size-8" aria-label={`Thao tác khác với ${u.email}`}><MoreHorizontal /></Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-44">
+                                                                <DropdownMenuItem variant="destructive" onSelect={() => setDialog({ kind: "reject", user: u })}><X />Từ chối đơn…</DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                     </>
-                                                ) : u.status === "ACTIVE" ? (
-                                                    <Button small variant="danger" disabled={isMe || lastAdmin} onClick={() => setDialog({ kind: "lock", user: u })}
-                                                        title={isMe ? "Không tự khoá tài khoản của mình" : lastAdmin ? "Không khoá được quản trị hệ thống cuối cùng" : undefined}>Khoá…</Button>
-                                                ) : <Button small busy={busy} onClick={() => void unlock(u)}>Mở khoá…</Button>}
+                                                ) : (
+                                                    <>
+                                                        {u.status === "ACTIVE" ? (
+                                                            <WithReason reason={lockReason}>
+                                                                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={!!lockReason}
+                                                                    onClick={() => setDialog({ kind: "lock", user: u })}><Lock />Khoá…</Button>
+                                                            </WithReason>
+                                                        ) : <Button variant="outline" size="sm" disabled={busy} onClick={() => void unlock(u)}>Mở khoá…</Button>}
+                                                        <span className="size-8 shrink-0" aria-hidden="true" />
+                                                    </>
+                                                )}
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 );
                             })}
-                        </tbody>
-                    )}
-                    {!users && !error && (
-                        <tbody>
-                            {[[132, 176, 80, 64, 104], [104, 148, 80, 64, 104], [148, 132, 84, 168, 64], [96, 120, 84, 136, 64], [112, 140, 96, 64, 64]].map((w, i) => (
-                                <tr key={i}>
-                                    <td><div className="k-stack" style={{ gap: 8 }}><Skel w={w[0]!} h={16} /><Skel w={w[1]!} /></div></td>
-                                    <td><Skel w={112} /></td><td><Skel w={w[2]!} /></td><td><Skel w={w[3]!} /></td>
-                                    <td><div className="ka-acts"><Skel w={w[4]!} h={32} /></div></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    )}
-                </table>
-                {error ? (
-                    <div className="ka-empty is-big">
-                        <h2 role="alert" className="k16 k-danger k-line"><Lc name="circle-alert" size={16} color="var(--danger)" />Không tải được danh sách người dùng</h2>
-                        <p className="k14 k-m">{(error as Error)?.message || "Lỗi máy chủ."} Dữ liệu không thay đổi.</p>
-                        <div style={{ marginTop: 8 }}><Button icon="refresh-cw" onClick={reload}>Thử lại</Button></div>
-                    </div>
-                ) : users && !list.length && (
-                    <div className="ka-empty is-big">
-                        <h2 className="k16">{q ? `Không có người dùng khớp “${query.trim()}”` : "Không có người dùng"}</h2>
-                        {q && <p className="k14 k-m">Thử tên khác hoặc email đầy đủ.</p>}
-                        {(q || filter !== "ALL") && <div style={{ marginTop: 8 }}><Button onClick={() => { setQuery(""); setFilter("ALL"); }}>Xoá tìm kiếm</Button></div>}
-                    </div>
-                )}
-            </section>
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
 
-            {dialog?.kind === "reject" && (
-                <Dialog title="Từ chối đơn đăng ký?" onClose={closeDialog}
-                    actions={<><Button onClick={closeDialog}>Huỷ</Button><DangerButton busy={busy} onClick={() => void setStatus(dialog.user, "LOCKED", `Đã từ chối ${dialog.user.email}`)}>Từ chối đơn</DangerButton></>}>
-                    <Who user={dialog.user} />
-                    <ul className="ka-list k14">
-                        <li>Tài khoản chuyển sang <span className="k-b">Bị khoá</span>, không đăng nhập được.</li>
-                        <li>Mở khoá được sau ở mục Bị khoá nếu cần.</li>
-                    </ul>
-                </Dialog>
-            )}
-            {dialog?.kind === "lock" && (
-                <Dialog title="Khoá tài khoản?" onClose={closeDialog}
-                    actions={<><Button onClick={closeDialog}>Huỷ</Button><DangerButton busy={busy} onClick={() => void setStatus(dialog.user, "LOCKED", `Đã khoá ${dialog.user.email}`)}>Khoá tài khoản</DangerButton></>}>
-                    <Who user={dialog.user} extra={ROLE_LABEL[dialog.user.role].toLowerCase()} />
-                    <ul className="ka-list k14">
-                        <li>Không đăng nhập được cho tới khi được mở khoá.</li>
-                        {ownedBy(dialog.user).length > 0
-                            ? <li><span className="k-b">{ownedBy(dialog.user).length} địa điểm</span> ({ownedBy(dialog.user).map(v => v.name).join(", ")}) giữ nguyên trạng thái; xử lý ở Kiểm duyệt.</li>
-                            : <li>Người này chưa sở hữu địa điểm nào.</li>}
-                    </ul>
-                </Dialog>
-            )}
-        </>
+            <Dialog open={dialog?.kind === "reject"} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {dialog?.kind === "reject" && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Từ chối đơn đăng ký?</DialogTitle>
+                                <DialogDescription>Mở khoá được sau ở mục Bị khoá nếu cần.</DialogDescription>
+                            </DialogHeader>
+                            <Who user={dialog.user} />
+                            <ul className="list-disc space-y-1 pl-5 text-sm">
+                                <li>Tài khoản chuyển sang <span className="font-medium">Bị khoá</span>, không đăng nhập được.</li>
+                            </ul>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setDialog(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy} onClick={() => void setStatus(dialog.user, "LOCKED", `Đã từ chối ${dialog.user.email}`)}>Từ chối đơn</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialog?.kind === "lock"} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {dialog?.kind === "lock" && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Khoá tài khoản?</DialogTitle>
+                                <DialogDescription>Không đăng nhập được cho tới khi được mở khoá.</DialogDescription>
+                            </DialogHeader>
+                            <Who user={dialog.user} extra={ROLE_LABEL[dialog.user.role].toLowerCase()} />
+                            <ul className="list-disc space-y-1 pl-5 text-sm">
+                                {dialogOwned.length > 0
+                                    ? <li><span className="font-medium">{dialogOwned.length} địa điểm</span> ({dialogOwned.map(v => v.name).join(", ")}) giữ nguyên trạng thái; xử lý ở Kiểm duyệt.</li>
+                                    : <li>Người này chưa sở hữu địa điểm nào.</li>}
+                            </ul>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setDialog(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy} onClick={() => void setStatus(dialog.user, "LOCKED", `Đã khoá ${dialog.user.email}`)}>Khoá tài khoản</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </Page>
     );
 }
 
@@ -620,6 +744,8 @@ export function AdminTemplates() {
     const code = form?.code?.trim() ?? "";
     const duplicate = code ? (templates ?? []).find(t => t.kind === formKind && t.code === code && t.id !== form?.id) : undefined;
     const canSave = !!form && !!form.name?.trim() && !!code && !duplicate;
+    const color = form?.color ?? DEFAULT_COLOR;
+    const colorChoices = color && !COLORS.includes(color.toLowerCase()) ? [...COLORS, color] : COLORS;
 
     const add = () => {
         setTab("types");
@@ -647,115 +773,174 @@ export function AdminTemplates() {
     };
 
     return (
-        <>
-            <HeaderActions><Button icon="plus" onClick={add}>Thêm mẫu</Button></HeaderActions>
-            <Title>Danh mục mẫu</Title>
-            <div role="tablist" aria-label="Danh mục mẫu" className="k-tabs">
-                <button type="button" role="tab" className="k-tab" aria-selected={tab === "types"} onClick={() => setTab("types")}>Loại địa điểm mẫu</button>
-                <button type="button" role="tab" className="k-tab" aria-selected={tab === "workflows"} onClick={() => setTab("workflows")}>Quy trình mẫu <span className="k12 k-m">Chưa khả dụng</span></button>
-            </div>
-            {tab === "workflows" ? (
-                <section className="k-card ka-empty">
-                    <h2 className="k16">Quy trình mẫu chưa khả dụng</h2>
-                    <p className="k12 k-m">Chưa có API lưu quy trình mẫu.</p>
-                </section>
-            ) : error ? <LoadError error={error} onRetry={load} /> : (
-                <>
-                    <Chips label="Loại hình" value={kind} onChange={k => { setKind(k); setForm(null); }}
-                        items={KINDS.map(k => [k, KIND_TAB[k] ?? k, templates ? templates.filter(t => t.kind === k).length : null] as [string, string, number | null])} />
-                    <div className="ka-tgrid">
-                        <section className="k-card ka-flush" aria-labelledby="set-title" aria-busy={!templates || undefined}>
-                            <div className="ka-hd"><h2 id="set-title" className="k16">{KIND_TAB[kind]}</h2>{templates && <span className="k14 k-m">{list.length} mẫu</span>}</div>
-                            <table className="k-tbl">
-                                <thead><tr><th scope="col">Mẫu</th><th scope="col">Mã</th><th scope="col">Nhóm</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead>
-                                <tbody>
-                                    {!templates ? [140, 120, 160, 100, 130].map((w, i) => (
-                                        <tr key={i}><td><Skel w={w} /></td><td><Skel w={64} /></td><td><Skel w={72} /></td><td><div className="ka-acts"><Skel w={48} h={32} /></div></td></tr>
-                                    )) : list.map(t => (
-                                        <tr key={t.id} aria-selected={form?.id === t.id || undefined}>
-                                            <td><span className="k-line"><span className="ka-swatch" style={{ background: t.color }}><i className={`bi ${t.icon ?? "bi-geo-alt"}`} aria-hidden="true" /></span><span className="k-b">{t.name}</span></span></td>
-                                            <td className="k-m">{t.code}</td>
-                                            <td>{groupLabel(t.groupName)}</td>
-                                            <td><div className="ka-acts"><Button small variant="ghost" onClick={() => setForm({ ...t })}>Sửa</Button></div></td>
-                                        </tr>
-                                    ))}
-                                    {templates && !list.length && <tr><td colSpan={4} className="k-m">Chưa có mẫu cho loại hình này.</td></tr>}
-                                </tbody>
-                            </table>
-                        </section>
-                        {form ? (
-                            <section className="k-card ka-flush" aria-labelledby="ed-title">
-                                <div className="ka-edhead">
-                                    <h2 id="ed-title" className="k16">{form.id ? form.name || "Mẫu" : "Mẫu mới"}</h2>
-                                    <p className="k12 k-m">{KIND_TAB[formKind] ?? formKind}</p>
-                                </div>
-                                <form id="ka-tpl" onSubmit={save} className="k-stack ka-edform">
-                                    <div className="k-field">
-                                        <label htmlFor="tp-name">Tên</label>
-                                        <input id="tp-name" className="k-input" type="text" required value={form.name ?? ""} onChange={e => setForm({ ...form, name: e.target.value })} />
+        <Page actions={<Button onClick={add}><Plus />Thêm mẫu</Button>}>
+            <Tabs value={tab} onValueChange={v => setTab(v as "types" | "workflows")} className="gap-6">
+                <TabsList>
+                    <TabsTrigger value="types">Loại địa điểm mẫu</TabsTrigger>
+                    <TabsTrigger value="workflows">Quy trình mẫu</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="workflows" className="flex flex-col gap-6">
+                    <Alert>
+                        <Clock />
+                        <AlertTitle>Chưa khả dụng</AlertTitle>
+                        <AlertDescription>Chưa có API lưu quy trình mẫu.</AlertDescription>
+                    </Alert>
+                    <EmptyState icon={<Workflow />} title="Chưa có quy trình mẫu" />
+                </TabsContent>
+
+                <TabsContent value="types" className="flex flex-col gap-6">
+                    {error ? <ErrorState error={error} onRetry={load} /> : (
+                        <>
+                            <div className="flex items-center gap-2">
+                                <FilterGroup label="Loại hình" value={kind} onChange={k => { setKind(k); setForm(null); }}
+                                    items={KINDS.map(k => [k, KIND_TAB[k] ?? k, templates ? templates.filter(t => t.kind === k).length : null] as [string, string, number | null])} />
+                            </div>
+                            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+                                <Section title={KIND_TAB[kind]} flush actions={templates ? <span className="text-sm text-muted-foreground tabular-nums">{list.length} mẫu</span> : <Skeleton className="h-4 w-12" />}>
+                                    <Table aria-busy={!templates || undefined}>
+                                        <TableHeader className="bg-muted/50">
+                                            <TableRow>
+                                                <TableHead className="pl-6">Mẫu</TableHead>
+                                                <TableHead>Mã</TableHead>
+                                                <TableHead>Nhóm</TableHead>
+                                                <TableHead className="w-0"><span className="sr-only">Thao tác</span></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {!templates ? [0, 1, 2, 3, 4].map(i => (
+                                                <TableRow key={i}>
+                                                    <TableCell className="pl-6"><div className="flex items-center gap-3"><Skeleton className="size-7 rounded-md" /><Skeleton className="h-4 w-32" /></div></TableCell>
+                                                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                                                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                                                    <TableCell className="pr-6"><Skeleton className="ml-auto h-8 w-12" /></TableCell>
+                                                </TableRow>
+                                            )) : list.length === 0 ? (
+                                                <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Chưa có mẫu cho loại hình này.</TableCell></TableRow>
+                                            ) : list.map(t => (
+                                                <TableRow key={t.id} data-state={form?.id === t.id ? "selected" : undefined}>
+                                                    <TableCell className="pl-6">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="flex size-7 shrink-0 items-center justify-center rounded-md text-sm text-white" style={{ background: t.color }}>
+                                                                <i className={`bi ${t.icon ?? "bi-geo-alt"}`} aria-hidden="true" />
+                                                            </span>
+                                                            <span className="font-medium">{t.name}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">{t.code}</TableCell>
+                                                    <TableCell>{groupLabel(t.groupName)}</TableCell>
+                                                    <TableCell className="pr-6 text-right"><Button variant="outline" size="sm" onClick={() => setForm({ ...t })}>Sửa</Button></TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </Section>
+
+                                {form ? (
+                                    <Section flush title={form.id ? form.name || "Mẫu" : "Mẫu mới"} description={KIND_TAB[formKind] ?? formKind}
+                                        actions={<Button variant="ghost" size="icon" className="size-8" aria-label="Đóng" onClick={() => setForm(null)}><X /></Button>}>
+                                        <form onSubmit={e => void save(e)}>
+                                            <div className="grid gap-4 p-6">
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="tp-name">Tên</Label>
+                                                    <Input id="tp-name" required value={form.name ?? ""} onChange={e => setForm({ ...form, name: e.target.value })} />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="tp-code">Mã</Label>
+                                                    <Input id="tp-code" required value={form.code ?? ""} aria-invalid={duplicate ? true : undefined} aria-describedby="tp-code-h"
+                                                        onChange={e => setForm({ ...form, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })} />
+                                                    {duplicate
+                                                        ? <p id="tp-code-h" role="alert" className="flex items-center gap-1 text-xs font-medium text-destructive"><AlertCircle className="size-3.5" />Mã “{code}” đã dùng cho {duplicate.name}</p>
+                                                        : code ? <p id="tp-code-h" className="flex items-center gap-1 text-xs text-success"><Check className="size-3.5" />Mã chưa trùng</p>
+                                                            : <p id="tp-code-h" className="text-xs text-muted-foreground">Chữ thường, số, dấu gạch dưới</p>}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="tp-grp">Nhóm</Label>
+                                                        <Select value={form.groupName ?? ""} onValueChange={v => setForm({ ...form, groupName: v })}>
+                                                            <SelectTrigger id="tp-grp" className="w-full"><SelectValue /></SelectTrigger>
+                                                            <SelectContent>{GROUPS.map(g => <SelectItem key={g} value={g}>{groupLabel(g)}</SelectItem>)}</SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="tp-kind">Loại hình</Label>
+                                                        <Select value={formKind} onValueChange={v => setForm({ ...form, kind: v })}>
+                                                            <SelectTrigger id="tp-kind" className="w-full"><SelectValue /></SelectTrigger>
+                                                            <SelectContent>{KINDS.map(k => <SelectItem key={k} value={k}>{KIND_TAB[k]}</SelectItem>)}</SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label>Màu mặc định</Label>
+                                                    <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Màu mặc định">
+                                                        {colorChoices.map(c => (
+                                                            <button key={c} type="button" role="radio" aria-checked={color.toLowerCase() === c.toLowerCase()} aria-label={c}
+                                                                className="size-6 rounded-md ring-offset-2 ring-offset-background aria-checked:ring-2 aria-checked:ring-ring" style={{ background: c }}
+                                                                onClick={() => setForm({ ...form, color: c })} />
+                                                        ))}
+                                                        <input type="color" aria-label="Màu khác" value={color} onChange={e => setForm({ ...form, color: e.target.value })}
+                                                            className="h-6 w-8 cursor-pointer rounded-md border bg-transparent p-0" />
+                                                    </div>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label>Biểu tượng</Label>
+                                                    <div className="grid grid-cols-8 gap-1" role="radiogroup" aria-label="Biểu tượng">
+                                                        {ICONS.map(icon => (
+                                                            <button key={icon} type="button" role="radio" aria-checked={(form.icon ?? "bi-geo-alt") === icon} aria-label={icon}
+                                                                className="flex size-8 items-center justify-center rounded-md border text-muted-foreground hover:bg-muted aria-checked:border-primary aria-checked:bg-primary/10 aria-checked:text-primary"
+                                                                onClick={() => setForm({ ...form, icon })}>
+                                                                <i className={`bi ${icon}`} aria-hidden="true" />
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground">Địa điểm đã tạo giữ bản sao của mình, không bị sửa.</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 border-t px-6 py-4">
+                                                {form.id && (
+                                                    <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void remove()}><Trash2 />Xoá…</Button>
+                                                )}
+                                                <div className="ml-auto">
+                                                    <WithReason reason={duplicate ? "Sửa mã trùng trước khi lưu" : undefined}>
+                                                        <Button type="submit" size="sm" disabled={!canSave || busy}>Lưu mẫu</Button>
+                                                    </WithReason>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </Section>
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2 rounded-xl border bg-card px-6 py-12 text-center">
+                                        <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"><MousePointer2 className="size-5" /></span>
+                                        <p className="text-sm font-medium">Chọn một mẫu để sửa</p>
+                                        <p className="text-sm text-muted-foreground">Mẫu Chung được thêm cho mọi loại hình.</p>
                                     </div>
-                                    <div className="k-field">
-                                        <label htmlFor="tp-code">Mã</label>
-                                        <input id="tp-code" className="k-input" type="text" required value={form.code ?? ""} aria-invalid={duplicate ? true : undefined} aria-describedby="tp-code-h"
-                                            onChange={e => setForm({ ...form, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })} />
-                                        {duplicate
-                                            ? <span id="tp-code-h" role="alert" className="k-line k12 k-b k-danger" style={{ gap: 4 }}><Lc name="circle-alert" size={14} />Mã “{code}” đã dùng cho {duplicate.name}</span>
-                                            : code ? <span id="tp-code-h" className="k-line k12 k-ok" style={{ gap: 4 }}><Lc name="check" size={14} />Mã chưa trùng</span>
-                                                : <span id="tp-code-h" className="k-hint">Chữ thường, số, dấu gạch dưới</span>}
-                                    </div>
-                                    <div className="k-grid2">
-                                        <div className="k-field">
-                                            <label htmlFor="tp-grp">Nhóm</label>
-                                            <select id="tp-grp" className="k-input" value={form.groupName ?? ""} onChange={e => setForm({ ...form, groupName: e.target.value })}>{GROUPS.map(g => <option key={g} value={g}>{groupLabel(g)}</option>)}</select>
-                                        </div>
-                                        <div className="k-field">
-                                            <label htmlFor="tp-kind">Loại hình</label>
-                                            <select id="tp-kind" className="k-input" value={formKind} onChange={e => setForm({ ...form, kind: e.target.value })}>{KINDS.map(k => <option key={k} value={k}>{KIND_TAB[k]}</option>)}</select>
-                                        </div>
-                                    </div>
-                                    <ColorPicker label="Màu mặc định" value={form.color ?? DEFAULT_COLOR} onChange={c => setForm({ ...form, color: c })} />
-                                    <IconPicker value={form.icon ?? "bi-geo-alt"} onChange={icon => setForm({ ...form, icon })} />
-                                    <p className="k12 k-m">Địa điểm đã tạo giữ bản sao của mình; không bị sửa.</p>
-                                </form>
-                                <div className="ka-edfoot">
-                                    {form.id && <Button variant="danger" onClick={() => void remove()}>Xoá…</Button>}
-                                    <div className="end">
-                                        <Button variant="ghost" onClick={() => setForm(null)}>Đóng</Button>
-                                        <button type="submit" form="ka-tpl" className="k-btn p" disabled={!canSave || busy} aria-busy={busy || undefined}
-                                            title={duplicate ? "Sửa mã trùng trước khi lưu" : undefined}>
-                                            {busy && <span className="cb-spinner is-inline" aria-hidden="true" />}Lưu mẫu
-                                        </button>
-                                    </div>
-                                </div>
-                            </section>
-                        ) : (
-                            <section className="k-card">
-                                <h2 className="k16">Chọn một mẫu để sửa</h2>
-                                <p className="k14 k-m">Mẫu Chung (nhà vệ sinh, thang máy, lối ra…) được thêm cho mọi loại hình.</p>
-                            </section>
-                        )}
-                    </div>
-                </>
-            )}
-        </>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </TabsContent>
+            </Tabs>
+        </Page>
     );
 }
 
 // ---------------------------------------------------------------- cấu hình (chỉ đọc) & nhật ký (chưa có API)
 type CfgRow = [string, string, string];
-function CfgSection({ id, title, rows, unavailable }: { id: string; title: string; rows: CfgRow[]; unavailable?: boolean }) {
+function CfgSection({ title, rows, unavailable }: { title: string; rows: CfgRow[]; unavailable?: boolean }) {
     return (
-        <section className="k-card" aria-labelledby={id}>
-            <div className="k-line"><h2 id={id} className="k16">{title}</h2>{unavailable && <span style={{ marginLeft: "auto" }}><Badge>Chưa khả dụng</Badge></span>}</div>
-            <dl className="ka-cfg">
+        <Section title={title} actions={unavailable ? <NotAvailable /> : undefined}>
+            <dl className="divide-y">
                 {rows.map(([k, d, v]) => (
-                    <div key={k} className="k-row">
-                        <dt><span className="k14 k-b ka-block">{k}</span><span className="k12 k-m">{d}</span></dt>
-                        <dd className={`k14${unavailable ? " k-m" : ""}`}>{v}</dd>
+                    <div key={k} className="flex items-start justify-between gap-6 py-3 first:pt-0 last:pb-0">
+                        <dt className="min-w-0">
+                            <p className="text-sm font-medium">{k}</p>
+                            <p className="text-xs text-muted-foreground">{d}</p>
+                        </dt>
+                        <dd className={`shrink-0 text-right text-sm ${unavailable ? "text-muted-foreground" : ""}`}>{v}</dd>
                     </div>
                 ))}
             </dl>
-        </section>
+        </Section>
     );
 }
 
@@ -763,71 +948,83 @@ export function AdminSettings() {
     const apiBase = import.meta.env.VITE_API_BASE_URL || "Cùng địa chỉ website (/api)";
     const host = window.location.host;
     return (
-        <>
-            <HeaderActions><Button variant="primary" disabled title="Chưa có API lưu cấu hình">Lưu cấu hình</Button></HeaderActions>
-            <Title after={<><Badge icon="lock">Chỉ đọc</Badge><span className="k12 k-m" style={{ marginLeft: "auto" }}>Chưa có API lưu</span></>}>Cấu hình hệ thống</Title>
-            <div className="ka-cfg-cols">
-                <div className="k-stack" style={{ gap: 24 }}>
-                    <CfgSection id="s1" title="Tài khoản và đăng nhập" rows={[
-                        ["Đăng ký quản trị địa điểm", "Tài khoản mới ở trạng thái Chờ duyệt.", "Mở, duyệt tay"],
-                        ["Khoá đăng nhập tạm", "Tính theo địa chỉ IP, tách khỏi khoá tài khoản.", "5 lần sai / 15 phút"],
-                        ["Hạn phiên đăng nhập", "Hết hạn thì phải đăng nhập lại.", "8 giờ"],
-                        ["Quản trị hệ thống đầu tiên", "Tạo từ biến môi trường khi chưa có người dùng.", "ADMIN_EMAIL"]
-                    ]} />
-                    <CfgSection id="s2" title="Dữ liệu địa điểm" rows={[
-                        ["Tệp mặt bằng", "Gửi lên dạng ảnh hoặc SVG.", "≤ 8 MB, SVG, PNG, JPG"],
-                        ["Địa chỉ API", "Frontend gọi backend qua địa chỉ này.", apiBase]
-                    ]} />
-                    <CfgSection id="s5" title="Chỉ đường bằng camera" unavailable rows={[["Cho phép chủ địa điểm bật", "Giai đoạn 2, chưa có cấu hình.", "Tắt"]]} />
-                </div>
-                <div className="k-stack" style={{ gap: 24 }}>
-                    <CfgSection id="s3" title="Chỉ đường" rows={[
-                        ["Tốc độ đi bộ", "Dùng cho thời gian ước tính.", "1,2 m/s"],
-                        ["Phạt chuyển tầng", "Tránh đổi tầng không cần thiết.", "30 m"],
-                        ["Bán kính nhập lối đi", "Điểm xa lối đi hơn mức này coi như không tới được.", "60 m"],
-                        ["Bán kính nhắc mốc", "Mốc gần lượt rẽ được nêu trong chỉ dẫn.", "14 m"]
-                    ]} />
-                    <CfgSection id="s4" title="Bản đồ và đường dẫn" rows={[
-                        ["Bản đồ nền ngoài trời", "Dùng khi đặt vị trí địa điểm.", "OpenStreetMap (CARTO)"],
-                        ["Đường dẫn bản đồ", "Link khách mở từ trình duyệt.", `${host}/v/…`],
-                        ["Đường dẫn mã QR", "Đổi sẽ làm hỏng tem đã dán.", `${host}/q/…`]
-                    ]} />
-                    <CfgSection id="s6" title="Email thông báo" unavailable rows={[["Gửi email cho người dùng", "Hệ thống chưa gửi email.", "Tắt"]]} />
-                </div>
-            </div>
-        </>
+        <Page width="narrow" actions={<WithReason reason="Chưa có API lưu cấu hình"><Button disabled>Lưu cấu hình</Button></WithReason>}>
+            <Alert>
+                <Lock />
+                <AlertTitle>Chưa khả dụng</AlertTitle>
+                <AlertDescription>Chưa có API lưu cấu hình, các giá trị dưới đây chỉ để xem.</AlertDescription>
+            </Alert>
+            <CfgSection title="Tài khoản và đăng nhập" rows={[
+                ["Đăng ký quản trị địa điểm", "Tài khoản mới ở trạng thái Chờ duyệt.", "Mở, duyệt tay"],
+                ["Khoá đăng nhập tạm", "Tính theo địa chỉ IP, tách khỏi khoá tài khoản.", "5 lần sai / 15 phút"],
+                ["Hạn phiên đăng nhập", "Hết hạn thì phải đăng nhập lại.", "8 giờ"],
+                ["Quản trị hệ thống đầu tiên", "Tạo từ biến môi trường khi chưa có người dùng.", "ADMIN_EMAIL"]
+            ]} />
+            <CfgSection title="Dữ liệu địa điểm" rows={[
+                ["Tệp mặt bằng", "Gửi lên dạng ảnh hoặc SVG.", "≤ 8 MB, SVG, PNG, JPG"],
+                ["Địa chỉ API", "Frontend gọi backend qua địa chỉ này.", apiBase]
+            ]} />
+            <CfgSection title="Chỉ đường" rows={[
+                ["Tốc độ đi bộ", "Dùng cho thời gian ước tính.", "1,2 m/s"],
+                ["Phạt chuyển tầng", "Tránh đổi tầng không cần thiết.", "30 m"],
+                ["Bán kính nhập lối đi", "Điểm xa lối đi hơn mức này coi như không tới được.", "60 m"],
+                ["Bán kính nhắc mốc", "Mốc gần lượt rẽ được nêu trong chỉ dẫn.", "14 m"]
+            ]} />
+            <CfgSection title="Bản đồ và đường dẫn" rows={[
+                ["Bản đồ nền ngoài trời", "Dùng khi đặt vị trí địa điểm.", "OpenStreetMap (CARTO)"],
+                ["Đường dẫn bản đồ", "Link khách mở từ trình duyệt.", `${host}/v/…`],
+                ["Đường dẫn mã QR", "Đổi sẽ làm hỏng tem đã dán.", `${host}/q/…`]
+            ]} />
+            <CfgSection title="Chỉ đường bằng camera" unavailable rows={[["Cho phép chủ địa điểm bật", "Giai đoạn 2, chưa có cấu hình.", "Tắt"]]} />
+            <CfgSection title="Email thông báo" unavailable rows={[["Gửi email cho người dùng", "Hệ thống chưa gửi email.", "Tắt"]]} />
+        </Page>
     );
 }
 
 const LOG_NA = "Chưa có API nhật ký";
+const LOG_FILTERS: [string, string[]][] = [
+    ["Người", ["Mọi người", "Quản trị hệ thống", "Chủ địa điểm", "Hệ thống"]],
+    ["Đối tượng", ["Mọi đối tượng", "Địa điểm", "Tài khoản", "Mẫu", "Cấu hình"]],
+    ["Hành động", ["Mọi hành động", "Kiểm duyệt", "Bảo mật", "Dữ liệu"]],
+    ["Thời gian", ["7 ngày qua", "24 giờ qua", "30 ngày qua"]]
+];
+
 export function AdminLogs() {
-    const filters: [string, string, string[]][] = [
-        ["f-actor", "Người", ["Mọi người", "Quản trị hệ thống", "Chủ địa điểm", "Hệ thống"]],
-        ["f-object", "Đối tượng", ["Mọi đối tượng", "Địa điểm", "Tài khoản", "Mẫu", "Cấu hình"]],
-        ["f-action", "Hành động", ["Mọi hành động", "Kiểm duyệt", "Bảo mật", "Dữ liệu"]],
-        ["f-time", "Thời gian", ["7 ngày qua", "24 giờ qua", "30 ngày qua"]]
-    ];
     return (
-        <>
-            <HeaderActions><Button disabled title={LOG_NA}>Xuất CSV</Button></HeaderActions>
-            <Title after={<Badge>Chưa khả dụng</Badge>}>Nhật ký hệ thống</Title>
-            <section aria-label="Bộ lọc" className="ka-flt">
-                <div className="k-field"><label htmlFor="f-q">Tìm</label><input id="f-q" className="k-input" type="search" disabled placeholder="Email, đối tượng" title={LOG_NA} /></div>
-                {filters.map(([id, label, opts]) => (
-                    <div key={id} className="k-field"><label htmlFor={id}>{label}</label><select id={id} className="k-input" disabled title={LOG_NA}>{opts.map(o => <option key={o}>{o}</option>)}</select></div>
-                ))}
-            </section>
-            <section className="k-card ka-flush" aria-labelledby="ev-title">
-                <div className="ka-hd"><h2 id="ev-title" className="k16">Sự kiện</h2></div>
-                <table className="k-tbl">
-                    <colgroup><col style={{ width: 128 }} /><col style={{ width: 220 }} /><col style={{ width: 200 }} /><col style={{ width: 300 }} /><col /></colgroup>
-                    <thead><tr><th scope="col">Thời gian</th><th scope="col">Người</th><th scope="col">Hành động</th><th scope="col">Đối tượng</th><th scope="col">Chi tiết</th></tr></thead>
-                </table>
-                <div className="ka-empty is-big">
-                    <h3 className="k16">Chưa ghi nhật ký</h3>
-                    <p className="k14 k-m">Backend chưa lưu đăng nhập, duyệt tài khoản, xuất bản hay nhập dữ liệu.</p>
+        <Page actions={<WithReason reason={LOG_NA}><Button variant="outline" disabled><Download />Xuất CSV</Button></WithReason>}>
+            <Alert>
+                <Clock />
+                <AlertTitle>Chưa khả dụng</AlertTitle>
+                <AlertDescription>Backend chưa lưu đăng nhập, duyệt tài khoản, xuất bản hay nhập dữ liệu.</AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-full max-w-sm">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input type="search" disabled placeholder="Tìm email, đối tượng" aria-label="Tìm email, đối tượng" className="pl-9" />
                 </div>
-            </section>
-        </>
+                {LOG_FILTERS.map(([label, opts]) => (
+                    <Select key={label} disabled defaultValue={opts[0]}>
+                        <SelectTrigger aria-label={label}><SelectValue /></SelectTrigger>
+                        <SelectContent>{opts.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                    </Select>
+                ))}
+            </div>
+            <div className="overflow-hidden rounded-xl border">
+                <Table>
+                    <TableHeader className="bg-muted/50">
+                        <TableRow>
+                            <TableHead className="pl-4">Thời gian</TableHead>
+                            <TableHead>Người</TableHead>
+                            <TableHead>Hành động</TableHead>
+                            <TableHead>Đối tượng</TableHead>
+                            <TableHead className="pr-4">Chi tiết</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Chưa ghi nhật ký.</TableCell></TableRow>
+                    </TableBody>
+                </Table>
+            </div>
+        </Page>
     );
 }

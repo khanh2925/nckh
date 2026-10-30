@@ -2,7 +2,7 @@
    Mọi lớp có tiền tố wf- để không đụng Builder/Admin (.cb-*, .k-*, .cs-*).
    Cỡ chữ: 13 / 15 / 17 / 22 / 28 / 44. Bo góc: 4 (ô biển bản đồ) · 12 (nút, ô nhập) · 16 (thẻ, HUD) · 24 (bảng trượt) · 999 (chip).
    Chiều cao: 44 (nút icon, chip, công tắc) · 52 (nút chính/phụ, ô tìm, nút trên thanh bản đồ). Lề 16, khoảng cách 8 / 16 / 24.
-   Vàng (--accent) chỉ cho nút chính, tuyến, biển cửa đích. Than chì (--graphite) cho HUD và mục đang chọn. */
+   Xanh dương (--accent) cho nút chính, mục đang chọn, tuyến, vị trí của bạn. Màu đậm (--graphite) cho HUD chỉ hướng và lớp phủ. */
 
 /* ---------- khung màn ---------- */
 .wf-screen {
@@ -49,7 +49,7 @@ html.large-text .wf-screen { --fs: 1.3; --fs-b: 1.1; }
     display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; padding: 0; text-decoration: none;
 }
 .wf-ib.is-clear { background: transparent; }
-.wf-ib.is-on { background: var(--graphite); color: var(--surface); }
+.wf-ib.is-on { background: var(--accent); color: var(--accent-ink); }
 .wf-link { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; font-weight: 600; background: none; border: 0; padding: 0; cursor: pointer; }
 
 /* ---------- thanh nổi trên bản đồ ---------- */
@@ -69,7 +69,7 @@ html.large-text .wf-screen { --fs: 1.3; --fs-b: 1.1; }
     display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; padding: 0; text-decoration: none;
 }
 .wf-mbtn.is-sm { width: 44px; height: 44px; }
-.wf-mbtn.is-on { background: var(--graphite); color: var(--surface); }
+.wf-mbtn.is-on { background: var(--accent); color: var(--accent-ink); }
 .wf-chips { position: absolute; left: 0; right: 0; top: 76px; display: flex; gap: 8px; padding: 0 16px 8px; overflow-x: auto; z-index: 1001; scrollbar-width: none; }
 .wf-chips::-webkit-scrollbar { display: none; }
 .wf-chips.is-static { position: static; padding: 0; overflow-x: auto; }
@@ -79,16 +79,16 @@ html.large-text .wf-screen { --fs: 1.3; --fs-b: 1.1; }
 }
 .wf-chip.is-text { padding: 0 16px; }
 .wf-chip.is-flat { background: var(--surface-2); }
-.wf-chip.is-on, .wf-chip[aria-pressed="true"] { background: var(--graphite); color: var(--surface); }
+.wf-chip.is-on, .wf-chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .wf-chip-count { font-weight: 400; }
-.wf-chip.is-on .wf-chip-count, .wf-chip[aria-pressed="true"] .wf-chip-count { color: color-mix(in srgb, var(--surface) 72%, var(--graphite)); }
+.wf-chip.is-on .wf-chip-count, .wf-chip[aria-pressed="true"] .wf-chip-count { color: color-mix(in srgb, var(--accent-ink) 78%, var(--accent)); }
 .wf-chip:not(.is-on):not([aria-pressed="true"]) .wf-chip-count { color: var(--muted); }
 .wf-side { position: absolute; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 1001; top: 136px; }
 .wf-side.is-top { top: 84px; }
 .wf-side.is-bottom { top: auto; bottom: 40px; }
 .wf-seg { display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; background: var(--surface); max-height: 280px; overflow-y: auto; scrollbar-width: none; }
 .wf-seg button { width: 44px; height: 44px; flex-shrink: 0; border: 0; background: var(--surface); color: var(--ink); font-size: calc(17px * var(--fs-b)); font-weight: 600; cursor: pointer; padding: 0; }
-.wf-seg button[aria-pressed="true"] { background: var(--graphite); color: var(--surface); }
+.wf-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .wf-float-chip { position: absolute; left: 16px; z-index: 1001; max-width: calc(100% - 92px); }
 .wf-float-chip .wf-chip { max-width: 100%; }
 .wf-float-chip .wf-chip span { overflow: hidden; text-overflow: ellipsis; }
@@ -147,10 +147,10 @@ a.wf-row, button.wf-row { cursor: pointer; }
 /* bước, chấm tiến độ, thanh tiến độ */
 .wf-dots { display: flex; align-items: center; gap: 8px; }
 .wf-dots i { display: block; height: 8px; width: 8px; border-radius: 999px; background: var(--surface-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--graphite) 16%, transparent); flex-shrink: 0; }
-.wf-dots i.on { width: 24px; background: var(--graphite); box-shadow: none; }
+.wf-dots i.on { width: 24px; background: var(--accent); box-shadow: none; }
 .wf-dots b { display: block; flex: 1; height: 2px; background: var(--surface-2); min-width: 4px; }
 .wf-progress { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-.wf-progress > div { height: 100%; background: var(--graphite); transition: width .4s; }
+.wf-progress > div { height: 100%; background: var(--accent); transition: width .4s; }
 .wf-steps { list-style: none; margin: 0; padding: 0; }
 .wf-steps .wf-row { align-items: flex-start; }
 .wf-steps .wf-row > svg { margin-top: 2px; flex-shrink: 0; }
@@ -202,7 +202,7 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--graphite) 16%, transparent);
 }
 .wf-sw::after { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 999px; background: var(--surface); box-shadow: 0 1px 2px color-mix(in srgb, var(--graphite) 30%, transparent); transition: left .15s; }
-.wf-sw[aria-checked="true"] { background: var(--graphite); box-shadow: none; }
+.wf-sw[aria-checked="true"] { background: var(--accent); box-shadow: none; }
 .wf-sw[aria-checked="true"]::after { left: 23px; }
 .wf-opt {
     display: flex; align-items: center; gap: 16px; min-height: 44px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--surface-2);
@@ -210,7 +210,7 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
 }
 .wf-opt:last-child { border-bottom: 0; }
 .wf-radio { width: 22px; height: 22px; border-radius: 999px; box-sizing: border-box; border: 2px solid color-mix(in srgb, var(--graphite) 30%, transparent); flex-shrink: 0; }
-.wf-opt[aria-checked="true"] .wf-radio { border: 7px solid var(--graphite); }
+.wf-opt[aria-checked="true"] .wf-radio { border: 7px solid var(--accent); }
 
 /* lớp phủ, hộp thoại, menu đáy */
 .wf-scrim { position: absolute; inset: 0; z-index: 1003; background: color-mix(in srgb, var(--graphite) 45%, transparent); border: 0; padding: 0; cursor: default; }
@@ -270,7 +270,7 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
 }
 .wf-user-dot {
     position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box; border-radius: 999px;
-    background: var(--signal); border: 4px solid var(--graphite); box-shadow: 0 0 0 2px var(--surface);
+    background: var(--signal); border: 3px solid var(--surface); box-shadow: 0 1px 4px color-mix(in srgb, var(--graphite) 40%, transparent);
 }
 .wf-user-cone {
     position: absolute; inset: 0; border-radius: 50%;
@@ -282,7 +282,7 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
 /* dấu ngắm chọn vị trí */
 .wf-crosshair { position: absolute; z-index: 1000; left: 50%; top: 50%; width: 72px; height: 72px; margin: -36px 0 0 -36px; pointer-events: none; }
 .wf-crosshair::before { content: ""; position: absolute; inset: 0; border-radius: 999px; border: 2px dashed color-mix(in srgb, var(--graphite) 45%, transparent); background: color-mix(in srgb, var(--graphite) 8%, transparent); }
-.wf-crosshair span { position: absolute; left: 27px; top: 27px; width: 18px; height: 18px; box-sizing: border-box; border-radius: 999px; background: var(--signal); border: 4px solid var(--graphite); box-shadow: 0 0 0 2px var(--surface); }
+.wf-crosshair span { position: absolute; left: 27px; top: 27px; width: 18px; height: 18px; box-sizing: border-box; border-radius: 999px; background: var(--signal); border: 3px solid var(--surface); box-shadow: 0 1px 4px color-mix(in srgb, var(--graphite) 40%, transparent); }
 
 /* dải "Xem như khách" */
 .wf-banner { flex-shrink: 0; display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--graphite); color: var(--surface); }

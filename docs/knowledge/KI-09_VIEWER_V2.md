@@ -1,12 +1,13 @@
 # KI-09 · Viewer v2 (khách tham quan) — React + TypeScript
 
-Frontend v2 của khách tham quan, nối API v2. Giao diện theo bản thiết kế hướng **"Biển chỉ dẫn"** (bản 31, 2026-10-28):
-than chì `#23272D` + vàng tín hiệu `#FFC629`, một phông Familjen Grotesk, bản đồ phẳng tràn màn + thanh tìm kiếm nổi
-+ bảng trượt dưới. Builder và Admin: xem [KI-10](KI-10_BUILDER_ADMIN_V2.md) (dùng chung bảng màu).
+Frontend v2 của khách tham quan, nối API v2. Bố cục theo bản thiết kế 31 (bản đồ phẳng tràn màn + thanh tìm kiếm nổi
++ bảng trượt dưới); màu và phông **giống Builder/Admin** (theme shadcn, xem [KI-10](KI-10_BUILDER_ADMIN_V2.md)):
+chữ neutral-900 `#171717`, màu chủ đạo xanh dương `#155DFC`, một phông Inter.
 
 ## Bộ giao diện khách (client kit)
 
-- Token màu dùng chung: `src/design/tokens.css` (cả Viewer lẫn Builder). Vàng **chỉ làm nền**: nút chính, tuyến, biển số cửa đích.
+- Token màu của khách: `src/design/tokens.css` (cùng giá trị với theme Builder). Xanh dương cho nút chính, mục đang chọn,
+  tuyến, vị trí của bạn; màu đậm cho HUD chỉ hướng. Tên biến cũ giữ nguyên (`--graphite` = màu đậm, `--signal` = màu chủ đạo).
 - Lớp CSS: `src/styles/wayfind.css`, mọi lớp có tiền tố `wf-`. Cỡ chữ 13/15/17/22/28/44 (`wf-t13`…`wf-t44`), bo góc 4/12/16/24/999,
   chiều cao bấm 44/52, nút chính luôn ở đáy bảng trượt hoặc đáy màn. Chữ lớn (`html.large-text`) phóng cỡ chữ.
 - Thành phần: `viewer/components/ui.tsx` (Button, IconButton, Sheet, Row, Segmented, Toggle, Hud, Dots, ErrorScreen, NotYet…).
@@ -14,7 +15,8 @@ than chì `#23272D` + vàng tín hiệu `#FFC629`, một phông Familjen Grotesk
   địa điểm lưu trong CSDL (`type.icon = "bi-…"`).
 - Bản đồ (`FloorMap.tsx` + `viewer/mapTheme.ts` + `themePlanSvg` trong `lib/planSvg.ts`): mặt bằng tô theo vai trò màu, điểm là ô biển
   bo 4 px; nhìn xa chỉ hiện mốc định hướng (cửa ra, an ninh, thang máy, thông tin), gần hơn hiện thêm loại quan trọng và nhãn;
-  tuyến vàng viền than chì; vị trí khách = chấm vàng viền than chì + quầng sai số + nón hướng nhìn. Không nghiêng 3D.
+  tuyến xanh dương viền xanh đậm; vị trí khách = chấm xanh viền trắng + quầng sai số + nón hướng nhìn. Không nghiêng 3D.
+  Màu Leaflet/SVG (cần hex) ở `viewer/mapTheme.ts`.
 - Không giả số liệu: chức năng chưa có API hiện "Chưa khả dụng" (Quy trình/hành trình, báo lỗi bản đồ, nhận diện mốc).
 
 ## Cấu trúc
@@ -101,8 +103,8 @@ CSDL đã migrate v2: chạy thêm `Back-End/database/v2/04_plans_tan_son_nhat.s
 ## Ghi chú kỹ thuật
 
 - TypeScript strict + `noUncheckedIndexedAccess`; ESLint typescript-eslint + react-hooks 7.
-- Phông chữ đi kèm: Familjen Grotesk 400/600/700 (`@fontsource`, có bộ tiếng Việt) — không phụ thuộc Google Fonts khi mạng trong toà nhà yếu.
+- Phông chữ đi kèm: Inter (`@fontsource-variable/inter`, có bộ tiếng Việt) — không phụ thuộc Google Fonts khi mạng trong toà nhà yếu.
 - Leaflet + leaflet-rotate; bản vẽ SVG nội tuyến (`L.svgOverlay`) đặt bằng ma trận affine của `projection.ts`.
   Đã vá `_onZoomTransitionEnd` của Leaflet để không báo lỗi `_leaflet_pos` khi chuyển trang giữa lúc zoom.
-- Nền bản đồ ngoài trời: CARTO light (OpenStreetMap), làm nhạt màu để mặt bằng nổi lên.
+- Nền bản đồ ngoài trời: tile OpenStreetMap, làm xám nhạt để mặt bằng nổi lên (CARTO không còn cho dùng không cần khoá API).
 - Màn camera, quét QR (jsQR) và trang Builder/Admin được tải sau (code-splitting).

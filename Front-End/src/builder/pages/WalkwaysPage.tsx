@@ -2,21 +2,38 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type * as Leaflet from "leaflet";
 import { analyzeVenue, buildVenueModel, distance, type LatLng, type WalkwayEdgeDto, type WalkwayNetworkDto, type WalkwayNodeDto } from "@indoor-map/core";
+import {
+    ArrowUpDown, Check, CircleAlert, Eraser, Layers, Link2, MousePointer2, Redo2, Route, Spline, Trash2, TriangleAlert, Undo2, X, type LucideIcon
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import L from "../../lib/leaflet";
 import { walkwayApi } from "../../console/api";
+import { EmptyState } from "../../console/page";
 import { HeaderActions, HeaderStatus, SaveState } from "../../console/Shell";
-import { Button, useAction, useFeedback } from "../../console/ui";
-import Lc from "../../design/Lc";
+import { useAction, useFeedback } from "../../console/ui";
 import EditorMap from "../EditorMap";
-import FloorList, { floorLabel, GuestLink } from "../FloorList";
-import { ClickLayer, lucideSvg, mapColors, PlacesLayer, signIcon } from "../layers";
+import { floorLabel } from "../FloorList";
+import { ClickLayer, lucideSvg, mapColors, PlacesLayer, selectedNodeIcon, signIcon } from "../layers";
 import { useWorkspace } from "../Workspace";
-import "./workspace.css";
 
 type Tool = "select" | "draw" | "link" | "connector" | "erase";
-const TOOLS: [Tool, string, string][] = [
-    ["select", "Chọn và kéo", "V"], ["draw", "Vẽ nút và cạnh", "N"], ["link", "Nối hai nút", "L"], ["connector", "Thang, nối tầng", "T"], ["erase", "Xoá nút, cắt cạnh", "C"]
+const TOOLS: [Tool, string, string, LucideIcon][] = [
+    ["select", "Chọn và kéo", "V", MousePointer2], ["draw", "Vẽ nút và cạnh", "N", Spline], ["link", "Nối hai nút", "L", Link2],
+    ["connector", "Thang, nối tầng", "T", ArrowUpDown], ["erase", "Xoá nút, cắt cạnh", "C", Eraser]
 ];
+const HINTS: Partial<Record<Tool, string>> = {
+    link: "Bấm hai nút để nối, bấm lại để gỡ cạnh",
+    connector: "Bấm một nút để đánh dấu là thang",
+    erase: "Bấm nút để xoá, bấm cạnh để cắt"
+};
+
 const CONNECTORS = ["Thang máy", "Thang cuốn", "Thang bộ"];
 const SNAP_METERS = 1.5;
 let seq = 0;
@@ -263,22 +280,18 @@ export default function WalkwaysPage() {
         <>
             <HeaderStatus><SaveState state={busy ? "saving" : dirty ? "dirty" : "saved"} count={changes} /></HeaderStatus>
             <HeaderActions>
-                <GuestLink venue={data.venue} />
-                {dirty && <Button onClick={() => void discard()}>Bỏ thay đổi</Button>}
-                <Button variant="primary" busy={busy} disabled={!dirty} title={dirty ? undefined : "Chưa có thay đổi"} onClick={() => void save()}>Lưu mạng lối đi</Button>
+                {dirty && <Button variant="outline" onClick={() => void discard()}>Bỏ thay đổi</Button>}
+                <Button disabled={!dirty || busy} title={dirty ? undefined : "Chưa có thay đổi"} onClick={() => void save()}>Lưu mạng lối đi</Button>
             </HeaderActions>
         </>
     );
 
     if (!floor || !floorId) {
         return (
-            <div className="k-page">
+            <div className="mx-auto w-full max-w-3xl px-6 py-6">
                 {header}
-                <section className="k-card ws-empty">
-                    <h2 className="k16">Chưa có tầng</h2>
-                    <p className="k14 k-m">Thêm toà nhà và tầng trước, rồi vẽ lối đi trên mặt bằng.</p>
-                    <div className="ws-mt8"><Button variant="primary" to={`/builder/v/${venueId}/buildings`}>Thêm toà nhà và tầng</Button></div>
-                </section>
+                <EmptyState icon={<Layers />} title="Chưa có tầng" description="Thêm toà nhà và tầng trước, rồi vẽ lối đi trên mặt bằng."
+                    action={<Button asChild><Link to={`/builder/v/${venueId}/buildings`}>Thêm toà nhà và tầng</Link></Button>} />
             </div>
         );
     }
@@ -289,50 +302,58 @@ export default function WalkwaysPage() {
         setLinkFloor("");
     };
     const qrState = node && qr.selected.includes(node.id) ? (qr.posted.includes(node.id) ? "Đã dán" : qr.printed.includes(node.id) ? "Đã in" : "Đã tạo") : null;
+    const c = mapColors();
+    const hint = HINTS[tool];
 
     return (
-        <div className="ws-work">
+        <div className="flex min-h-0 flex-1">
             {header}
-            <aside aria-label="Công cụ" className="ws-panel is-left">
-                <section className="ws-grp">
-                    <h2 className="k-sec">Toà nhà và tầng</h2>
-                    {model.buildings.length > 1 && (
-                        <select aria-label="Toà nhà" className="k-input" value={floor.buildingId} onChange={e => { const first = model.floorsOf(Number(e.target.value))[0]; if (first) selectFloor(first.id); }}>
-                            {model.buildings.filter(b => model.floorsOf(b.id).length).map(b => <option key={b.id} value={b.id}>{b.code} {b.name}</option>)}
-                        </select>
-                    )}
-                    <div><FloorList model={model} floorId={floorId} buildingId={floor.buildingId} onSelect={selectFloor} count={id => `${network.nodes.filter(n => n.floorId === id).length} nút`} /></div>
-                </section>
-                <section className="ws-grp">
-                    <h2 className="k-sec">Công cụ</h2>
-                    <div role="group" aria-label="Công cụ vẽ">
-                        {TOOLS.map(([t, label, key]) => (
-                            <button key={t} type="button" className="ws-tl" aria-pressed={tool === t} aria-keyshortcuts={key} onClick={() => setTool(t)}>
-                                {label}<kbd className="k12 k-m">{key}</kbd>
-                            </button>
-                        ))}
+            {/* Trái: số liệu, kiểm tra đồ thị, hiển thị */}
+            <aside aria-label="Kiểm tra đồ thị" className="flex w-64 shrink-0 flex-col border-r bg-background">
+                <div className="grid grid-cols-3 gap-2 border-b p-3">
+                    {([["nút", floorNodes.length], ["cạnh", floorEdges.length], ["mét", Math.round(floorMeters)]] as const).map(([label, n]) => (
+                        <div key={label} className="rounded-md bg-muted/50 px-2 py-1.5">
+                            <p className="text-base font-semibold tabular-nums">{n.toLocaleString("vi-VN")}</p>
+                            <p className="text-xs text-muted-foreground">{label}</p>
+                        </div>
+                    ))}
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                    <p className="px-2 pt-1 pb-2 text-xs font-medium text-muted-foreground">Kiểm tra tầng này</p>
+                    {strayOnFloor.length ? (
+                        <CheckRow tone="destructive" label={`${strayOnFloor.length} nút thuộc mảnh rời`} onClick={() => setFocus({ key: Date.now(), points: strayOnFloor })} />
+                    ) : <CheckRow tone="success" label="Liền mạch" />}
+                    {unreachableOnFloor.length ? (
+                        <CheckRow tone="warning" label={`${unreachableOnFloor.length} điểm chưa nối lối đi`} onClick={() => setFocus({ key: Date.now(), points: unreachableOnFloor })} />
+                    ) : <CheckRow tone="success" label="Mọi điểm tới được" />}
+                    {connectorsOnFloor.length > 0 && (looseOnFloor
+                        ? <CheckRow tone="warning" label={`${connectorsOnFloor.length - looseOnFloor}/${connectorsOnFloor.length} thang đã nối tầng`} />
+                        : <CheckRow tone="success" label={`${connectorsOnFloor.length}/${connectorsOnFloor.length} thang đã nối tầng`} />)}
+                    {buildingFloors.length > 1 && connectorsOnFloor.length === 0 && <CheckRow tone="warning" label="Tầng này chưa có nút thang" />}
+                    <Button asChild variant="ghost" size="sm" className="mt-1 w-full justify-start text-muted-foreground">
+                        <Link to={`/builder/v/${venueId}/test`}><Route />Thử chỉ đường</Link>
+                    </Button>
+                </div>
+                <div className="space-y-3 border-t p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Hiển thị</p>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="ww-snap" className="font-normal">Bắt dính nút ≤ 1,5 m</Label>
+                        <Switch id="ww-snap" checked={snap} onCheckedChange={setSnap} />
                     </div>
-                </section>
-                <section className="ws-grp">
-                    <h2 className="k-sec">Hiển thị</h2>
-                    <div>
-                        <label className="k-line k14" style={{ minHeight: 32 }}><input type="checkbox" className="k-check" checked={snap} onChange={e => setSnap(e.target.checked)} />Bắt dính nút ≤ 1,5 m</label>
-                        <label className="k-line k14" style={{ minHeight: 32 }}><input type="checkbox" className="k-check" checked={showPlaces} onChange={e => setShowPlaces(e.target.checked)} />Điểm quan tâm</label>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="ww-places" className="font-normal">Điểm quan tâm</Label>
+                        <Switch id="ww-places" checked={showPlaces} onCheckedChange={setShowPlaces} />
                     </div>
-                    <div className="ws-grp">
-                        <span className="k-line k12 k-m"><span aria-hidden="true" className="ws-legend" style={{ height: 3, borderRadius: 999, background: "var(--graphite)" }} />Lối đi</span>
-                        <span className="k-line k12 k-m"><span aria-hidden="true" className="ws-legend" style={{ borderTop: "2px dashed var(--danger)" }} />Mảnh rời</span>
-                        <span className="k-line k12 k-m"><span aria-hidden="true" className="ws-legend" style={{ borderTop: "2px dotted var(--warn)" }} />Thang chưa nối tầng</span>
-                    </div>
-                </section>
-                <div className="ws-stats">
-                    <div><span className="k16">{floorNodes.length.toLocaleString("vi-VN")}</span><span className="k12 k-m">nút</span></div>
-                    <div><span className="k16">{floorEdges.length.toLocaleString("vi-VN")}</span><span className="k12 k-m">cạnh</span></div>
-                    <div><span className="k16">{Math.round(floorMeters).toLocaleString("vi-VN")}</span><span className="k12 k-m">mét</span></div>
+                    <ul className="space-y-1.5 pt-1 text-xs text-muted-foreground">
+                        <li className="flex items-center gap-2"><span aria-hidden="true" className="h-0.5 w-5 rounded-full" style={{ background: c.graphite }} />Lối đi</li>
+                        <li className="flex items-center gap-2"><span aria-hidden="true" className="w-5 border-t-2 border-dashed" style={{ borderColor: c.danger }} />Mảnh rời</li>
+                        <li className="flex items-center gap-2"><span aria-hidden="true" className="w-5 border-t-2 border-dotted" style={{ borderColor: c.warn }} />Thang chưa nối tầng</li>
+                    </ul>
                 </div>
             </aside>
 
-            <section className="ws-canvas" aria-label="Canvas lối đi">
+            {/* Giữa: mặt bằng */}
+            <section aria-label="Canvas lối đi" className="relative min-w-0 flex-1 bg-muted/40 [&_.cb-map]:absolute [&_.cb-map]:inset-0 [&_.cb-map]:min-h-0">
                 <EditorMap model={model} floorId={floorId}>
                     {map => (
                         <>
@@ -344,98 +365,154 @@ export default function WalkwaysPage() {
                         </>
                     )}
                 </EditorMap>
-                <div role="toolbar" aria-label="Hoàn tác" className="ws-float is-tl">
-                    <button type="button" className="k-ib sm t" aria-label="Hoàn tác" title="Hoàn tác (Ctrl+Z)" disabled={!history.length} onClick={undo}><Lc name="undo-2" size={16} /></button>
-                    <button type="button" className="k-ib sm t" aria-label="Làm lại" title="Làm lại (Ctrl+Shift+Z)" disabled={!future.length} onClick={redo}><Lc name="redo-2" size={16} /></button>
+
+                {/* chọn toà + tầng */}
+                <div className="absolute top-3 left-3 z-[800] flex max-w-[calc(100%-7rem)] items-center gap-2 rounded-lg border bg-background p-1 shadow-sm">
+                    {model.buildings.length > 1 && (
+                        <Select value={String(floor.buildingId)} onValueChange={v => { const first = model.floorsOf(Number(v))[0]; if (first) selectFloor(first.id); }}>
+                            <SelectTrigger size="sm" className="border-0 shadow-none" aria-label="Toà nhà"><SelectValue /></SelectTrigger>
+                            <SelectContent>{model.buildings.filter(b => model.floorsOf(b.id).length).map(b => <SelectItem key={b.id} value={String(b.id)}>{b.code} {b.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                    )}
+                    <ToggleGroup type="single" size="sm" value={String(floorId)} onValueChange={v => v && selectFloor(Number(v))} aria-label="Tầng" className="overflow-x-auto">
+                        {buildingFloors.map(f => (
+                            <ToggleGroupItem key={f.id} value={String(f.id)} className="px-2.5 whitespace-nowrap data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{f.name}</ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
                 </div>
-                <div role="region" aria-label="Kiểm tra đồ thị" className="ws-float is-bar">
-                    <span className="k-b">Kiểm tra</span>
-                    {strayOnFloor.length ? (
-                        <button type="button" className="k-btn t sm" onClick={() => setFocus({ key: Date.now(), points: strayOnFloor })}>
-                            <span className="ws-badgepin is-danger" aria-hidden="true">1</span><span className="k-danger">{strayOnFloor.length} nút thuộc mảnh rời</span>
-                        </button>
-                    ) : <span className="k-line"><Lc name="check" size={16} color="var(--ok)" /><span className="k-ok">Liền mạch</span></span>}
-                    {unreachableOnFloor.length ? (
-                        <button type="button" className="k-btn t sm" onClick={() => setFocus({ key: Date.now(), points: unreachableOnFloor })}>
-                            <span className="ws-badgepin is-warn" aria-hidden="true">2</span><span className="k-warn">{unreachableOnFloor.length} điểm chưa nối lối đi</span>
-                        </button>
-                    ) : <span className="k-line"><Lc name="check" size={16} color="var(--ok)" /><span className="k-ok">Mọi điểm tới được</span></span>}
-                    {connectorsOnFloor.length > 0 && (looseOnFloor
-                        ? <span className="k-line"><Lc name="triangle-alert" size={16} color="var(--warn)" /><span className="k-warn">{connectorsOnFloor.length - looseOnFloor}/{connectorsOnFloor.length} thang đã nối tầng</span></span>
-                        : <span className="k-line"><Lc name="check" size={16} color="var(--ok)" /><span className="k-ok">{connectorsOnFloor.length}/{connectorsOnFloor.length} thang đã nối tầng</span></span>)}
-                    <Link to={`/builder/v/${venueId}/test`} className="k-btn t sm ws-right">Thử chỉ đường</Link>
+
+                {/* hoàn tác, làm lại */}
+                <div role="toolbar" aria-label="Hoàn tác" className="absolute top-3 right-3 z-[800] flex items-center gap-1 rounded-lg border bg-background p-1 shadow-sm">
+                    <ToolButton icon={Undo2} label="Hoàn tác (Ctrl+Z)" disabled={!history.length} onClick={undo} side="bottom" />
+                    <ToolButton icon={Redo2} label="Làm lại (Ctrl+Shift+Z)" disabled={!future.length} onClick={redo} side="bottom" />
+                </div>
+
+                {hint && (
+                    <div className="absolute top-16 left-1/2 z-[800] flex -translate-x-1/2 items-center gap-3 rounded-full bg-primary px-4 py-1.5 text-sm text-primary-foreground shadow-md">
+                        {hint}
+                        <Button size="sm" variant="ghost" className="h-6 rounded-full px-2 hover:bg-white/10 hover:text-primary-foreground" onClick={() => setTool("draw")}>Xong</Button>
+                    </div>
+                )}
+
+                {/* thanh công cụ */}
+                <div role="toolbar" aria-label="Công cụ vẽ" className="absolute bottom-4 left-1/2 z-[800] flex -translate-x-1/2 items-center gap-1 rounded-lg border bg-background p-1 shadow-md">
+                    {TOOLS.map(([t, label, key, icon], i) => (
+                        <span key={t} className="contents">
+                            {i === 1 && <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-5" />}
+                            <ToolButton icon={icon} label={`${label} (${key})`} shortcut={key} pressed={tool === t} onClick={() => setTool(t)} />
+                        </span>
+                    ))}
                 </div>
             </section>
 
-            <aside aria-label="Thuộc tính" className="ws-panel is-right">
+            {/* Phải: thuộc tính nút */}
+            <aside aria-label="Thuộc tính" className="flex w-80 shrink-0 flex-col border-l bg-background">
                 {node ? (
                     <>
-                        <div className="ws-phead">
-                            <h2 className="k16">{node.connector ?? "Nút lối đi"}</h2>
-                            <span className="k12 k-m ws-ellipsis" title={node.id}>Nút {node.id}, {floorLabel(model, model.floorsById.get(node.floorId))}</span>
+                        <div className="flex items-start gap-2 border-b p-4">
+                            <div className="min-w-0 flex-1">
+                                <h2 className="text-base font-semibold">{node.connector ?? "Nút lối đi"}</h2>
+                                <p className="mt-1 truncate text-xs text-muted-foreground" title={node.id}>{floorLabel(model, model.floorsById.get(node.floorId))}, {node.id}</p>
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Bỏ chọn" onClick={() => setSelected(null)}><X /></Button>
                         </div>
-                        <div className="ws-pbody is-24">
-                            <fieldset className="k-field ws-fs0">
-                                <legend className="k-label">Loại nút</legend>
-                                <div className="ws-seg" role="group" aria-label="Loại nút">
-                                    <button type="button" className="k-chip" aria-pressed={!node.connector} onClick={() => setConnector(undefined)}>Lối đi thường</button>
-                                    {CONNECTORS.map(c => <button key={c} type="button" className="k-chip" aria-pressed={node.connector === c} onClick={() => setConnector(c)}>{c}</button>)}
-                                </div>
-                            </fieldset>
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                            <div className="grid gap-2">
+                                <Label>Loại nút</Label>
+                                <ToggleGroup type="single" variant="outline" size="sm" spacing={1} value={node.connector ?? "none"} aria-label="Loại nút"
+                                    onValueChange={v => v && setConnector(v === "none" ? undefined : v)} className="grid w-full grid-cols-2">
+                                    {[["none", "Lối đi thường"], ...CONNECTORS.map(x => [x, x])].map(([value, label]) => (
+                                        <ToggleGroupItem key={value} value={value!} className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{label}</ToggleGroupItem>
+                                    ))}
+                                </ToggleGroup>
+                            </div>
                             {node.connector && (
-                                <div className="k-field">
-                                    <span className="k-label">Nối tầng</span>
+                                <div className="grid gap-2">
+                                    <Label>Nối tầng</Label>
                                     {otherFloorLinks.map(n => (
-                                        <div key={n.id} className="k-line k14" style={{ minHeight: 40, padding: "0 4px 0 12px", borderRadius: 6, background: "var(--surface-2)" }}>
-                                            <span className="ws-grow ws-ellipsis" title={n.id}>{floorLabel(model, model.floorsById.get(n.floorId), " ")}, {n.id}</span>
-                                            <span className="k-badge k-ok"><Lc name="check" size={14} />Đã nối</span>
-                                            <button type="button" className="k-btn t sm" onClick={() => change(x => ({ ...x, edges: x.edges.filter(e => edgeKey(e.from, e.to) !== edgeKey(node.id, n.id)) }))}>Gỡ</button>
+                                        <div key={n.id} className="flex items-center gap-2 rounded-md bg-muted/50 py-1 pr-1 pl-3 text-sm">
+                                            <span className="min-w-0 flex-1 truncate" title={n.id}>{floorLabel(model, model.floorsById.get(n.floorId), " ")}</span>
+                                            <Badge className="gap-1 bg-success/10 text-success"><Check />Đã nối</Badge>
+                                            <Button type="button" variant="ghost" size="sm" className="h-7"
+                                                onClick={() => change(x => ({ ...x, edges: x.edges.filter(e => edgeKey(e.from, e.to) !== edgeKey(node.id, n.id)) }))}>Gỡ</Button>
                                         </div>
                                     ))}
-                                    {!otherFloorLinks.length && <span className="k-badge k-warn"><Lc name="triangle-alert" size={14} />Chưa nối sang tầng nào</span>}
-                                    <select className="k-input" aria-label="Tầng cần nối" value={linkFloor} onChange={e => setLinkFloor(e.target.value ? Number(e.target.value) : "")}>
-                                        <option value="">Chọn nút tầng khác…</option>
-                                        {sameBuildingFloors.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                                    </select>
+                                    {!otherFloorLinks.length && <Badge className="gap-1 bg-warning/10 text-warning"><TriangleAlert />Chưa nối sang tầng nào</Badge>}
+                                    <Select value={linkFloor === "" ? "" : String(linkFloor)} onValueChange={v => setLinkFloor(v ? Number(v) : "")}>
+                                        <SelectTrigger size="sm" className="w-full" aria-label="Tầng cần nối"><SelectValue placeholder="Chọn tầng cần nối" /></SelectTrigger>
+                                        <SelectContent>{sameBuildingFloors.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}</SelectContent>
+                                    </Select>
                                     {linkFloor !== "" && (
-                                        <div className="ws-grp">
-                                            <button type="button" className="k-btn sm" onClick={createStacked}>Tạo nút thang cùng vị trí</button>
+                                        <div className="grid gap-1">
+                                            <Button type="button" variant="outline" size="sm" onClick={createStacked}>Tạo nút thang cùng vị trí</Button>
                                             {linkCandidates.map(({ n, d }) => (
-                                                <button key={n.id} type="button" className="k-btn sm" style={{ justifyContent: "space-between" }} onClick={() => linkTo(n)}>
-                                                    <span className="ws-ellipsis">{n.id}</span><span className="k12 k-m">{n.connector ?? "lối đi"}, {d.toFixed(1)} m</span>
+                                                <button key={n.id} type="button" onClick={() => linkTo(n)}
+                                                    className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted">
+                                                    <span className="min-w-0 flex-1 truncate">{n.id}</span>
+                                                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{n.connector ?? "lối đi"}, {d.toFixed(1)} m</span>
                                                 </button>
                                             ))}
-                                            {!linkCandidates.length && <span className="k12 k-m">Tầng đó chưa có nút nào.</span>}
+                                            {!linkCandidates.length && <p className="px-2 text-xs text-muted-foreground">Tầng đó chưa có nút nào.</p>}
                                         </div>
                                     )}
                                 </div>
                             )}
-                            <div className="k-field">
-                                <span className="k-label">Mã QR</span>
-                                <div className="k-line k14" style={{ height: 40, padding: "0 4px 0 12px", borderRadius: 6, border: "1px solid var(--rule)" }}>
-                                    <span className={`ws-grow ws-ellipsis${qrState ? " k-b" : " k-m"}`}>{qrState ? node.id : "Chưa có mã"}</span>
-                                    {qrState && <span className="k12 k-m">{qrState}</span>}
-                                    <Link to={`/builder/v/${venueId}/qr?floor=${node.floorId}`} className="k-btn t sm">Quản lý</Link>
+                            <div className="grid gap-2">
+                                <Label>Mã QR</Label>
+                                <div className="flex items-center gap-2 rounded-md border py-1 pr-1 pl-3 text-sm">
+                                    <span className={`min-w-0 flex-1 truncate ${qrState ? "font-medium" : "text-muted-foreground"}`}>{qrState ? node.id : "Chưa có mã"}</span>
+                                    {qrState && <span className="text-xs text-muted-foreground">{qrState}</span>}
+                                    <Button asChild variant="ghost" size="sm" className="h-7"><Link to={`/builder/v/${venueId}/qr?floor=${node.floorId}`}>Quản lý</Link></Button>
                                 </div>
                             </div>
-                            <div>
-                                <div className="k-row"><span className="k12 k-m" style={{ width: 64 }}>Toạ độ</span><span className="k14">{node.lat.toFixed(6)}, {node.lng.toFixed(6)}</span></div>
-                                <div className="k-row"><span className="k12 k-m" style={{ width: 64 }}>Nối với</span><span className="k14">{neighbors.length} nút</span></div>
-                            </div>
+                            <dl className="grid grid-cols-[4.5rem_1fr] gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-xs">
+                                <dt className="text-muted-foreground">Toạ độ</dt><dd className="tabular-nums">{node.lat.toFixed(6)}, {node.lng.toFixed(6)}</dd>
+                                <dt className="text-muted-foreground">Nối với</dt><dd className="tabular-nums">{neighbors.length} nút</dd>
+                            </dl>
                         </div>
-                        <div className="ws-pfoot">
-                            <button type="button" className="k-btn d sm" style={{ paddingLeft: 0 }} onClick={() => void deleteSelected()}><Lc name="trash" size={16} />Xoá nút…</button>
-                            <button type="button" className="k-btn t sm ws-right" onClick={() => setSelected(null)}>Bỏ chọn</button>
+                        <div className="flex items-center gap-2 border-t p-3">
+                            <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void deleteSelected()}><Trash2 />Xoá nút</Button>
                         </div>
                     </>
                 ) : (
-                    <div className="ws-pidle">
-                        <p className="k14 k-m">Bấm dọc giữa hành lang để vẽ lối đi. Chọn một nút để sửa loại thang và nối tầng.</p>
-                        {buildingFloors.length > 1 && connectorsOnFloor.length === 0 && <p className="k12 k-m">Tầng này chưa có nút thang nào.</p>}
+                    <div className="flex flex-col items-center gap-2 p-4 pt-14 text-center">
+                        <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Spline className="size-5" /></span>
+                        <p className="text-sm font-medium">Chưa chọn nút</p>
+                        <p className="text-sm text-muted-foreground">Bấm dọc hành lang để vẽ, chọn một nút để sửa thang và nối tầng.</p>
                     </div>
                 )}
             </aside>
         </div>
+    );
+}
+
+const TONE = {
+    success: { icon: Check, className: "text-success" },
+    warning: { icon: TriangleAlert, className: "text-warning" },
+    destructive: { icon: CircleAlert, className: "text-destructive" }
+};
+
+/** Một dòng kết quả kiểm tra đồ thị; có onClick thì bấm để phóng tới chỗ lỗi */
+function CheckRow({ tone, label, onClick }: { tone: keyof typeof TONE; label: string; onClick?: () => void }) {
+    const { icon: Icon, className } = TONE[tone];
+    const body = <><Icon className={`size-4 shrink-0 ${className}`} /><span className="min-w-0 flex-1 truncate">{label}</span></>;
+    if (!onClick) return <div className="flex h-8 items-center gap-2 px-2 text-sm">{body}</div>;
+    return (
+        <button type="button" title="Xem trên mặt bằng" onClick={onClick} className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted">{body}</button>
+    );
+}
+
+function ToolButton({ icon: Icon, label, shortcut, pressed, disabled, side = "top", onClick }: {
+    icon: LucideIcon; label: string; shortcut?: string; pressed?: boolean; disabled?: boolean; side?: "top" | "bottom"; onClick(): void;
+}) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button type="button" variant={pressed ? "default" : "ghost"} size="icon" className="size-8" aria-label={label} aria-pressed={pressed} aria-keyshortcuts={shortcut}
+                    disabled={disabled} onClick={onClick}><Icon /></Button>
+            </TooltipTrigger>
+            <TooltipContent side={side}>{label}</TooltipContent>
+        </Tooltip>
     );
 }
 
@@ -503,7 +580,7 @@ function NetworkLayer({ map, network, floorId, selected, stray, loose, draggable
                 layer = m;
             } else if (isSel) {
                 const m = L.marker([n.lat, n.lng], {
-                    icon: L.divIcon({ className: "", html: `<span class="cb-node is-selected"></span>`, iconSize: [16, 16], iconAnchor: [8, 8] }),
+                    icon: selectedNodeIcon(),
                     draggable, zIndexOffset: 2000, bubblingMouseEvents: false
                 });
                 m.on("dragend", () => cb.current.onMove(n.id, m.getLatLng()));

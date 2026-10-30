@@ -1,12 +1,15 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { ChevronRight, CircleCheck, Copy, MonitorSmartphone } from "lucide-react";
 import type { VenueDto } from "@indoor-map/core";
-import "./console.css";
-import "../builder/pages/global.css";
+import "@fontsource-variable/inter";
+import "./app.css";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { venueApi } from "./api";
 import { AuthProvider, useAuth } from "./auth";
+import { BrandMark } from "./Shell";
 import { FeedbackProvider } from "./ui";
-import Lc from "../design/Lc";
 
 // Builder và Admin cần màn hình rộng (vẽ mặt bằng, lối đi). Dưới ngưỡng này hiện màn "Mở Builder trên máy tính";
 // đăng nhập, đăng ký, quên mật khẩu vẫn dùng được trên điện thoại.
@@ -46,50 +49,62 @@ function PhoneBlock() {
         }
     };
     return (
-        <div className="kg-phone">
-            <header className="kg-phone-head">
-                <Link to="/" className="cs-logo" aria-label="Indoor Map, mở bản đồ cho khách"><Lc name="map-pin" size={18} stroke={2.2} /></Link>
-                <span className="k16" style={{ flex: 1, minWidth: 0 }}>Indoor Map</span>
-                {user && <span className="cs-avatar" aria-label={user.fullName} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", background: "var(--surface)", color: "var(--ink)", borderColor: "var(--rule)" }}>{initials(user.fullName)}</span>}
+        <div className="flex min-h-svh flex-col bg-background">
+            <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+                <Link to="/" aria-label="Indoor Map, mở bản đồ cho khách"><BrandMark /></Link>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">Indoor Map</span>
+                {user && (
+                    <span role="img" aria-label={user.fullName} className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                        {initials(user.fullName)}
+                    </span>
+                )}
             </header>
-            <main className="kg-phone-main">
-                <section className="k-card" aria-labelledby="pb-t" style={{ padding: 16 }}>
-                    <div className="kg-phone-art" aria-hidden="true">
-                        <div className="k-stack" style={{ alignItems: "center", gap: 8 }}>
-                            <div className="kg-screen"><span /><span><Lc name="map" size={32} color="var(--muted)" /></span></div>
-                            <div className="kg-stand" />
-                        </div>
-                        <div className="kg-handset"><Lc name="x" size={20} color="var(--muted)" /></div>
-                    </div>
-                    <div>
-                        <h1 id="pb-t" className="k28">Mở Builder trên máy tính</h1>
-                        <p className="k14 k-m" style={{ marginTop: 8 }}>Builder cần màn hình rộng từ 900 px để vẽ mặt bằng và lối đi.</p>
+            <main className="flex flex-1 flex-col gap-6 p-4">
+                <section aria-labelledby="pb-t" className="flex flex-col items-center gap-3 rounded-xl border bg-card px-6 py-8 text-center">
+                    <span aria-hidden="true" className="flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary"><MonitorSmartphone className="size-6" /></span>
+                    <div className="space-y-1">
+                        <h1 id="pb-t" className="text-lg font-semibold">Mở Builder trên máy tính</h1>
+                        <p className="text-sm text-muted-foreground">Builder cần màn hình rộng từ 900 px để vẽ mặt bằng và lối đi.</p>
                     </div>
                 </section>
                 {copied === "ok" && (
-                    <div role="status" className="k-note"><Lc name="circle-check" size={16} color="var(--ok)" /><div><div className="k-b k-ok">Đã sao chép link</div><div>Dán vào trình duyệt trên máy tính.</div></div></div>
+                    <Alert role="status">
+                        <CircleCheck className="text-success" />
+                        <AlertTitle>Đã sao chép link</AlertTitle>
+                        <AlertDescription>Dán vào trình duyệt trên máy tính.</AlertDescription>
+                    </Alert>
                 )}
                 {venues && venues.length > 0 && (
-                    <section aria-labelledby="pb-x" className="k-stack" style={{ gap: 8 }}>
-                        <h2 id="pb-x" className="k-sec">Xem như khách</h2>
-                        <div className="k-card kg-phone-list">
-                            {venues.map(v => v.status === "PUBLISHED" ? (
-                                <a key={v.id} href={`/v/${v.slug}`}>
-                                    <span style={{ flex: 1, minWidth: 0 }}><span className="k16" style={{ display: "block" }}>{v.name}</span><span className="k12 k-m">Công khai</span></span>
-                                    <Lc name="chevron-right" size={20} color="var(--muted)" />
-                                </a>
-                            ) : (
-                                <div key={v.id} aria-disabled="true">
-                                    <span style={{ flex: 1, minWidth: 0 }}><span className="k16 k-m" style={{ display: "block" }}>{v.name}</span><span className="k12 k-m">{v.status === "HIDDEN" ? "Bị ẩn bởi quản trị" : "Bản nháp, chưa có bản công khai"}</span></span>
-                                </div>
+                    <section aria-labelledby="pb-x" className="flex flex-col gap-2">
+                        <h2 id="pb-x" className="text-xs font-medium text-muted-foreground">Xem như khách</h2>
+                        <ul className="divide-y rounded-xl border bg-card">
+                            {venues.map(v => (
+                                <li key={v.id}>
+                                    {v.status === "PUBLISHED" ? (
+                                        <a href={`/v/${v.slug}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-sm font-medium">{v.name}</span>
+                                                <span className="text-xs text-muted-foreground">Công khai</span>
+                                            </span>
+                                            <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
+                                        </a>
+                                    ) : (
+                                        <div aria-disabled="true" className="px-4 py-3">
+                                            <span className="block truncate text-sm font-medium text-muted-foreground">{v.name}</span>
+                                            <span className="text-xs text-muted-foreground">{v.status === "HIDDEN" ? "Bị ẩn bởi quản trị" : "Bản nháp, chưa có bản công khai"}</span>
+                                        </div>
+                                    )}
+                                </li>
                             ))}
-                        </div>
+                        </ul>
                     </section>
                 )}
             </main>
-            <div className="kg-phone-foot">
-                <button type="button" className="k-btn p kg-full" onClick={() => void copy()}>{copied === "ok" ? "Sao chép lại" : "Sao chép link"}</button>
-                <p className="k12 k-m kg-center">{copied === "err" ? "Không sao chép được, hãy mở link này trên máy tính." : "Mở link này trên máy tính"}</p>
+            <div className="flex flex-col gap-2 border-t p-4">
+                <Button className="w-full" onClick={() => void copy()}><Copy />{copied === "ok" ? "Sao chép lại" : "Sao chép link"}</Button>
+                <p className={`text-center text-xs ${copied === "err" ? "text-destructive" : "text-muted-foreground"}`}>
+                    {copied === "err" ? "Không sao chép được, hãy mở link này trên máy tính." : "Mở link này trên máy tính"}
+                </p>
             </div>
         </div>
     );

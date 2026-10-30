@@ -1,12 +1,22 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { groupLabel, type FacilityDto, type LocationTypeDto } from "@indoor-map/core";
+import { Copy, MoreHorizontal, MousePointer2, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { catalogApi, locationApi } from "../../console/api";
-import { HeaderActions } from "../../console/Shell";
-import { Button, COLORS, IconPicker, useAction, useFeedback } from "../../console/ui";
-import Lc from "../../design/Lc";
-import { Dialog, GuestLink } from "../FloorList";
+import { Page } from "../../console/page";
+import { COLORS, ICONS, useAction, useFeedback } from "../../console/ui";
 import { useWorkspace } from "../Workspace";
-import "./workspace.css";
 
 const GROUPS = ["gate", "procedure", "food", "service", "restroom", "transport", "health", "study", "office", "leisure"];
 /** Tên các màu marker (màu dữ liệu, cùng thứ tự với COLORS trong console/ui) */
@@ -16,6 +26,23 @@ const colorName = (c?: string) => {
     const i = COLORS.indexOf((c ?? "").toLowerCase());
     return i >= 0 ? COLOR_NAMES[i] ?? c ?? "" : c ?? "";
 };
+
+function TypeTile({ color, icon }: { color?: string; icon?: string }) {
+    return (
+        <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-md text-xs text-white" style={{ background: color || "var(--muted-foreground)" }}>
+            <i className={`bi ${icon || "bi-geo-alt"}`} />
+        </span>
+    );
+}
+
+function Idle({ text }: { text: string }) {
+    return (
+        <div className="flex flex-col items-center gap-2 px-4 py-14 text-center">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"><MousePointer2 className="size-5" /></span>
+            <p className="text-sm text-muted-foreground">{text}</p>
+        </div>
+    );
+}
 
 // Loại điểm (màu, biểu tượng, nhóm lọc) và tiện ích của địa điểm
 export default function TypesPage() {
@@ -94,148 +121,211 @@ export default function TypesPage() {
     };
 
     const colorChoices = form?.color && !COLORS.includes(form.color.toLowerCase()) ? [...COLORS, form.color] : COLORS;
+    const removingCount = removing ? counts.get(removing.type.code) ?? 0 : 0;
+
+    const actions = (
+        <>
+            <Button variant="outline" disabled={busy && !form} onClick={() => void copyTemplates()}><Copy />Thêm từ mẫu</Button>
+            <Button onClick={() => { setTab("types"); setForm({ ...EMPTY }); }}><Plus />Thêm loại</Button>
+        </>
+    );
 
     return (
-        <div className="k-page ws-page-full" style={{ minHeight: 640 }}>
-            <HeaderActions>
-                <GuestLink venue={data.venue} />
-                <Button variant="primary" onClick={() => { setTab("types"); setForm({ ...EMPTY }); }}>Thêm loại</Button>
-            </HeaderActions>
-            <div className="k-title">
-                <h1 className="k24">Loại và tiện ích</h1>
-                <div className="k-acts"><Button busy={busy && !form} onClick={() => void copyTemplates()}>Thêm từ mẫu</Button></div>
-            </div>
-            <div role="tablist" aria-label="Danh mục" className="k-tabs">
-                <button type="button" role="tab" aria-selected={tab === "types"} className="k-tab" onClick={() => setTab("types")}>Loại điểm <span className="k-m">{types.length}</span></button>
-                <button type="button" role="tab" aria-selected={tab === "facilities"} className="k-tab" onClick={() => setTab("facilities")}>Tiện ích <span className="k-m">{data.facilities.length}</span></button>
-            </div>
+        <Page actions={actions}>
+            <Tabs value={tab} onValueChange={v => setTab(v as "types" | "facilities")} className="gap-6">
+                <TabsList>
+                    <TabsTrigger value="types">Loại điểm<span className="text-muted-foreground tabular-nums">{types.length}</span></TabsTrigger>
+                    <TabsTrigger value="facilities">Tiện ích<span className="text-muted-foreground tabular-nums">{data.facilities.length}</span></TabsTrigger>
+                </TabsList>
 
-            {tab === "types" ? (
-                <div className="ws-row ws-fill">
-                    <section aria-label="Danh sách loại" className="k-card ws-card0 ws-grow" style={{ overflow: "auto", display: "block" }}>
-                        <table className="k-tbl">
-                            <thead><tr><th scope="col">Loại</th><th scope="col">Mã</th><th scope="col">Nhóm</th><th scope="col" className="num">Số điểm</th><th scope="col">Màu</th></tr></thead>
-                            <tbody>
-                                {types.map(t => (
-                                    <tr key={t.code} className="is-click" tabIndex={0} aria-selected={form?.id != null && form.id === t.id}
-                                        onClick={() => setForm({ ...t })} onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setForm({ ...t }))}>
-                                        <td className="k-b">
-                                            <span className="k-line">
-                                                <span aria-hidden="true" className="ws-tile" style={{ background: t.color || "var(--muted)" }}><i className={`bi ${t.icon || "bi-geo-alt"}`} /></span>
-                                                {t.name}
-                                            </span>
-                                        </td>
-                                        <td><code className="k-m" style={{ fontFamily: "inherit" }}>{t.code}</code></td>
-                                        <td>{groupLabel(t.groupName)}</td>
-                                        <td className="num">{counts.get(t.code) ?? 0}</td>
-                                        <td><span className="k-line"><span aria-hidden="true" className="ws-swatch" style={{ background: t.color || "var(--muted)" }} />{colorName(t.color)}</span></td>
-                                    </tr>
-                                ))}
-                                {!types.length && <tr><td colSpan={5} className="k-m">Chưa có loại nào. Bấm Thêm từ mẫu để lấy danh mục theo loại hình địa điểm.</td></tr>}
-                            </tbody>
-                        </table>
-                    </section>
+                <TabsContent value="types" className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                    <div className="overflow-hidden rounded-xl border">
+                        <Table>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-4">Loại</TableHead>
+                                    <TableHead>Mã</TableHead>
+                                    <TableHead>Nhóm</TableHead>
+                                    <TableHead className="text-right">Số điểm</TableHead>
+                                    <TableHead className="pr-4">Màu</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {types.map(t => {
+                                    const selected = form?.id != null && form.id === t.id;
+                                    return (
+                                        <TableRow key={t.code} tabIndex={0} aria-selected={selected} data-state={selected ? "selected" : undefined} className="cursor-pointer"
+                                            onClick={() => setForm({ ...t })} onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setForm({ ...t }))}>
+                                            <TableCell className="pl-4">
+                                                <span className="flex items-center gap-2 font-medium"><TypeTile color={t.color} icon={t.icon} />{t.name}</span>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{t.code}</TableCell>
+                                            <TableCell>{groupLabel(t.groupName)}</TableCell>
+                                            <TableCell className="text-right tabular-nums">{counts.get(t.code) ?? 0}</TableCell>
+                                            <TableCell className="pr-4">
+                                                <span className="flex items-center gap-2">
+                                                    <span aria-hidden="true" className="size-3 rounded-sm" style={{ background: t.color || "var(--muted-foreground)" }} />
+                                                    {colorName(t.color)}
+                                                </span>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {!types.length && (
+                                    <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Chưa có loại nào. Bấm Thêm từ mẫu để lấy danh mục mẫu.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-                    <aside aria-label={form ? `Sửa loại ${form.name ?? ""}` : "Sửa loại"} className="k-card ws-card0" style={{ width: 360, flexShrink: 0, minHeight: 0, display: "flex" }}>
+                    <aside aria-label={form ? `Sửa loại ${form.name ?? ""}` : "Sửa loại"} className="flex flex-col overflow-hidden rounded-xl border bg-card">
                         {form ? (
-                            <form className="ws-col" style={{ flex: 1 }} onSubmit={e => void saveType(e)}>
-                                <div className="ws-cardhead is-24" style={{ flexDirection: "column", alignItems: "flex-start", gap: 0 }}>
-                                    <h2 className="k16">{form.id ? form.name : "Loại mới"}</h2>
-                                    {form.id && <div className="k12 k-m">{counts.get(form.code ?? "") ?? 0} điểm</div>}
+                            <form className="flex flex-col" onSubmit={e => void saveType(e)}>
+                                <div className="flex items-center gap-3 border-b p-4">
+                                    <TypeTile color={form.color} icon={form.icon} />
+                                    <div className="min-w-0">
+                                        <h2 className="truncate text-base font-semibold">{form.id ? form.name : "Loại mới"}</h2>
+                                        {form.id && <p className="text-xs text-muted-foreground">{counts.get(form.code ?? "") ?? 0} điểm</p>}
+                                    </div>
                                 </div>
-                                <div className="k-stack" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 24px" }}>
-                                    <div className="k-field"><label htmlFor="t-name">Tên</label><input id="t-name" className="k-input" required value={form.name ?? ""} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-                                    <div className="k-grid2">
-                                        <div className="k-field">
-                                            <label htmlFor="t-code">Mã</label>
-                                            <input id="t-code" className="k-input" required pattern="[a-z0-9_]+" disabled={Boolean(form.id)} title={form.id ? "Không đổi được khi đã có dữ liệu" : "Chữ thường, số, _"}
+                                <div className="space-y-4 p-4">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="t-name">Tên</Label>
+                                        <Input id="t-name" required value={form.name ?? ""} onChange={e => setForm({ ...form, name: e.target.value })} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="t-code">Mã</Label>
+                                            <Input id="t-code" required pattern="[a-z0-9_]+" disabled={Boolean(form.id)} title={form.id ? "Không đổi được khi đã có dữ liệu" : "Chữ thường, số, _"}
                                                 value={form.code ?? ""} onChange={e => setForm({ ...form, code: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })} />
                                         </div>
-                                        <div className="k-field">
-                                            <label htmlFor="t-grp">Nhóm</label>
-                                            <select id="t-grp" className="k-input" value={form.groupName ?? ""} onChange={e => setForm({ ...form, groupName: e.target.value })}>
-                                                {GROUPS.map(g => <option key={g} value={g}>{groupLabel(g)}</option>)}
-                                            </select>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="t-grp">Nhóm</Label>
+                                            <Select value={form.groupName ?? ""} onValueChange={v => setForm({ ...form, groupName: v })}>
+                                                <SelectTrigger id="t-grp" className="w-full"><SelectValue placeholder="Chọn nhóm" /></SelectTrigger>
+                                                <SelectContent>{GROUPS.map(g => <SelectItem key={g} value={g}>{groupLabel(g)}</SelectItem>)}</SelectContent>
+                                            </Select>
                                         </div>
                                     </div>
-                                    <fieldset className="ws-fs0">
-                                        <legend className="k-label">Màu marker</legend>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 16 }}>
+                                    <div className="grid gap-2">
+                                        <div className="flex items-center justify-between">
+                                            <Label id="t-color">Màu marker</Label>
+                                            <span className="text-xs text-muted-foreground">{colorName(form.color)}</span>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-labelledby="t-color">
                                             {colorChoices.map(c => (
-                                                <label key={c} className="k-line k14" style={{ minHeight: 32, cursor: "pointer" }}>
-                                                    <input type="radio" className="k-check" name="color" value={c} checked={(form.color ?? "").toLowerCase() === c.toLowerCase()} onChange={() => setForm({ ...form, color: c })} />
-                                                    <span aria-hidden="true" className="ws-swatch" style={{ background: c }} />{colorName(c)}
-                                                </label>
+                                                <button key={c} type="button" role="radio" aria-checked={(form.color ?? "").toLowerCase() === c.toLowerCase()} aria-label={colorName(c)} title={colorName(c)}
+                                                    className="size-6 rounded-md ring-offset-2 ring-offset-background aria-checked:ring-2 aria-checked:ring-ring" style={{ background: c }}
+                                                    onClick={() => setForm({ ...form, color: c })} />
+                                            ))}
+                                            <input type="color" aria-label="Màu khác" title="Màu khác" value={form.color ?? COLORS[1]} onChange={e => setForm({ ...form, color: e.target.value })}
+                                                className="size-6 cursor-pointer rounded-md border bg-transparent p-0" />
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label id="t-icon">Biểu tượng</Label>
+                                        <div className="grid grid-cols-8 gap-1" role="radiogroup" aria-labelledby="t-icon">
+                                            {ICONS.map(icon => (
+                                                <button key={icon} type="button" role="radio" aria-checked={form.icon === icon} aria-label={icon}
+                                                    className="flex size-8 items-center justify-center rounded-md text-sm text-muted-foreground hover:bg-muted aria-checked:bg-primary aria-checked:text-primary-foreground"
+                                                    onClick={() => setForm({ ...form, icon })}>
+                                                    <i className={`bi ${icon}`} aria-hidden="true" />
+                                                </button>
                                             ))}
                                         </div>
-                                        <label className="k-line k12 k-m" style={{ marginTop: 8 }}>
-                                            Màu khác
-                                            <input type="color" aria-label="Màu khác" value={form.color ?? COLORS[1]} onChange={e => setForm({ ...form, color: e.target.value })} className="cb-color-input" />
-                                        </label>
-                                    </fieldset>
-                                    <IconPicker value={form.icon ?? "bi-geo-alt"} onChange={icon => setForm({ ...form, icon })} />
+                                    </div>
                                 </div>
-                                <div className="ws-cardfoot is-24">
-                                    {form.id ? <button type="button" className="k-btn d" style={{ marginLeft: -16 }} onClick={() => void askRemove(form as LocationTypeDto)}>Xoá loại…</button> : <button type="button" className="k-btn t" style={{ marginLeft: -16 }} onClick={() => setForm(null)}>Huỷ</button>}
-                                    <Button type="submit" busy={busy} disabled={!form.name?.trim() || !form.code?.trim()}>{form.id ? "Lưu loại" : "Thêm loại"}</Button>
+                                <div className="flex items-center gap-2 border-t p-3">
+                                    {form.id
+                                        ? <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void askRemove(form as LocationTypeDto)}><Trash2 />Xoá</Button>
+                                        : <Button type="button" variant="ghost" size="sm" onClick={() => setForm(null)}>Huỷ</Button>}
+                                    <Button type="submit" size="sm" className="ml-auto" disabled={busy || !form.name?.trim() || !form.code?.trim()}>{form.id ? "Lưu loại" : "Thêm loại"}</Button>
                                 </div>
                             </form>
-                        ) : (
-                            <div className="ws-pidle" style={{ flex: 1 }}><p className="k14 k-m">Chọn một loại để sửa tên, màu và biểu tượng.</p></div>
-                        )}
+                        ) : <Idle text="Chọn một loại để sửa tên, màu và biểu tượng." />}
                     </aside>
-                </div>
-            ) : (
-                <div className="ws-row ws-fill">
-                    <section aria-label="Danh sách tiện ích" className="k-card ws-card0 ws-grow" style={{ overflow: "auto", display: "block" }}>
-                        <table className="k-tbl">
-                            <thead><tr><th scope="col">Tiện ích</th><th scope="col" className="num">Số điểm có</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead>
-                            <tbody>
+                </TabsContent>
+
+                <TabsContent value="facilities" className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                    <div className="overflow-hidden rounded-xl border">
+                        <Table>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-4">Tiện ích</TableHead>
+                                    <TableHead className="text-right">Số điểm có</TableHead>
+                                    <TableHead className="w-0"><span className="sr-only">Thao tác</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
                                 {data.facilities.map(f => (
-                                    <tr key={f.id} aria-selected={editingFacility?.id === f.id}>
-                                        <td className="k-b">{f.name}</td>
-                                        <td className="num">{facilityUse.get(f.name) ?? 0}</td>
-                                        <td className="is-act">
-                                            <button type="button" className="k-btn t sm" onClick={() => setEditingFacility({ ...f })}>Đổi tên</button>
-                                            <button type="button" className="k-btn d sm" onClick={() => void removeFacility(f)}>Xoá…</button>
-                                        </td>
-                                    </tr>
+                                    <TableRow key={f.id} data-state={editingFacility?.id === f.id ? "selected" : undefined}>
+                                        <TableCell className="pl-4 font-medium">{f.name}</TableCell>
+                                        <TableCell className="text-right tabular-nums">{facilityUse.get(f.name) ?? 0}</TableCell>
+                                        <TableCell className="pr-4">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Button variant="outline" size="sm" onClick={() => setEditingFacility({ ...f })}><Pencil />Đổi tên</Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="size-8" aria-label={`Thao tác khác với ${f.name}`}><MoreHorizontal /></Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-44">
+                                                        <DropdownMenuItem variant="destructive" onSelect={() => void removeFacility(f)}><Trash2 />Xoá tiện ích…</DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
                                 ))}
-                                {!data.facilities.length && <tr><td colSpan={3} className="k-m">Chưa có tiện ích.</td></tr>}
-                            </tbody>
-                        </table>
-                    </section>
-                    <aside className="k-card" style={{ width: 360, flexShrink: 0, alignSelf: "flex-start" }}>
-                        <form className="k-stack" onSubmit={e => void saveFacility(e)}>
-                            <h2 className="k16">{editingFacility ? "Đổi tên tiện ích" : "Thêm tiện ích"}</h2>
-                            <div className="k-field">
-                                <label htmlFor="fac-name">Tên</label>
-                                <input id="fac-name" className="k-input" required placeholder="Wi-Fi miễn phí" value={editingFacility?.name ?? facilityName}
+                                {!data.facilities.length && (
+                                    <TableRow><TableCell colSpan={3} className="h-24 text-center text-muted-foreground">Chưa có tiện ích.</TableCell></TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <aside className="overflow-hidden rounded-xl border bg-card">
+                        <form onSubmit={e => void saveFacility(e)}>
+                            <div className="border-b p-4"><h2 className="text-base font-semibold">{editingFacility ? "Đổi tên tiện ích" : "Thêm tiện ích"}</h2></div>
+                            <div className="grid gap-2 p-4">
+                                <Label htmlFor="fac-name">Tên</Label>
+                                <Input id="fac-name" required placeholder="Wi-Fi miễn phí" value={editingFacility?.name ?? facilityName}
                                     onChange={e => (editingFacility ? setEditingFacility({ ...editingFacility, name: e.target.value }) : setFacilityName(e.target.value))} />
                             </div>
-                            <div className="k-line">
-                                <Button type="submit" busy={busy}>{editingFacility ? "Lưu" : "Thêm tiện ích"}</Button>
-                                {editingFacility && <Button variant="ghost" onClick={() => setEditingFacility(null)}>Huỷ</Button>}
+                            <div className="flex items-center gap-2 border-t p-3">
+                                {editingFacility && <Button type="button" variant="ghost" size="sm" onClick={() => setEditingFacility(null)}>Huỷ</Button>}
+                                <Button type="submit" size="sm" className="ml-auto" disabled={busy}>{editingFacility ? "Lưu" : "Thêm tiện ích"}</Button>
                             </div>
                         </form>
                     </aside>
-                </div>
-            )}
+                </TabsContent>
+            </Tabs>
 
-            {removing && (
-                <Dialog alert title={`Xoá loại “${removing.type.name}”?`} onClose={() => setRemoving(null)}
-                    actions={<><Button onClick={() => setRemoving(null)}>Huỷ</Button><Button variant="danger" busy={busy} disabled={!removing.to} onClick={() => void moveAndRemove()}>Chuyển và xoá loại</Button></>}>
-                    <p className="k14"><Lc name="triangle-alert" size={16} color="var(--warn)" style={{ verticalAlign: "-3px", marginRight: 8 }} />{counts.get(removing.type.code) ?? 0} điểm đang thuộc loại này.</p>
-                    <div className="k-field">
-                        <label htmlFor="del-to">Chuyển {counts.get(removing.type.code) ?? 0} điểm sang</label>
-                        <select id="del-to" className="k-input" aria-describedby="del-help" value={removing.to} onChange={e => setRemoving({ ...removing, to: e.target.value })}>
-                            <option value="">Chọn loại thay thế…</option>
-                            {types.filter(t => t.code !== removing.type.code).map(t => <option key={t.code} value={t.code}>{t.name}</option>)}
-                        </select>
-                        <span id="del-help" className="k-hint">Bắt buộc, để điểm không mất loại.</span>
-                    </div>
-                </Dialog>
-            )}
-        </div>
+            <Dialog open={removing !== null} onOpenChange={open => !open && setRemoving(null)}>
+                <DialogContent className="sm:max-w-md">
+                    {removing && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Xoá loại “{removing.type.name}”?</DialogTitle>
+                                <DialogDescription className="flex items-center gap-2"><TriangleAlert className="size-4 text-warning" />{removingCount} điểm đang thuộc loại này.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-2">
+                                <Label htmlFor="del-to">Chuyển {removingCount} điểm sang</Label>
+                                <Select value={removing.to} onValueChange={v => setRemoving({ ...removing, to: v })}>
+                                    <SelectTrigger id="del-to" className="w-full" aria-describedby="del-help"><SelectValue placeholder="Chọn loại thay thế" /></SelectTrigger>
+                                    <SelectContent>
+                                        {types.filter(t => t.code !== removing.type.code).map(t => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <p id="del-help" className="text-xs text-muted-foreground">Bắt buộc, để điểm không mất loại.</p>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setRemoving(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy || !removing.to} onClick={() => void moveAndRemove()}>Chuyển và xoá loại</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </Page>
     );
 }

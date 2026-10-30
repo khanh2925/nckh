@@ -3,23 +3,19 @@ import type * as Leaflet from "leaflet";
 import { plateText, type FloorProjection, type LatLng, type LocationTypeDto, type WalkwayNetworkDto, type ZoneDto } from "@indoor-map/core";
 import L from "../lib/leaflet";
 import { LUCIDE, type LucideName } from "../design/lucide";
-import "./pages/workspace.css";
+import "./map.css";
 
 // Các lớp vẽ trên EditorMap. Mỗi lớp là một component không hiển thị gì ngoài Leaflet; nhận "map" từ EditorMap.
 
-/** Leaflet cần chuỗi màu thật: đọc token từ design/tokens.css (giá trị dự phòng = token gốc, đặt ở MỘT chỗ này) */
-const TOKEN_FALLBACK = {
-    graphite: "#23272D", signal: "#FFC629", surface: "#FFFFFF", danger: "#B42318", warn: "#8A5A12", ok: "#12704F", muted: "#5B6169"
+/** Leaflet cần chuỗi màu thật. Màu theo theme shadcn của Builder (app.css): chữ đậm neutral-900, nhấn xanh dương blue-600.
+ *  Giữ tên khoá cũ (graphite = màu nét đậm, signal = màu nhấn) để các trang không phải đổi. */
+const THEME = {
+    graphite: "#171717", signal: "#155DFC", surface: "#FFFFFF", danger: "#DC2626", warn: "#D97706", ok: "#16A34A", muted: "#737373"
 };
-export type MapColors = typeof TOKEN_FALLBACK;
+export type MapColors = typeof THEME;
 // eslint-disable-next-line react-refresh/only-export-components
 export function mapColors(): MapColors {
-    const css = getComputedStyle(document.documentElement);
-    const read = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
-    return {
-        graphite: read("--graphite", TOKEN_FALLBACK.graphite), signal: read("--signal", TOKEN_FALLBACK.signal), surface: read("--surface", TOKEN_FALLBACK.surface),
-        danger: read("--danger", TOKEN_FALLBACK.danger), warn: read("--warn", TOKEN_FALLBACK.warn), ok: read("--ok", TOKEN_FALLBACK.ok), muted: read("--muted", TOKEN_FALLBACK.muted)
-    };
+    return THEME;
 }
 
 /** Icon Lucide dạng chuỗi SVG (cho L.divIcon) */
@@ -41,6 +37,12 @@ export function signIcon({ inner, label, color, ink, plate, light, selected, tag
     const html = `<span class="ws-mk${selected ? " is-selected" : ""}${tag ? " is-tag" : ""}${showLabel ? " is-lbl" : ""}"><span class="ws-pin${plate ? " is-plate" : ""}${light ? " is-light" : ""}"${style}>${inner}</span>`
         + (label ? `<span class="ws-lbl">${escapeHtml(label)}</span>` : "") + "</span>";
     return L.divIcon({ className: "", html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+}
+
+/** Nút lối đi đang chọn (trang Lối đi): chấm tròn vàng viền than chì */
+// eslint-disable-next-line react-refresh/only-export-components
+export function selectedNodeIcon(): Leaflet.DivIcon {
+    return L.divIcon({ className: "", html: '<span class="cb-node is-selected"></span>', iconSize: [16, 16], iconAnchor: [8, 8] });
 }
 
 function useLayer(map: Leaflet.Map) {

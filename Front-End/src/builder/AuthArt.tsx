@@ -1,26 +1,30 @@
 // Hình minh hoạ cột phải màn Đăng nhập / Đăng ký / Quên mật khẩu / Bảo trì: mặt bằng thật Ga T1 tầng 1,
-// tuyến từ an ninh tới Cửa 12. Sinh từ bản thiết kế (gen/kauth_art.py), toạ độ làm tròn. Chỉ dùng biến màu.
-import Lc from "../design/Lc";
+// tuyến từ an ninh tới Cửa 12. Sinh từ bản thiết kế (gen/kauth_art.py), toạ độ làm tròn.
+// Chỉ dùng biến màu của giao diện shadcn (app.css): nền trung tính, tuyến màu chủ đạo (xanh dương).
+import { Coffee, Toilet } from "lucide-react";
 
-// Các màu bản đồ chưa có trong tokens.css (giống bản thiết kế)
+const ink = (pct: number, base = "var(--background)") => `color-mix(in oklab, var(--muted-foreground) ${pct}%, ${base})`;
 const M = {
-    bridge: "color-mix(in srgb, var(--graphite) 16%, var(--surface))",
-    service: "color-mix(in srgb, var(--graphite) 11%, var(--paper))",
-    amenity: "color-mix(in srgb, var(--graphite) 11%, var(--surface))",
-    gate: "color-mix(in srgb, var(--graphite) 4%, var(--surface))",
-    hatch: "color-mix(in srgb, var(--graphite) 20%, var(--paper))"
+    floor: "var(--background)",
+    wall: ink(55),
+    edge: ink(28),
+    bridge: ink(16),
+    service: ink(11, "var(--muted)"),
+    amenity: ink(11),
+    gate: ink(4),
+    hatch: ink(20, "var(--muted)")
 };
 
 /** [fill, stroke, strokeWidth] */
 const STYLES: [string, string, number][] = [
-    ["var(--m-floor)", "var(--m-wall)", 2],
-    [M.bridge, "var(--m-wall)", 1],
-    [M.service, "var(--m-edge)", 0.8],
+    [M.floor, M.wall, 2],
+    [M.bridge, M.wall, 1],
+    [M.service, M.edge, 0.8],
     ["url(#auth-hatch)", "none", 0],
-    [M.amenity, "var(--m-edge)", 0.8],
-    ["var(--m-floor)", "var(--m-edge)", 0.8],
-    [M.gate, "var(--m-edge)", 0.8],
-    ["none", "var(--m-edge)", 0.8],
+    [M.amenity, M.edge, 0.8],
+    [M.floor, M.edge, 0.8],
+    [M.gate, M.edge, 0.8],
+    ["none", M.edge, 0.8],
 ];
 
 const PATHS: [number, string][] = [
@@ -50,11 +54,11 @@ const PATHS: [number, string][] = [
 
 const ROUTE = "544.1,812.2 471.4,753.0 448.8,328.5 270.3,322.8 260.3,232.3 194.2,221.4 182.6,124.6 139.4,108.2";
 
-function Sign({ x, y, icon }: { x: number; y: number; icon: "coffee" | "toilet" }) {
+function Sign({ x, y, icon: Icon }: { x: number; y: number; icon: typeof Coffee }) {
     return (
         <g transform={`translate(${x} ${y})`}>
-            <rect width="28" height="28" rx="4" fill="var(--graphite)" stroke="var(--surface)" strokeWidth="2" />
-            <g transform="translate(6 6)"><Lc name={icon} size={16} color="var(--surface)" /></g>
+            <rect width="28" height="28" rx="6" fill="var(--foreground)" stroke="var(--background)" strokeWidth="2" />
+            <Icon x={6} y={6} width={16} height={16} color="var(--background)" strokeWidth={1.75} aria-hidden="true" />
         </g>
     );
 }
@@ -76,17 +80,17 @@ export default function AuthArt() {
                     })}
                 </svg>
             </g>
-            <polyline points={ROUTE} fill="none" stroke="var(--graphite)" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
-            <polyline points={ROUTE} fill="none" stroke="var(--signal)" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" />
-            <Sign x={480.4} y={281.4} icon="coffee" />
-            <Sign x={299.8} y={109.8} icon="toilet" />
-            <circle cx="544.1" cy="812.2" r="22" fill="var(--signal)" fillOpacity="0.24" stroke="var(--graphite)" strokeOpacity="0.3" />
-            <circle cx="544.1" cy="812.2" r="9" fill="var(--signal)" stroke="var(--graphite)" strokeWidth="4" />
+            <polyline points={ROUTE} fill="none" stroke="var(--background)" strokeWidth="12" strokeLinecap="round" strokeLinejoin="round" />
+            <polyline points={ROUTE} fill="none" stroke="var(--primary)" strokeWidth="6.5" strokeLinecap="round" strokeLinejoin="round" />
+            <Sign x={480.4} y={281.4} icon={Coffee} />
+            <Sign x={299.8} y={109.8} icon={Toilet} />
+            <circle cx="544.1" cy="812.2" r="22" fill="var(--primary)" fillOpacity="0.16" stroke="var(--primary)" strokeOpacity="0.3" />
+            <circle cx="544.1" cy="812.2" r="9" fill="var(--primary)" stroke="var(--background)" strokeWidth="4" />
             <g transform="translate(113.4 50.2)">
-                <rect width="52" height="40" rx="4" fill="var(--hud)" stroke="var(--surface)" strokeWidth="2" />
-                <path d="M20 39 L26 47 L32 39 Z" fill="var(--hud)" stroke="var(--surface)" strokeWidth="2" strokeLinejoin="round" />
-                <rect x="19" y="36" width="14" height="4" fill="var(--hud)" />
-                <text x="26" y="26" textAnchor="middle" fill="var(--signal)" fontFamily="var(--font)" fontSize="18" fontWeight="600">12</text>
+                <rect width="52" height="40" rx="6" fill="var(--primary)" stroke="var(--background)" strokeWidth="2" />
+                <path d="M20 39 L26 47 L32 39 Z" fill="var(--primary)" stroke="var(--background)" strokeWidth="2" strokeLinejoin="round" />
+                <rect x="19" y="36" width="14" height="4" fill="var(--primary)" />
+                <text x="26" y="26" textAnchor="middle" fill="var(--primary-foreground)" fontFamily="inherit" fontSize="18" fontWeight="600">12</text>
             </g>
         </svg>
     );

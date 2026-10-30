@@ -1,14 +1,36 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { EyeOff, Info, Lock, Trash2, Undo2, UserPlus, X } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { venueApi } from "../../console/api";
-import { HeaderActions, HeaderStatus, SaveState } from "../../console/Shell";
-import { Button, NotYet, useAction, useFeedback } from "../../console/ui";
-import Lc from "../../design/Lc";
-import { Dialog, GuestLink } from "../FloorList";
+import { Page, Section } from "../../console/page";
+import { HeaderStatus, SaveState } from "../../console/Shell";
+import { useAction, useFeedback } from "../../console/ui";
 import { useWorkspace } from "../Workspace";
+import { LocationPicker } from "../LocationPicker";
 import { OutlineMap } from "./VenueCreatePage";
 import { KIND_LABEL } from "./VenuesPage";
-import "./workspace.css";
+
+function NotAvailable({ children }: { children: string }) {
+    return (
+        <Alert>
+            <Info />
+            <AlertTitle>Chưa khả dụng</AlertTitle>
+            <AlertDescription>{children}</AlertDescription>
+        </Alert>
+    );
+}
 
 // Cài đặt địa điểm: tên, loại hình, mô tả, vùng bao (venueApi.update); gỡ xuất bản; xoá địa điểm (venueApi.remove).
 export default function VenueSettingsPage() {
@@ -20,14 +42,18 @@ export default function VenueSettingsPage() {
     const [tab, setTab] = useState<"general" | "members">("general");
     const [form, setForm] = useState({ name: venue.name, kind: venue.kind ?? "other", description: venue.description ?? "" });
     const [outline, setOutline] = useState<[number, number][]>(venue.outline ?? []);
+    const savedPin: [number, number] | null = venue.centerLat != null && venue.centerLng != null ? [venue.centerLat, venue.centerLng] : null;
+    const [pin, setPin] = useState<[number, number] | null>(savedPin);
     const [deleting, setDeleting] = useState<string | null>(null);
     const hidden = venue.status === "HIDDEN";
     const dirty = form.name !== venue.name || form.kind !== (venue.kind ?? "other") || form.description !== (venue.description ?? "")
-        || JSON.stringify(outline) !== JSON.stringify(venue.outline ?? []);
+        || JSON.stringify(outline) !== JSON.stringify(venue.outline ?? []) || JSON.stringify(pin) !== JSON.stringify(savedPin);
     const host = window.location.host;
 
     const save = async () => {
-        const center = outline.length ? { centerLat: outline.reduce((s, p) => s + p[0], 0) / outline.length, centerLng: outline.reduce((s, p) => s + p[1], 0) / outline.length } : {};
+        // Tâm địa điểm = ghim vị trí; chưa có ghim thì lấy giữa vùng bao như trước
+        const center = pin ? { centerLat: pin[0], centerLng: pin[1] }
+            : outline.length ? { centerLat: outline.reduce((s, p) => s + p[0], 0) / outline.length, centerLng: outline.reduce((s, p) => s + p[1], 0) / outline.length } : {};
         const saved = await run(() => venueApi.update(venueId, {
             ...venue, name: form.name.trim(), kind: form.kind, description: form.description.trim(), outline: outline.length >= 3 ? outline : undefined, ...center
         }), "Đã lưu cài đặt địa điểm");
@@ -44,105 +70,156 @@ export default function VenueSettingsPage() {
         if (await run(() => venueApi.remove(venueId), "Đã xoá địa điểm") !== null) navigate("/builder", { replace: true });
     };
 
+    const saveButton = (
+        <Button disabled={busy || !dirty || !form.name.trim()} title={dirty ? undefined : "Chưa có thay đổi"} onClick={() => void save()}>Lưu thay đổi</Button>
+    );
+
     return (
-        <div className="k-page">
+        <Page width="narrow" actions={saveButton}>
             <HeaderStatus>{dirty ? <SaveState state={busy ? "saving" : "dirty"} /> : null}</HeaderStatus>
-            <HeaderActions>
-                <GuestLink venue={venue} />
-                <Button variant="primary" busy={busy} disabled={!dirty || !form.name.trim()} title={dirty ? undefined : "Chưa có thay đổi"} onClick={() => void save()}>Lưu thay đổi</Button>
-            </HeaderActions>
-            <h1 className="k24">Cài đặt địa điểm</h1>
-            <div role="tablist" aria-label="Cài đặt" className="k-tabs">
-                <button type="button" role="tab" aria-selected={tab === "general"} className="k-tab" onClick={() => setTab("general")}>Chung</button>
-                <button type="button" role="tab" aria-selected={tab === "members"} className="k-tab" onClick={() => setTab("members")}>Thành viên <span className="k12 k-m" style={{ fontWeight: 400 }}>Giai đoạn 2</span></button>
-            </div>
 
             {hidden && (
-                <div className="k-note" role="status">
-                    <Lc name="eye-off" size={16} color="var(--danger)" />
-                    <div><b className="k-b">Quản trị hệ thống đã ẩn địa điểm này.</b><div className="k-m">Bạn vẫn sửa bản nháp được. Không gỡ, xoá hay đổi đường dẫn khi đang bị ẩn.</div></div>
-                </div>
+                <Alert variant="destructive">
+                    <EyeOff />
+                    <AlertTitle>Quản trị hệ thống đã ẩn địa điểm này</AlertTitle>
+                    <AlertDescription>Bạn vẫn sửa bản nháp được. Không gỡ, xoá hay đổi đường dẫn khi đang bị ẩn.</AlertDescription>
+                </Alert>
             )}
 
-            {tab === "members" ? (
-                <NotYet>Mời thêm người biên tập, người dán tem và chuyển quyền sở hữu cần API thành viên, sẽ có ở giai đoạn 2.</NotYet>
-            ) : (
-                <>
-                    <div className="ws-split is-aside-400">
-                        <section aria-labelledby="s-info" className="k-card">
-                            <h2 id="s-info" className="k16">Thông tin chung</h2>
-                            <div className="k-field"><label htmlFor="v-name">Tên địa điểm</label><input id="v-name" className="k-input" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-                            <div className="k-field">
-                                <label htmlFor="v-slug">Đường dẫn</label>
-                                <div className="k-input ws-slug">
-                                    <span className="k-m">{host}/v/</span>
-                                    <input id="v-slug" readOnly value={venue.slug} aria-describedby="slug-h" />
-                                    <Lc name="lock" size={16} color="var(--muted)" />
+            <Tabs value={tab} onValueChange={v => setTab(v as "general" | "members")} className="gap-6">
+                <TabsList>
+                    <TabsTrigger value="general">Chung</TabsTrigger>
+                    <TabsTrigger value="members">Thành viên<Badge variant="outline" className="ml-1">GĐ 2</Badge></TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="general" className="flex flex-col gap-6">
+                    <Section title="Thông tin chung">
+                        <div className="grid gap-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="v-name">Tên địa điểm</Label>
+                                    <Input id="v-name" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                                 </div>
-                                <span id="slug-h" className="k-hint">Không đổi được sau khi tạo, vì mã QR đã in chứa đường dẫn này.</span>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="v-kind">Loại hình</Label>
+                                    <Select value={form.kind} onValueChange={v => setForm(f => ({ ...f, kind: v }))}>
+                                        <SelectTrigger id="v-kind" className="w-full"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            {Object.entries(KIND_LABEL).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
-                            <div className="k-field">
-                                <label htmlFor="v-kind">Loại hình</label>
-                                <select id="v-kind" className="k-input" value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))}>
-                                    {Object.entries(KIND_LABEL).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                                </select>
+                            <div className="grid gap-2">
+                                <Label htmlFor="v-slug">Đường dẫn</Label>
+                                <div className="relative">
+                                    <Input id="v-slug" readOnly value={`${host}/v/${venue.slug}`} aria-describedby="slug-h" className="bg-muted/50 pr-9 text-muted-foreground" />
+                                    <Lock className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                                </div>
+                                <p id="slug-h" className="text-xs text-muted-foreground">Không đổi được sau khi tạo, vì mã QR đã in chứa đường dẫn này.</p>
                             </div>
-                            <div className="k-field"><label htmlFor="v-desc">Mô tả</label><textarea id="v-desc" rows={3} className="k-input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-                        </section>
-                        <div className="k-stack" style={{ gap: 24 }}>
-                            <section aria-labelledby="s-entry" className="k-card">
-                                <h2 id="s-entry" className="k16">Lối vào chính</h2>
-                                <NotYet>Chọn điểm xuất phát mặc định cho khách chưa định vị cần trường dữ liệu mới ở backend.</NotYet>
-                            </section>
-                            <section aria-labelledby="s-ct" className="k-card">
-                                <h2 id="s-ct" className="k16">Liên hệ cho khách</h2>
-                                <NotYet>Điện thoại và trang web của địa điểm chưa có chỗ lưu ở backend.</NotYet>
-                            </section>
+                            <div className="grid gap-2">
+                                <Label htmlFor="v-desc">Mô tả</Label>
+                                <Textarea id="v-desc" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                            </div>
+                        </div>
+                    </Section>
+
+                    <Section title="Vị trí" flush description="Khách mở bản đồ sẽ thấy chỗ này trước. Tìm địa chỉ hoặc kéo ghim cho đúng cổng chính.">
+                        <LocationPicker value={pin} onChange={setPin} initialQuery={venue.name} />
+                    </Section>
+
+                    <Section title="Vùng bao" description={`${outline.length} góc, bấm lên bản đồ để thêm góc, kéo để sửa.`}
+                        actions={(
+                            <>
+                                <Button variant="outline" size="sm" disabled={!outline.length} onClick={() => setOutline(o => o.slice(0, -1))}><Undo2 />Bỏ góc cuối</Button>
+                                <Button variant="outline" size="sm" disabled={!outline.length} onClick={() => setOutline([])}><X />Xoá vùng bao</Button>
+                            </>
+                        )}>
+                        <div className="relative h-112 overflow-hidden rounded-lg border [&_.cb-map]:absolute [&_.cb-map]:inset-0 [&_.cb-map]:min-h-0">
+                            {/* vẽ lại khi ghim đổi để ghim trên bản đồ vùng bao luôn đúng chỗ */}
+                            <OutlineMap key={pin?.join(",") ?? "none"} value={outline} onChange={setOutline} center={pin ?? undefined} pin={pin} />
+                        </div>
+                    </Section>
+
+                    <Section title="Lối vào chính">
+                        <NotAvailable>Điểm xuất phát mặc định cho khách chưa định vị cần trường dữ liệu mới ở backend.</NotAvailable>
+                    </Section>
+
+                    <Section title="Liên hệ cho khách">
+                        <NotAvailable>Điện thoại và trang web của địa điểm chưa có chỗ lưu ở backend.</NotAvailable>
+                    </Section>
+
+                    <div className="divide-y rounded-xl border border-destructive/30">
+                        <div className="flex items-center justify-between gap-4 px-6 py-4">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium">Gỡ xuất bản</p>
+                                <p id="dz-1" className="text-sm text-muted-foreground">
+                                    {hidden ? "Khoá khi địa điểm đang bị quản trị ẩn." : venue.status === "PUBLISHED" ? "Khách không mở được bản đồ. Bản nháp và mã QR giữ nguyên." : "Địa điểm chưa công khai."}
+                                </p>
+                            </div>
+                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" aria-describedby="dz-1"
+                                disabled={hidden || venue.status !== "PUBLISHED" || busy} onClick={() => void unpublish()}>
+                                {hidden ? <Lock /> : <EyeOff />}Gỡ xuất bản…
+                            </Button>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 px-6 py-4">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium">Xoá địa điểm</p>
+                                <p id="dz-2" className="text-sm text-muted-foreground">{hidden ? "Khoá khi địa điểm đang bị quản trị ẩn." : "Xoá toà nhà, tầng, điểm, lối đi. Không hoàn tác."}</p>
+                            </div>
+                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" aria-describedby="dz-2" aria-haspopup="dialog"
+                                disabled={hidden || busy} onClick={() => setDeleting("")}>
+                                {hidden ? <Lock /> : <Trash2 />}Xoá địa điểm…
+                            </Button>
                         </div>
                     </div>
+                </TabsContent>
 
-                    <section aria-labelledby="s-outline" className="k-card">
-                        <div className="k-line">
-                            <h2 id="s-outline" className="k16">Vùng bao</h2>
-                            <span className="k12 k-m">{outline.length} góc</span>
-                            <div className="k-line ws-right">
-                                <button type="button" className="k-btn sm" disabled={!outline.length} onClick={() => setOutline(o => o.slice(0, -1))}>Bỏ góc cuối</button>
-                                <button type="button" className="k-btn sm" disabled={!outline.length} onClick={() => setOutline([])}>Xoá vùng bao</button>
+                <TabsContent value="members" className="flex flex-col gap-6">
+                    <NotAvailable>Mời người biên tập, người dán tem và chuyển quyền sở hữu cần API thành viên ở giai đoạn 2.</NotAvailable>
+                    <Section title="Thành viên" flush actions={<Button variant="outline" size="sm" disabled title="Chưa khả dụng"><UserPlus />Mời thành viên</Button>}>
+                        <Table>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-6">Người dùng</TableHead>
+                                    <TableHead className="pr-6">Vai trò</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <TableRow><TableCell colSpan={2} className="h-24 text-center text-muted-foreground">Chưa mời ai.</TableCell></TableRow>
+                            </TableBody>
+                        </Table>
+                    </Section>
+                </TabsContent>
+            </Tabs>
+
+            <Dialog open={deleting !== null} onOpenChange={open => !open && setDeleting(null)}>
+                <DialogContent className="sm:max-w-md">
+                    {deleting !== null && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Xoá {venue.name}?</DialogTitle>
+                                <DialogDescription>Không hoàn tác được. Toàn bộ dữ liệu của địa điểm bị xoá.</DialogDescription>
+                            </DialogHeader>
+                            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 rounded-lg border px-4 py-3 text-sm">
+                                <dt className="text-muted-foreground">Toà nhà</dt><dd className="text-right font-medium tabular-nums">{data.buildings.length}</dd>
+                                <dt className="text-muted-foreground">Tầng</dt><dd className="text-right font-medium tabular-nums">{data.floors.length}</dd>
+                                <dt className="text-muted-foreground">Điểm (kèm mọi lối đi)</dt><dd className="text-right font-medium tabular-nums">{data.locations.length}</dd>
+                                <dt className="text-destructive">Mã QR hết hiệu lực</dt><dd className="text-right font-medium text-destructive">Tất cả</dd>
+                            </dl>
+                            <div className="grid gap-2">
+                                <Label htmlFor="dl-conf">Gõ <span className="font-semibold">{venue.name}</span> để xác nhận</Label>
+                                <Input id="dl-conf" autoComplete="off" spellCheck={false} placeholder={venue.name} value={deleting} onChange={e => setDeleting(e.target.value)} />
                             </div>
-                        </div>
-                        <p className="k12 k-m">Bấm lên bản đồ để thêm góc, kéo để sửa. Khách thấy vùng này trên bản đồ chọn địa điểm.</p>
-                        <OutlineMap value={outline} onChange={setOutline} center={venue.centerLat != null && venue.centerLng != null ? [venue.centerLat, venue.centerLng] : undefined} />
-                    </section>
-
-                    <section aria-label="Gỡ hoặc xoá địa điểm" className="k-card ws-danger-zone">
-                        <div className="k-row">
-                            <div className="ws-grow"><div className="k14 k-b">Gỡ xuất bản</div>
-                                <div id="dz-1" className="k12 k-m">{hidden ? "Khoá khi địa điểm đang bị quản trị ẩn." : venue.status === "PUBLISHED" ? "Khách không mở được bản đồ. Bản nháp và mã QR giữ nguyên." : "Địa điểm chưa công khai."}</div></div>
-                            <button type="button" className="k-btn d" aria-describedby="dz-1" disabled={hidden || venue.status !== "PUBLISHED" || busy} onClick={() => void unpublish()}>{hidden && <Lc name="lock" size={16} />}Gỡ xuất bản…</button>
-                        </div>
-                        <div className="k-row">
-                            <div className="ws-grow"><div className="k14 k-b">Xoá địa điểm</div>
-                                <div id="dz-2" className="k12 k-m">{hidden ? "Khoá khi địa điểm đang bị quản trị ẩn." : "Xoá toà nhà, tầng, điểm, lối đi. Không hoàn tác."}</div></div>
-                            <button type="button" className="k-btn d" aria-describedby="dz-2" aria-haspopup="dialog" disabled={hidden || busy} onClick={() => setDeleting("")}>{hidden && <Lc name="lock" size={16} />}Xoá địa điểm…</button>
-                        </div>
-                    </section>
-                </>
-            )}
-
-            {deleting !== null && (
-                <Dialog alert title={`Xoá ${venue.name}?`} onClose={() => setDeleting(null)}
-                    actions={<><Button onClick={() => setDeleting(null)}>Huỷ</Button><Button variant="danger" busy={busy} disabled={deleting.trim() !== venue.name.trim()} onClick={() => void remove()}>Xoá vĩnh viễn</Button></>}>
-                    <ul className="k14" style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-                        <li>{data.buildings.length} toà nhà, {data.floors.length} tầng, {data.locations.length} điểm và mọi lối đi.</li>
-                        <li>Mọi mã QR hết hiệu lực, kể cả tem đã dán.</li>
-                    </ul>
-                    <div className="k-field">
-                        <label htmlFor="dl-conf">Gõ {venue.name} để xác nhận</label>
-                        <input id="dl-conf" className="k-input" autoComplete="off" aria-describedby="dl-h" value={deleting} onChange={e => setDeleting(e.target.value)} />
-                        <span id="dl-h" className="k-hint">Không hoàn tác.</span>
-                    </div>
-                </Dialog>
-            )}
-        </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setDeleting(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy || deleting.trim() !== venue.name.trim()} onClick={() => void remove()}>Xoá vĩnh viễn</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </Page>
     );
 }

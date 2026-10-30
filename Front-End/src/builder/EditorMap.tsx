@@ -5,7 +5,6 @@ import L from "../lib/leaflet";
 import { api } from "../lib/data";
 import { buildPlanOverlay, parsePlanSvg, rasterAsSvg } from "../lib/planSvg";
 import { mapColors } from "./layers";
-import "./pages/workspace.css";
 
 // Bản đồ nền cho trình biên tập: nền ngoài trời + bản vẽ mặt bằng của tầng đang chọn.
 // Các lớp biên tập (điểm, vùng, lối đi...) là component con nhận "map" và tự vẽ bằng useEffect.
@@ -47,8 +46,9 @@ export default function EditorMap({ model, floorId, children, fitKey, className 
         if (!box.current) return undefined;
         const m = L.map(box.current, { zoomControl: false, center: [model.venue.centerLat ?? 10.8, model.venue.centerLng ?? 106.66], zoom: 17, maxZoom: 23, zoomSnap: 0.25, rotateControl: false, doubleClickZoom: false });
         L.control.zoom({ position: "bottomright" }).addTo(m);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-            maxZoom: 23, maxNativeZoom: 20, subdomains: "abcd", attribution: "&copy; OpenStreetMap &copy; CARTO"
+        // Nền đường phố OSM, làm xám nhạt để mặt bằng nổi lên (CARTO không còn cho dùng không cần khoá API)
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 23, maxNativeZoom: 19, className: "grayscale opacity-40", attribution: "&copy; OpenStreetMap"
         }).addTo(m);
         const rotatePane = m.getPane("rotatePane");
         m.createPane("planPane", rotatePane).style.zIndex = "350";

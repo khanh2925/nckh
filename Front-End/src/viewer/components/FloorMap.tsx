@@ -43,7 +43,8 @@ interface FloorMapProps {
     className?: string;
 }
 
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+// Nền đường phố OSM (CARTO không còn cho dùng không cần khoá API); CSS .wf-tiles-base làm xám nhạt
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 // Nhìn xa (zoom < 19) chỉ hiện mốc định hướng (cửa ra, an ninh, thang máy, thông tin), không nhãn;
 // gần hơn hiện thêm loại quan trọng kèm nhãn; rất gần hiện hết
 const TOP_TYPES = new Set(["gate", "security", "information", "elevator"]);
@@ -148,8 +149,8 @@ export default function FloorMap({
         });
         map.attributionControl?.setPrefix(false);
         L.tileLayer(TILE_URL, {
-            maxZoom: 22, maxNativeZoom: 20, subdomains: "abcd", className: "wf-tiles-base",
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; CARTO'
+            maxZoom: 22, maxNativeZoom: 19, className: "wf-tiles-base",
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         }).addTo(map);
         // Pane phải nằm trong rotatePane của leaflet-rotate để xoay cùng bản đồ
         const rotatePane = map.getPane("rotatePane");
@@ -256,7 +257,7 @@ export default function FloorMap({
             const latlngs = leg.points.map(p => L.latLng(p.lat, p.lng));
             const active = index === activeLeg;
             if (active) {
-                group.addLayer(L.polyline(latlngs, { pane: "routePane", color: MAP.graphite, weight: 10, opacity: 1, lineJoin: "round", lineCap: "round", interactive: false }));
+                group.addLayer(L.polyline(latlngs, { pane: "routePane", color: MAP.routeEdge, weight: 10, opacity: 1, lineJoin: "round", lineCap: "round", interactive: false }));
                 group.addLayer(L.polyline(latlngs, { pane: "routePane", color: MAP.signal, weight: 5.5, opacity: 1, lineJoin: "round", lineCap: "round", interactive: false }));
             } else {
                 group.addLayer(L.polyline(latlngs, { pane: "routePane", color: MAP.graphite, weight: 6, opacity: 0.9, dashArray: "1 11", lineCap: "round", lineJoin: "round", interactive: false }));

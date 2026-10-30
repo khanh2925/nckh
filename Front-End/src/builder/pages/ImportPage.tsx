@@ -1,14 +1,21 @@
-import { useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { normalizeText, type ImportResultDto, type LocationDto } from "@indoor-map/core";
+import { Check, CircleAlert, CircleCheck, Download, FileText, ListChecks, TriangleAlert, Upload } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { catalogApi, locationApi } from "../../console/api";
-import { HeaderActions } from "../../console/Shell";
-import { Button, COLORS, useAction } from "../../console/ui";
-import Lc from "../../design/Lc";
-import { floorLabel, FloorSelect, GuestLink } from "../FloorList";
+import { Page, Section, Stat } from "../../console/page";
+import { COLORS, useAction } from "../../console/ui";
+import { floorLabel } from "../FloorList";
 import { useWorkspace } from "../Workspace";
-import { Steps } from "./CalibratePage";
-import "./workspace.css";
 
 // Nhập hàng loạt địa điểm từ CSV hoặc GeoJSON vào một tầng. Kiểm tra trên trình duyệt trước, rồi gửi một lần.
 const FIELDS = [
@@ -241,193 +248,253 @@ export default function ImportPage() {
         fileInput.current?.click();
     };
 
-    const helpBox = (
-        <section aria-labelledby="need-title" className="k-card ws-card0">
-            <div className="ws-cardhead">
-                <h2 id="need-title" className="k16">Cột trong tệp</h2>
-                <button type="button" className="k-btn t sm ws-right" onClick={() => downloadText("mau_diem_quan_tam.csv", SAMPLE)}>Tải tệp mẫu</button>
-            </div>
-            <table className="k-tbl is-dense"><tbody>{NEED.map(([a, b, c]) => <tr key={a}><td className="k-m">{a}</td><td>{b}</td><td className="k-m">{c}</td></tr>)}</tbody></table>
-        </section>
-    );
+    const floors = model.buildings.flatMap(b => model.floorsOf(b.id));
+    const editorLink = `${base}/editor?floor=${floorId}`;
 
-    let footer: ReactNode = <div className="ws-right"><button type="button" className="k-btn" disabled>Nhập điểm</button></div>;
-    if (reading) footer = <><span role="status" className="k14 k-m">Đang đọc tệp…</span><div className="ws-right"><button type="button" className="k-btn p" disabled>Nhập điểm</button></div></>;
-    else if (result) footer = <div className="ws-right k-line"><Button onClick={reset}>Nhập tệp khác</Button><Button variant="primary" to={`${base}/editor?floor=${floorId}`}>Xem trên mặt bằng</Button></div>;
-    else if (fileName) footer = (
-        <>
-            {bad > 0 && <span role="status" className="k14 k-danger k-line"><Lc name="circle-alert" size={16} />{bad} dòng lỗi sẽ bị bỏ qua</span>}
-            {bad > 0 && <button type="button" className="k-btn" onClick={downloadErrors}><Lc name="download" size={16} />Tải file lỗi (.csv)</button>}
-            <div className="k-line ws-right">
-                <Button to={`${base}/editor?floor=${floorId}`}>Huỷ</Button>
-                <Button variant="primary" busy={busy} disabled={!valid.length || !mappingOk} onClick={() => void submit()}>Nhập {valid.length} dòng hợp lệ</Button>
-            </div>
-        </>
-    );
+    let actions: ReactNode = <Button disabled>Nhập điểm</Button>;
+    if (result) {
+        actions = (
+            <>
+                <Button variant="outline" onClick={reset}><Upload />Nhập tệp khác</Button>
+                <Button asChild><Link to={editorLink}>Xem trên mặt bằng</Link></Button>
+            </>
+        );
+    } else if (fileName && !reading) {
+        actions = (
+            <>
+                {bad > 0 && <Button variant="outline" onClick={downloadErrors}><Download />Tải dòng lỗi</Button>}
+                <Button variant="outline" asChild><Link to={editorLink}>Huỷ</Link></Button>
+                <Button disabled={!valid.length || !mappingOk || busy} onClick={() => void submit()}>Nhập {valid.length} dòng hợp lệ</Button>
+            </>
+        );
+    }
 
     return (
-        <div className="ws-scroll">
-            <HeaderActions><GuestLink venue={data.venue} /></HeaderActions>
+        <Page width="wide" actions={actions}>
             <input ref={fileInput} type="file" accept=".csv,.txt,.json,.geojson,text/csv,application/json,application/geo+json" hidden onChange={onFile} />
-            <div className="k-page">
-                <div>
-                    <Link to={`${base}/editor?floor=${floorId}`} className="k12 k-m ws-back"><Lc name="chevron-left" size={16} />Điểm và vùng</Link>
-                    <div className="k-title">
-                        <h1 className="k24">Nhập điểm quan tâm</h1>
-                        <div className="k-acts">
-                            <label htmlFor="imp-floor" className="k14 k-m" style={{ whiteSpace: "nowrap" }}>Nhập vào</label>
-                            <FloorSelect model={model} floorId={floorId} onSelect={setFloorId} id="imp-floor" width={220} />
-                        </div>
-                    </div>
-                </div>
+            <div className="flex flex-wrap items-center gap-2">
                 <Steps labels={["Chọn tệp", "Ghép cột", "Kiểm tra và nhập"]} current={result ? 3 : step} />
-
-                {!fileName && !reading ? (
-                    <div className="ws-split is-help">
-                        <section aria-label="Chọn tệp" className={`k-card ws-drop${over ? " is-over" : ""}${error ? " is-bad" : ""}`}
-                            onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
-                            {error ? (
-                                <>
-                                    <h2 role="alert" className="k16 k-line k-danger"><Lc name="circle-alert" size={18} />Không đọc được tệp {error.file}</h2>
-                                    <p className="k14 k-m">{error.message}</p>
-                                    <div className="ws-mt8"><Button variant="primary" onClick={() => fileInput.current?.click()}>Chọn tệp khác</Button></div>
-                                </>
-                            ) : (
-                                <>
-                                    <h2 className="k16 k-line"><Lc name="upload" size={18} color="var(--muted)" />Kéo tệp vào đây</h2>
-                                    <p className="k14 k-m">CSV (UTF-8) hoặc GeoJSON</p>
-                                    <div className="ws-mt8"><Button variant="primary" onClick={() => fileInput.current?.click()}>Chọn tệp</Button></div>
-                                </>
-                            )}
-                        </section>
-                        {helpBox}
-                    </div>
-                ) : (
-                    <div className="ws-split is-280">
-                        <aside className="k-stack">
-                            <div className="k-card tight">
-                                <div className="k-line" style={{ gap: 16 }}>
-                                    <div className="ws-grow">
-                                        <div className="k14 k-b ws-ellipsis" title={fileName ?? ""}>{fileName ?? "Đang đọc tệp"}</div>
-                                        <div className="k12 k-m">{reading ? "Đang đọc…" : `${records.length} dòng`}</div>
-                                    </div>
-                                    {!reading && <button type="button" className="k-btn t sm" onClick={reset}>Đổi tệp</button>}
-                                </div>
-                            </div>
-                            {reading ? (
-                                <div className="k-card tight" aria-hidden="true">
-                                    <span className="k-skel" style={{ width: 80, height: 16 }} />
-                                    {Array.from({ length: 6 }, (_, i) => <span key={i} className="k-skel" style={{ height: 12 }} />)}
-                                </div>
-                            ) : (
-                                <>
-                                    <section aria-labelledby="map-title" className="k-card ws-card0">
-                                        <div className="ws-cardhead">
-                                            <h2 id="map-title" className="k16">Ghép cột</h2>
-                                            <span className={`k-badge ${mappingOk ? "k-ok" : "k-warn"}`}>{header.filter(h => mapping[h]).length}/{header.length}</span>
-                                        </div>
-                                        <table className="k-tbl is-dense">
-                                            <thead><tr><th scope="col">Cột trong tệp</th><th scope="col">Trường</th></tr></thead>
-                                            <tbody>
-                                                {header.map(h => (
-                                                    <tr key={h}>
-                                                        <td className="k-m ws-ellipsis" style={{ maxWidth: 100 }} title={h}>{h}</td>
-                                                        <td>
-                                                            <select className="k-input" style={{ height: 32 }} aria-label={`Trường cho cột ${h}`} value={mapping[h] ?? ""} onChange={e => setMapping(m => ({ ...m, [h]: e.target.value as FieldKey | "" }))}>
-                                                                <option value="">Bỏ qua</option>
-                                                                {FIELDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-                                                            </select>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                        {!mappingOk && <div className="ws-cardfoot k12 k-warn">Cần ghép cột Tên và toạ độ (x, y hoặc lat, lng).</div>}
-                                    </section>
-                                    <section aria-label="Tuỳ chọn nhập" className="k-card tight">
-                                        <label className="k-line k14" style={{ minHeight: 32 }}>
-                                            <input type="checkbox" className="k-check" checked={createTypes} onChange={e => setCreateTypes(e.target.checked)} />
-                                            {newTypes.length ? `Tạo ${newTypes.length} loại mới` : "Tạo loại chưa có"}
-                                        </label>
-                                        <div className="k-field">
-                                            <label htmlFor="dup">Trùng tên trên tầng</label>
-                                            <select id="dup" className="k-input" value={dupPolicy} onChange={e => setDupPolicy(e.target.value as "skip" | "keep")}>
-                                                <option value="skip">Bỏ qua dòng trùng</option>
-                                                <option value="keep">Vẫn nhập</option>
-                                            </select>
-                                        </div>
-                                    </section>
-                                </>
-                            )}
-                        </aside>
-
-                        <section aria-label="Kết quả kiểm tra" className="k-stack" style={{ minWidth: 0 }} role={reading ? "status" : undefined}>
-                            {reading ? (
-                                <>
-                                    <div className="k-card" aria-hidden="true"><div className="k-grid3">{[0, 1, 2].map(i => <div key={i} className="k-kpi" style={{ gap: 8 }}><span className="k-skel" style={{ width: 64, height: 12 }} /><span className="k-skel" style={{ width: 96, height: 28 }} /></div>)}</div></div>
-                                    <div className="k-card ws-card0" aria-hidden="true"><table className="k-tbl"><tbody>{Array.from({ length: 7 }, (_, i) => <tr key={i}>{[24, 160, 96, 72, 140].map(w => <td key={w}><span className="k-skel" style={{ width: w, height: 12 }} /></td>)}</tr>)}</tbody></table></div>
-                                </>
-                            ) : result ? (
-                                <div className="k-card">
-                                    <h2 className="k16">Đã nhập vào {floorLabel(model, floor)}</h2>
-                                    <div className="k-grid3">
-                                        <Kpi n={result.imported} label="Đã nhập" />
-                                        <Kpi n={result.skipped} label="Máy chủ từ chối" tone={result.skipped ? "k-danger" : ""} />
-                                        <Kpi n={bad} label="Bỏ qua trước khi gửi" />
-                                    </div>
-                                    {result.errors.map(e => <div key={e} className="k-badge k-danger"><Lc name="circle-alert" size={14} />{e}</div>)}
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="k-card">
-                                        <div className="k-grid3">
-                                            <Kpi n={valid.length} label="Sẽ nhập" sub={warned ? `${warned} có cảnh báo` : undefined} />
-                                            <Kpi n={bad} label="Bị bỏ qua" sub="dòng lỗi" tone={bad ? "k-danger" : ""} />
-                                            <Kpi n={rows.length} label="Tổng" sub="dòng trong tệp" />
-                                        </div>
-                                    </div>
-                                    <div className="k-card ws-card0" style={{ overflowX: "auto" }}>
-                                        <div className="k-line" role="group" aria-label="Lọc dòng" style={{ padding: 16, borderBottom: "1px solid var(--rule)" }}>
-                                            <button type="button" className="k-chip" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>Tất cả {rows.length}</button>
-                                            <button type="button" className="k-chip" aria-pressed={filter === "review"} onClick={() => setFilter("review")}>Cần xem {bad + warned}</button>
-                                        </div>
-                                        <table className="k-tbl">
-                                            <thead><tr><th scope="col">Dòng</th><th scope="col">Tên</th><th scope="col">Loại</th><th scope="col">x, y</th><th scope="col">Kiểm tra</th></tr></thead>
-                                            <tbody>
-                                                {shown.slice(0, 200).map(r => (
-                                                    <tr key={r.index}>
-                                                        <td className="k-m">{r.index + 2}</td>
-                                                        <td className="k-b">{r.dto.name || <span className="k-danger">(trống)</span>}</td>
-                                                        <td>{typeLabel(r.dto.type)}</td>
-                                                        <td className="k-m is-nowrap">{r.dto.x != null ? `${Math.round(r.dto.x)}, ${Math.round(r.dto.y ?? 0)}` : r.dto.lat != null ? `${r.dto.lat.toFixed(5)}, ${r.dto.lng?.toFixed(5)}` : "—"}</td>
-                                                        <td>
-                                                            {r.errors.length ? <span className="k-badge k-danger"><Lc name="circle-alert" size={14} />Bỏ qua: {r.errors.join(", ")}</span>
-                                                                : r.warnings.length ? <span className="k-badge k-warn"><Lc name="triangle-alert" size={14} />{r.warnings.join(", ").replace(/^./, c => c.toUpperCase())}</span>
-                                                                    : <span className="k-m">Hợp lệ</span>}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                                {!shown.length && <tr><td colSpan={5} className="k-m">Không có dòng nào cần xem.</td></tr>}
-                                            </tbody>
-                                        </table>
-                                        {shown.length > 200 && <div className="ws-cardfoot k12 k-m">Hiện 200 trên {shown.length} dòng.</div>}
-                                    </div>
-                                </>
-                            )}
-                        </section>
-                    </div>
-                )}
+                <div className="ml-auto flex items-center gap-2">
+                    <Label htmlFor="imp-floor" className="font-normal whitespace-nowrap text-muted-foreground">Nhập vào</Label>
+                    <Select value={floorId ? String(floorId) : ""} onValueChange={v => setFloorId(Number(v))}>
+                        <SelectTrigger id="imp-floor" className="w-56"><SelectValue placeholder="Chọn tầng" /></SelectTrigger>
+                        <SelectContent>
+                            {floors.map(f => <SelectItem key={f.id} value={String(f.id)}>{model.buildings.length > 1 ? `${f.buildingCode} ${f.name}` : f.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
-            <div className="ws-stickyfoot"><div>{footer}</div></div>
-        </div>
+
+            {!fileName && !reading ? (
+                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+                    <section aria-label="Chọn tệp" onDragOver={e => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}
+                        className={`flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center transition-colors ${over ? "border-primary bg-primary/5" : error ? "border-destructive/40 bg-destructive/5" : ""}`}>
+                        {error ? (
+                            <>
+                                <span className="flex size-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive"><CircleAlert className="size-5" /></span>
+                                <div className="space-y-1">
+                                    <p role="alert" className="text-sm font-medium">Không đọc được tệp {error.file}</p>
+                                    <p className="max-w-md text-sm text-muted-foreground">{error.message}</p>
+                                </div>
+                                <Button onClick={() => fileInput.current?.click()}>Chọn tệp khác</Button>
+                            </>
+                        ) : (
+                            <>
+                                <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><Upload className="size-5" /></span>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium">Kéo tệp vào đây</p>
+                                    <p className="text-sm text-muted-foreground">CSV (UTF-8) hoặc GeoJSON</p>
+                                </div>
+                                <Button onClick={() => fileInput.current?.click()}>Chọn tệp</Button>
+                            </>
+                        )}
+                    </section>
+                    <Section title="Cột trong tệp" flush actions={<Button variant="outline" size="sm" onClick={() => downloadText("mau_diem_quan_tam.csv", SAMPLE)}><Download />Tải tệp mẫu</Button>}>
+                        <Table>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-6">Cột</TableHead>
+                                    <TableHead>Nội dung</TableHead>
+                                    <TableHead className="pr-6">Yêu cầu</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {NEED.map(([a, b, c]) => (
+                                    <TableRow key={a}>
+                                        <TableCell className="pl-6 font-mono text-xs">{a}</TableCell>
+                                        <TableCell className="whitespace-normal">{b}</TableCell>
+                                        <TableCell className="pr-6 whitespace-normal text-muted-foreground">{c}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Section>
+                </div>
+            ) : (
+                <div className="grid items-start gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+                    <div className="grid gap-6">
+                        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span>
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium" title={fileName ?? ""}>{fileName ?? "Đang đọc tệp"}</p>
+                                <p className="text-xs text-muted-foreground">{reading ? "Đang đọc…" : `${records.length} dòng`}</p>
+                            </div>
+                            {!reading && <Button variant="outline" size="sm" onClick={reset}>Đổi tệp</Button>}
+                        </div>
+                        {reading ? (
+                            <div aria-hidden="true" className="grid gap-3 rounded-xl border p-6">
+                                <Skeleton className="h-4 w-24" />
+                                {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                            </div>
+                        ) : (
+                            <>
+                                <Section title="Ghép cột" flush actions={<Badge className={mappingOk ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}>{header.filter(h => mapping[h]).length}/{header.length}</Badge>}>
+                                    <Table>
+                                        <TableHeader className="bg-muted/50">
+                                            <TableRow>
+                                                <TableHead className="pl-4">Cột trong tệp</TableHead>
+                                                <TableHead className="pr-4">Trường</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {header.map(h => (
+                                                <TableRow key={h}>
+                                                    <TableCell className="max-w-28 truncate pl-4 text-muted-foreground" title={h}>{h}</TableCell>
+                                                    <TableCell className="pr-4">
+                                                        <Select value={mapping[h] || "skip"} onValueChange={v => setMapping(m => ({ ...m, [h]: v === "skip" ? "" : (v as FieldKey) }))}>
+                                                            <SelectTrigger size="sm" className="w-full" aria-label={`Trường cho cột ${h}`}><SelectValue /></SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="skip">Bỏ qua</SelectItem>
+                                                                {FIELDS.map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                    {!mappingOk && <p className="border-t px-4 py-3 text-xs text-warning">Cần ghép cột Tên và toạ độ (x, y hoặc lat, lng).</p>}
+                                </Section>
+                                <Section title="Tuỳ chọn">
+                                    <div className="grid gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <Checkbox id="imp-types" checked={createTypes} onCheckedChange={v => setCreateTypes(v === true)} />
+                                            <Label htmlFor="imp-types" className="font-normal">{newTypes.length ? `Tạo ${newTypes.length} loại mới` : "Tạo loại chưa có"}</Label>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="dup">Trùng tên trên tầng</Label>
+                                            <Select value={dupPolicy} onValueChange={v => setDupPolicy(v as "skip" | "keep")}>
+                                                <SelectTrigger id="dup" className="w-full"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="skip">Bỏ qua dòng trùng</SelectItem>
+                                                    <SelectItem value="keep">Vẫn nhập</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </Section>
+                            </>
+                        )}
+                    </div>
+
+                    <section aria-label="Kết quả kiểm tra" className="grid min-w-0 gap-6" role={reading ? "status" : undefined}>
+                        {reading ? (
+                            <>
+                                <div aria-hidden="true" className="grid grid-cols-3 gap-4">
+                                    {[0, 1, 2].map(i => <Skeleton key={i} className="h-18 rounded-xl" />)}
+                                </div>
+                                <div aria-hidden="true" className="grid gap-3 rounded-xl border p-6">
+                                    {Array.from({ length: 7 }, (_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+                                </div>
+                            </>
+                        ) : result ? (
+                            <Section title={`Đã nhập vào ${floorLabel(model, floor)}`}>
+                                <div className="grid gap-4">
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <Stat icon={<CircleCheck />} tone="green" label="Đã nhập" value={result.imported} />
+                                        <Stat icon={<CircleAlert />} tone="amber" label="Máy chủ từ chối" value={result.skipped} />
+                                        <Stat icon={<ListChecks />} tone="blue" label="Bỏ qua trước khi gửi" value={bad} />
+                                    </div>
+                                    {result.errors.length > 0 && (
+                                        <Alert variant="destructive">
+                                            <CircleAlert />
+                                            <AlertTitle>Máy chủ báo lỗi</AlertTitle>
+                                            <AlertDescription><ul className="list-disc pl-4">{result.errors.map(e => <li key={e}>{e}</li>)}</ul></AlertDescription>
+                                        </Alert>
+                                    )}
+                                </div>
+                            </Section>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <Stat icon={<CircleCheck />} tone="green" label="Sẽ nhập" value={valid.length} hint={warned ? `${warned} có cảnh báo` : undefined} />
+                                    <Stat icon={<CircleAlert />} tone="amber" label="Bị bỏ qua" value={bad} hint="dòng lỗi" />
+                                    <Stat icon={<ListChecks />} tone="blue" label="Tổng" value={rows.length} hint="dòng trong tệp" />
+                                </div>
+                                <Section title="Kiểm tra từng dòng" flush actions={
+                                    <Tabs value={filter} onValueChange={v => setFilter(v as "all" | "review")}>
+                                        <TabsList aria-label="Lọc dòng">
+                                            <TabsTrigger value="all">Tất cả {rows.length}</TabsTrigger>
+                                            <TabsTrigger value="review">Cần xem {bad + warned}</TabsTrigger>
+                                        </TabsList>
+                                    </Tabs>
+                                }>
+                                    <Table>
+                                        <TableHeader className="bg-muted/50">
+                                            <TableRow>
+                                                <TableHead className="w-16 pl-6">Dòng</TableHead>
+                                                <TableHead>Tên</TableHead>
+                                                <TableHead>Loại</TableHead>
+                                                <TableHead>Vị trí</TableHead>
+                                                <TableHead className="pr-6">Kiểm tra</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {shown.slice(0, 200).map(r => (
+                                                <TableRow key={r.index}>
+                                                    <TableCell className="pl-6 text-muted-foreground tabular-nums">{r.index + 2}</TableCell>
+                                                    <TableCell className="font-medium">{r.dto.name || <span className="text-destructive">(trống)</span>}</TableCell>
+                                                    <TableCell>{typeLabel(r.dto.type)}</TableCell>
+                                                    <TableCell className="text-muted-foreground tabular-nums">
+                                                        {r.dto.x != null ? `${Math.round(r.dto.x)}, ${Math.round(r.dto.y ?? 0)}` : r.dto.lat != null ? `${r.dto.lat.toFixed(5)}, ${r.dto.lng?.toFixed(5)}` : "—"}
+                                                    </TableCell>
+                                                    <TableCell className="pr-6">
+                                                        {r.errors.length ? <Badge className="h-auto bg-destructive/10 text-left whitespace-normal text-destructive"><CircleAlert />Bỏ qua: {r.errors.join(", ")}</Badge>
+                                                            : r.warnings.length ? <Badge className="h-auto bg-warning/10 text-left whitespace-normal text-warning"><TriangleAlert />{r.warnings.join(", ").replace(/^./, c => c.toUpperCase())}</Badge>
+                                                                : <span className="inline-flex items-center gap-1 text-muted-foreground"><Check className="size-3.5" />Hợp lệ</span>}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {!shown.length && <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Không có dòng nào cần xem.</TableCell></TableRow>}
+                                        </TableBody>
+                                    </Table>
+                                    {shown.length > 200 && <p className="border-t px-6 py-3 text-xs text-muted-foreground">Hiện 200 trên {shown.length} dòng.</p>}
+                                </Section>
+                            </>
+                        )}
+                    </section>
+                </div>
+            )}
+        </Page>
     );
 }
 
-function Kpi({ n, label, sub, tone = "" }: { n: number; label: string; sub?: string; tone?: string }) {
+/** Thanh bước 1, 2, 3 (xong = tick tròn xanh, đang làm = số trên nền chính) */
+function Steps({ labels, current }: { labels: string[]; current: number }) {
     return (
-        <div className="k-kpi">
-            <span className="k12 k-m">{label}</span>
-            <div className="k-line" style={{ alignItems: "baseline" }}><span className={`k28 ${tone}`}>{n}</span>{sub && <span className="k12 k-m">{sub}</span>}</div>
-        </div>
+        <ol aria-label="Các bước" className="flex flex-wrap items-center gap-2 text-sm">
+            {labels.map((t, i) => (
+                <Fragment key={t}>
+                    {i > 0 && <li aria-hidden="true" className="h-px w-6 bg-border" />}
+                    <li aria-current={i === current ? "step" : undefined} className="flex items-center gap-2">
+                        <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium ${i < current ? "bg-success text-white" : i === current ? "bg-primary text-primary-foreground" : "border text-muted-foreground"}`}>
+                            {i < current ? <Check className="size-3" strokeWidth={3} /> : i + 1}
+                        </span>
+                        <span className={i === current ? "font-medium" : "text-muted-foreground"}>{t}</span>
+                        {i < current && <span className="sr-only">(xong)</span>}
+                    </li>
+                </Fragment>
+            ))}
+        </ol>
     );
 }

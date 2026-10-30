@@ -2,14 +2,24 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { analyzeVenue, normalizeText, type LatLng, type LocationDto, type ZoneDto } from "@indoor-map/core";
 import { locationApi, planApi } from "../../console/api";
-import { HeaderActions, HeaderStatus, SaveState } from "../../console/Shell";
-import { Button, COLORS, ColorPicker, useAction, useFeedback } from "../../console/ui";
-import Lc, { type LucideName } from "../../design/Lc";
+import { Download, Layers, MapPinPlus, MousePointer2, Pentagon, Plus, Search, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { EmptyState } from "../../console/page";
+import { HeaderStatus, SaveState } from "../../console/Shell";
+import { COLORS, useAction, useFeedback } from "../../console/ui";
 import EditorMap from "../EditorMap";
-import { floorLabel, FloorChips, GuestLink } from "../FloorList";
+import { floorLabel } from "../FloorList";
 import { ClickLayer, DraftPolygonLayer, DropLayer, PlacesLayer, WalkwayPreviewLayer, ZonesLayer } from "../layers";
 import { useWorkspace } from "../Workspace";
-import "./workspace.css";
 
 type Tool = "select" | "point" | "zone";
 type PlaceDraft = Partial<LocationDto> & { floorId: number; lat: number; lng: number };
@@ -184,83 +194,74 @@ export default function EditorPage() {
         setZonePoints([]);
     };
 
-    const header = (
-        <>
-            <HeaderStatus><SaveState state={busy ? "saving" : dirty ? "dirty" : "saved"} /></HeaderStatus>
-            <HeaderActions>
-                <GuestLink venue={data.venue} />
-                <Button variant="primary" busy={busy} disabled={!canSave} title={canSave ? undefined : dirty ? "Cần đặt tên trước khi lưu" : "Chưa có thay đổi"} onClick={save}>Lưu bản nháp</Button>
-            </HeaderActions>
-        </>
-    );
+    const status = <HeaderStatus><SaveState state={busy ? "saving" : dirty ? "dirty" : "saved"} /></HeaderStatus>;
 
     if (!floor || !floorId) {
         return (
-            <div className="k-page">
-                {header}
-                <section className="k-card ws-empty">
-                    <h2 className="k16">Chưa có tầng</h2>
-                    <p className="k14 k-m">Thêm toà nhà và tầng trước, rồi đặt điểm lên mặt bằng.</p>
-                    <div className="ws-mt8"><Button variant="primary" to={`${base}/buildings`}>Thêm toà nhà và tầng</Button></div>
-                </section>
+            <div className="mx-auto w-full max-w-3xl px-6 py-6">
+                {status}
+                <EmptyState icon={<Layers />} title="Chưa có tầng" description="Thêm toà nhà và tầng trước, rồi đặt điểm lên mặt bằng."
+                    action={<Button asChild><Link to={`${base}/buildings`}>Thêm toà nhà và tầng</Link></Button>} />
             </div>
         );
     }
 
     const typeName = editing ? model.typeOf(editing.type).name : "";
     const facilities = editing ? [...new Set([...data.facilities.map(f => f.name), ...(editing.facilities ?? [])])] : [];
+    const building = model.buildings.find(b => b.id === floor.buildingId);
+    const close = () => void leaveSelection().then(ok => ok && setSelection(null));
 
     return (
-        <div className="ws-work">
-            {header}
-            <aside aria-label="Thêm vào bản đồ" className="ws-panel is-left">
-                <label className="k-input ws-search">
-                    <Lc name="search" size={16} />
-                    <input aria-label="Tìm loại điểm" placeholder="Tìm loại điểm" value={query} onChange={e => setQuery(e.target.value)} />
-                </label>
-                <section className="ws-grp">
-                    <h2 className="k-sec">Loại điểm</h2>
-                    <div>
-                        {types.map(t => (
-                            <button key={t.code} type="button" className="ws-tl" draggable aria-pressed={tool === "point" && pendingType === t.code}
-                                title="Kéo vào mặt bằng, hoặc bấm rồi bấm vào mặt bằng"
+        <div className="flex min-h-0 flex-1">
+            {status}
+            {/* Trái: thêm vào bản đồ */}
+            <aside aria-label="Thêm vào bản đồ" className="flex w-64 shrink-0 flex-col border-r bg-background">
+                <div className="border-b p-3">
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input aria-label="Tìm loại điểm" placeholder="Tìm loại điểm" value={query} onChange={e => setQuery(e.target.value)} className="h-8 pl-8" />
+                    </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                    <p className="px-2 pt-1 pb-2 text-xs font-medium text-muted-foreground">Loại điểm, kéo vào mặt bằng</p>
+                    {types.map(t => {
+                        const armed = tool === "point" && pendingType === t.code;
+                        return (
+                            <button key={t.code} type="button" draggable aria-pressed={armed} title="Kéo vào mặt bằng, hoặc bấm rồi bấm vào mặt bằng"
                                 onDragStart={e => { e.dataTransfer.setData("text/plain", t.code); e.dataTransfer.effectAllowed = "copy"; }}
-                                onClick={() => (tool === "point" && pendingType === t.code ? armTool("select") : armTool("point", t.code))}>
-                                <span aria-hidden="true" className="ws-tile" style={{ background: t.color || "var(--muted)" }}><i className={`bi ${t.icon || "bi-geo-alt"}`} /></span>
-                                <span className="ws-ellipsis">{t.name}</span>
-                                {typeCounts.get(t.code) ? <span className="n k12 k-m">{typeCounts.get(t.code)}</span> : null}
+                                onClick={() => (armed ? armTool("select") : armTool("point", t.code))}
+                                className={`flex h-8 w-full cursor-grab items-center gap-2 rounded-md px-2 text-left text-sm ${armed ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                                <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded text-[11px] text-white" style={{ background: t.color || "#71717a" }}>
+                                    <i className={`bi ${t.icon || "bi-geo-alt"}`} />
+                                </span>
+                                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                                {typeCounts.get(t.code) ? <span className={`text-xs tabular-nums ${armed ? "" : "text-muted-foreground"}`}>{typeCounts.get(t.code)}</span> : null}
                             </button>
-                        ))}
-                        {!types.length && <p className="k14 k-m" style={{ padding: 8 }}>Không có loại nào khớp.</p>}
-                    </div>
-                    <Link to={`${base}/types`} className="k-btn t sm" style={{ alignSelf: "flex-start", paddingLeft: 8 }}><Lc name="plus" size={16} />Thêm loại</Link>
-                </section>
-                <section className="ws-grp">
-                    <h2 className="k-sec">Vẽ</h2>
-                    <div>
-                        <button type="button" className="ws-tl" aria-pressed={tool === "zone"} disabled={!projection} title={projection ? "Bấm từng góc, bấm lại góc đầu để khép" : "Cần mặt bằng đã căn chỉnh"}
-                            onClick={() => armTool(tool === "zone" ? "select" : "zone")}>
-                            <Lc name="pentagon" size={16} />Vùng
-                        </button>
-                        <Link to={`${base}/import?floor=${floorId}`} className="ws-tl"><Lc name="download" size={16} />Nhập từ CSV, GeoJSON</Link>
-                    </div>
-                </section>
-                <section className="ws-grp">
-                    <h2 className="k-sec">Hiển thị</h2>
-                    <div>
-                        <label className="k-line k14" style={{ minHeight: 32 }}><input type="checkbox" className="k-check" checked={show.places} onChange={e => setShow(s => ({ ...s, places: e.target.checked }))} />Điểm quan tâm</label>
-                        <label className="k-line k14" style={{ minHeight: 32 }}><input type="checkbox" className="k-check" checked={show.zones} onChange={e => setShow(s => ({ ...s, zones: e.target.checked }))} />Vùng</label>
-                        <label className="k-line k14" style={{ minHeight: 32 }}><input type="checkbox" className="k-check" checked={show.walkways} onChange={e => setShow(s => ({ ...s, walkways: e.target.checked }))} />Lối đi, chỉ xem</label>
-                    </div>
-                    <label htmlFor="type-filter" className="k-label">Loại trên bản đồ</label>
-                    <select id="type-filter" className="k-input" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-                        <option value="">Mọi loại ({floorPlaces})</option>
-                        {floorTypes.map(code => <option key={code} value={code}>{model.typeOf(code).name}</option>)}
-                    </select>
-                </section>
+                        );
+                    })}
+                    {!types.length && <p className="px-2 py-4 text-sm text-muted-foreground">Không có loại nào khớp.</p>}
+                    <Button asChild variant="ghost" size="sm" className="mt-1 w-full justify-start text-muted-foreground"><Link to={`${base}/types`}><Plus />Thêm loại</Link></Button>
+                </div>
+                <div className="space-y-3 border-t p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Hiển thị</p>
+                    {([["places", "Điểm quan tâm"], ["zones", "Vùng"], ["walkways", "Lối đi (chỉ xem)"]] as const).map(([key, label]) => (
+                        <div key={key} className="flex items-center justify-between">
+                            <Label htmlFor={`show-${key}`} className="font-normal">{label}</Label>
+                            <Switch id={`show-${key}`} checked={show[key]} onCheckedChange={v => setShow(s => ({ ...s, [key]: v }))} />
+                        </div>
+                    ))}
+                    <Select value={typeFilter || "all"} onValueChange={v => setTypeFilter(v === "all" ? "" : v)}>
+                        <SelectTrigger size="sm" className="w-full" aria-label="Lọc loại trên bản đồ"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Mọi loại ({floorPlaces})</SelectItem>
+                            {floorTypes.map(code => <SelectItem key={code} value={code}>{model.typeOf(code).name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
             </aside>
 
-            <section className="ws-canvas" aria-label="Canvas mặt bằng">
+            {/* Giữa: mặt bằng */}
+            <section aria-label="Mặt bằng" className="relative min-w-0 flex-1 bg-muted/40 [&_.cb-map]:absolute [&_.cb-map]:inset-0 [&_.cb-map]:min-h-0">
                 <EditorMap model={model} floorId={floorId} onMouseMove={setCursor}>
                     {map => (
                         <>
@@ -276,119 +277,173 @@ export default function EditorPage() {
                         </>
                     )}
                 </EditorMap>
-                <FloorChips model={model} floorId={floorId} onSelect={id => void selectFloor(id)} />
-                {cursor && <div className="ws-float is-tr k12 k-m" style={{ padding: "8px 12px" }}>{cursorXY ? `x ${Math.round(cursorXY.x)}, y ${Math.round(cursorXY.y)}` : `${cursor.lat.toFixed(6)}, ${cursor.lng.toFixed(6)}`}</div>}
+
+                {/* chọn toà + tầng */}
+                <div className="absolute top-3 left-3 z-[800] flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border bg-background p-1 shadow-sm">
+                    {model.buildings.length > 1 && (
+                        <Select value={String(floor.buildingId)} onValueChange={v => { const first = model.floorsOf(Number(v))[0]; if (first) void selectFloor(first.id); }}>
+                            <SelectTrigger size="sm" className="border-0 shadow-none" aria-label="Toà nhà"><SelectValue /></SelectTrigger>
+                            <SelectContent>{model.buildings.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.code} {b.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                    )}
+                    <ToggleGroup type="single" size="sm" value={String(floorId)} onValueChange={v => v && void selectFloor(Number(v))} aria-label="Tầng" className="overflow-x-auto">
+                        {building && model.floorsOf(building.id).map(f => (
+                            <ToggleGroupItem key={f.id} value={String(f.id)} className="px-2.5 whitespace-nowrap data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">{f.name}</ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                </div>
+
+                {cursor && (
+                    <div className="absolute top-3 right-3 z-[800] rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground tabular-nums shadow-sm">
+                        {cursorXY ? `x ${Math.round(cursorXY.x)}, y ${Math.round(cursorXY.y)}` : `${cursor.lat.toFixed(6)}, ${cursor.lng.toFixed(6)}`}
+                    </div>
+                )}
 
                 {floorPlaces === 0 && !editing && !zoneDraft && tool === "select" && (
-                    <div role="region" aria-labelledby="ed-empty" className="k-card ws-overcard">
-                        <h2 id="ed-empty" className="k16">{floor.name} chưa có điểm nào</h2>
-                        <p className="k14 k-m">Kéo một loại điểm vào mặt bằng, hoặc nhập nhiều điểm từ tệp.</p>
-                        <div className="ws-mt8"><Link to={`${base}/import?floor=${floorId}`} className="k-btn"><Lc name="download" size={16} />Nhập từ CSV</Link></div>
+                    <div className="absolute top-1/2 left-1/2 z-[800] w-80 -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-background p-5 shadow-lg">
+                        <p className="text-sm font-medium">{floor.name} chưa có điểm nào</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Kéo một loại điểm vào mặt bằng, hoặc nhập nhiều điểm từ tệp.</p>
+                        <Button asChild variant="outline" size="sm" className="mt-4"><Link to={`${base}/import?floor=${floorId}`}><Download />Nhập từ CSV, GeoJSON</Link></Button>
                     </div>
                 )}
 
-                {tool === "point" && <div className="ws-float is-hint is-low">Bấm vào mặt bằng để đặt {model.typeOf(pendingType ?? "other").name.toLowerCase()}</div>}
-                {tool === "zone" && (
-                    <div className="ws-float is-hint is-low">
-                        Bấm từng góc của vùng, bấm lại góc đầu để khép ({zonePoints.length} góc)
-                        <button type="button" className="k-btn sm" disabled={zonePoints.length < 3} onClick={finishZone}>Xong</button>
+                {(tool === "point" || tool === "zone") && (
+                    <div className="absolute top-16 left-1/2 z-[800] flex -translate-x-1/2 items-center gap-3 rounded-full bg-primary px-4 py-1.5 text-sm text-primary-foreground shadow-md">
+                        {tool === "point" ? `Bấm vào mặt bằng để đặt ${model.typeOf(pendingType ?? "other").name.toLowerCase()}` : `Bấm từng góc, bấm lại góc đầu để khép (${zonePoints.length} góc)`}
+                        {tool === "zone" && <Button size="sm" variant="secondary" className="h-6 rounded-full px-3" disabled={zonePoints.length < 3} onClick={finishZone}>Xong</Button>}
+                        <Button size="sm" variant="ghost" className="h-6 rounded-full px-2 hover:bg-white/10 hover:text-primary-foreground" onClick={() => armTool("select")}>Huỷ</Button>
                     </div>
                 )}
 
-                <div role="toolbar" aria-label="Công cụ" className="ws-float is-bc">
-                    <ToolButton icon="mouse-pointer-2" label="Chọn, kéo để dời" pressed={tool === "select"} onClick={() => armTool("select")} />
-                    <ToolButton icon="map-pin-plus" label="Thêm điểm" pressed={tool === "point"} onClick={() => armTool(tool === "point" ? "select" : "point", pendingType)} />
-                    <ToolButton icon="pentagon" label={projection ? "Vẽ vùng" : "Vẽ vùng: cần mặt bằng đã căn chỉnh"} pressed={tool === "zone"} disabled={!projection} onClick={() => armTool(tool === "zone" ? "select" : "zone")} />
+                {/* thanh công cụ */}
+                <div role="toolbar" aria-label="Công cụ" className="absolute bottom-4 left-1/2 z-[800] flex -translate-x-1/2 items-center gap-1 rounded-lg border bg-background p-1 shadow-md">
+                    <ToolButton icon={MousePointer2} label="Chọn, kéo để dời" pressed={tool === "select"} onClick={() => armTool("select")} />
+                    <ToolButton icon={MapPinPlus} label="Thêm điểm" pressed={tool === "point"} onClick={() => armTool(tool === "point" ? "select" : "point", pendingType)} />
+                    <ToolButton icon={Pentagon} label={projection ? "Vẽ vùng" : "Vẽ vùng: cần mặt bằng đã căn chỉnh"} pressed={tool === "zone"} disabled={!projection} onClick={() => armTool(tool === "zone" ? "select" : "zone")} />
+                    <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-5" />
+                    <Button asChild variant="ghost" size="sm" className="text-muted-foreground"><Link to={`${base}/import?floor=${floorId}`}><Download />Nhập tệp</Link></Button>
                 </div>
 
                 {(floorUnreachable.length + floorIsolated > 0 || !projection) && (
-                    <div className="ws-float is-br" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                    <div className="absolute bottom-4 left-4 z-[800] flex flex-col gap-1">
                         {floorUnreachable.length + floorIsolated > 0 && (
-                            <Link to={`${base}/walkways?floor=${floorId}`} className="k-btn t sm"><Lc name="triangle-alert" size={16} color="var(--warn)" /><span className="k-warn">{floorUnreachable.length + floorIsolated} điểm chưa tới được</span></Link>
+                            <Link to={`${base}/walkways?floor=${floorId}`} className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs shadow-sm hover:bg-muted">
+                                <TriangleAlert className="size-3.5 text-warning" />{floorUnreachable.length + floorIsolated} điểm chưa tới được
+                            </Link>
                         )}
-                        {!projection && <Link to={`${base}/plan?floor=${floorId}`} className="k-btn t sm"><Lc name="triangle-alert" size={16} color="var(--warn)" /><span className="k-warn">Tầng chưa căn chỉnh mặt bằng</span></Link>}
+                        {!projection && (
+                            <Link to={`${base}/plan?floor=${floorId}`} className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 text-xs shadow-sm hover:bg-muted">
+                                <TriangleAlert className="size-3.5 text-warning" />Tầng chưa căn chỉnh mặt bằng
+                            </Link>
+                        )}
                     </div>
                 )}
             </section>
 
-            <aside aria-label="Thuộc tính" className="ws-panel is-right">
+            {/* Phải: thuộc tính */}
+            <aside aria-label="Thuộc tính" className="flex w-80 shrink-0 flex-col border-l bg-background">
                 {editing ? (
-                    <>
-                        <div className="ws-phead">
-                            <input aria-label="Tên điểm" className="ws-name" placeholder="Tên điểm" autoFocus={!editing.id} value={editing.name ?? ""} onChange={e => setDraft({ name: e.target.value })} />
-                            <span className="k12 k-m">{editing.id ? `${typeName}, ${floorLabel(model, floor)}` : `Điểm mới, ${floorLabel(model, floor)}`}</span>
+                    <form className="flex min-h-0 flex-1 flex-col" onSubmit={e => { e.preventDefault(); if (canSave) save(); }}>
+                        <div className="flex items-start gap-2 border-b p-4">
+                            <div className="min-w-0 flex-1">
+                                <Input aria-label="Tên điểm" placeholder="Tên điểm" autoFocus={!editing.id} value={editing.name ?? ""} onChange={e => setDraft({ name: e.target.value })}
+                                    className="h-8 border-transparent px-1.5 text-base font-semibold shadow-none hover:border-input focus-visible:border-ring md:text-base" />
+                                <p className="mt-1 px-1.5 text-xs text-muted-foreground">{editing.id ? typeName : "Điểm mới"}, {floorLabel(model, floor)}</p>
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Đóng" onClick={close}><X /></Button>
                         </div>
-                        <form className="ws-pbody" onSubmit={e => { e.preventDefault(); if (canSave) save(); }}>
-                            <div className="k-grid2">
-                                <div className="k-field"><label htmlFor="pl-type">Loại</label>
-                                    <select id="pl-type" className="k-input" value={editing.type ?? "other"} onChange={e => setDraft({ type: e.target.value })}>
-                                        {!data.types.some(t => t.code === (editing.type ?? "other")) && <option value={editing.type ?? "other"}>{typeName}</option>}
-                                        {data.types.map(t => <option key={t.code} value={t.code}>{t.name}</option>)}
-                                    </select>
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label>Loại</Label>
+                                    <Select value={editing.type ?? "other"} onValueChange={v => setDraft({ type: v })}>
+                                        <SelectTrigger size="sm" className="w-full"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            {!data.types.some(t => t.code === (editing.type ?? "other")) && <SelectItem value={editing.type ?? "other"}>{typeName}</SelectItem>}
+                                            {data.types.map(t => <SelectItem key={t.code} value={t.code}>{t.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <div className="k-field"><label htmlFor="pl-area">Khu vực</label><input id="pl-area" className="k-input" value={editing.area ?? ""} placeholder="Sảnh A" onChange={e => setDraft({ area: e.target.value })} /></div>
+                                <Field id="pl-area" label="Khu vực" value={editing.area} placeholder="Sảnh A" onChange={v => setDraft({ area: v })} />
+                                <Field id="pl-hours" label="Giờ mở cửa" value={editing.openingHours} placeholder="05:00–22:00" onChange={v => setDraft({ openingHours: v })} />
+                                <Field id="pl-phone" label="Điện thoại" type="tel" value={editing.phone} placeholder="028 …" onChange={v => setDraft({ phone: v })} />
                             </div>
-                            <div className="k-grid2">
-                                <div className="k-field"><label htmlFor="pl-hours">Giờ mở cửa</label><input id="pl-hours" className="k-input" value={editing.openingHours ?? ""} placeholder="05:00–22:00" onChange={e => setDraft({ openingHours: e.target.value })} /></div>
-                                <div className="k-field"><label htmlFor="pl-phone">Điện thoại</label><input id="pl-phone" type="tel" className="k-input" value={editing.phone ?? ""} placeholder="028 …" onChange={e => setDraft({ phone: e.target.value })} /></div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="pl-desc">Mô tả</Label>
+                                <Textarea id="pl-desc" rows={2} className="min-h-16" value={editing.description ?? ""} onChange={e => setDraft({ description: e.target.value })} />
                             </div>
-                            <div className="k-field"><label htmlFor="pl-desc">Mô tả</label><textarea id="pl-desc" rows={2} className="k-input" value={editing.description ?? ""} onChange={e => setDraft({ description: e.target.value })} /></div>
-                            <fieldset className="k-field ws-fs0">
-                                <legend className="k-label">Tiện ích</legend>
-                                {facilities.map(name => {
-                                    const on = editing.facilities?.includes(name) ?? false;
-                                    return (
-                                        <label key={name} className="k-line k14" style={{ minHeight: 28 }}>
-                                            <input type="checkbox" className="k-check" checked={on} onChange={() => setDraft({ facilities: on ? (editing.facilities ?? []).filter(f => f !== name) : [...(editing.facilities ?? []), name] })} />{name}
-                                        </label>
-                                    );
-                                })}
-                                <div className="k-line">
-                                    <input className="k-input" style={{ height: 32 }} aria-label="Tiện ích mới" placeholder="Thêm tiện ích" value={newFacility} onChange={e => setNewFacility(e.target.value)} />
-                                    <button type="button" className="k-btn sm" disabled={!newFacility.trim()} onClick={() => { setDraft({ facilities: [...new Set([...(editing.facilities ?? []), newFacility.trim()])] }); setNewFacility(""); }}>Thêm</button>
+                            <div className="grid gap-2">
+                                <Label>Tiện ích</Label>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                                    {facilities.map(name => {
+                                        const on = editing.facilities?.includes(name) ?? false;
+                                        return (
+                                            <label key={name} className="flex items-center gap-2 text-sm">
+                                                <Checkbox checked={on} onCheckedChange={() => setDraft({ facilities: on ? (editing.facilities ?? []).filter(f => f !== name) : [...(editing.facilities ?? []), name] })} />
+                                                <span className="truncate">{name}</span>
+                                            </label>
+                                        );
+                                    })}
                                 </div>
-                            </fieldset>
-                            <div className="k-field"><label htmlFor="pl-img">Ảnh</label><input id="pl-img" type="url" className="k-input" value={editing.imageUrl ?? ""} placeholder="Dán đường dẫn ảnh" onChange={e => setDraft({ imageUrl: e.target.value })} /></div>
-                            <div className="k-field"><label htmlFor="pl-web">Trang web</label><input id="pl-web" type="url" className="k-input" value={editing.website ?? ""} onChange={e => setDraft({ website: e.target.value })} /></div>
-                            <div>
-                                {editing.x != null && <div className="k-row"><span className="k12 k-m" style={{ width: 64 }}>Vị trí</span><span className="k14">x {Math.round(editing.x)}, y {Math.round(editing.y ?? 0)}</span></div>}
-                                <div className="k-row"><span className="k12 k-m" style={{ width: 64 }}>Toạ độ</span><span className="k14">{editing.lat.toFixed(5)}, {editing.lng.toFixed(5)}</span></div>
+                                <div className="flex gap-2">
+                                    <Input className="h-8" aria-label="Tiện ích mới" placeholder="Thêm tiện ích" value={newFacility} onChange={e => setNewFacility(e.target.value)} />
+                                    <Button type="button" variant="outline" size="sm" disabled={!newFacility.trim()} onClick={() => { setDraft({ facilities: [...new Set([...(editing.facilities ?? []), newFacility.trim()])] }); setNewFacility(""); }}>Thêm</Button>
+                                </div>
                             </div>
-                            <p className="k12 k-m">Kéo ô biển trên mặt bằng để dời điểm.</p>
-                            <button type="submit" hidden />
-                        </form>
-                        <div className="ws-pfoot">
-                            <button type="button" className="k-btn d sm" style={{ paddingLeft: 0 }} onClick={() => void removePlace()}><Lc name="trash" size={16} />{editing.id ? "Xoá điểm…" : "Bỏ điểm mới"}</button>
-                            <button type="button" className="k-btn t sm ws-right" onClick={() => void leaveSelection().then(ok => ok && setSelection(null))}>Đóng</button>
+                            <Field id="pl-img" label="Ảnh" type="url" value={editing.imageUrl} placeholder="Dán đường dẫn ảnh" onChange={v => setDraft({ imageUrl: v })} />
+                            <Field id="pl-web" label="Trang web" type="url" value={editing.website} onChange={v => setDraft({ website: v })} />
+                            <dl className="grid grid-cols-[4.5rem_1fr] gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-xs">
+                                {editing.x != null && <><dt className="text-muted-foreground">Bản vẽ</dt><dd className="tabular-nums">x {Math.round(editing.x)}, y {Math.round(editing.y ?? 0)}</dd></>}
+                                <dt className="text-muted-foreground">Toạ độ</dt><dd className="tabular-nums">{editing.lat.toFixed(5)}, {editing.lng.toFixed(5)}</dd>
+                            </dl>
                         </div>
-                    </>
+                        <div className="flex items-center gap-2 border-t p-3">
+                            <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void removePlace()}><Trash2 />{editing.id ? "Xoá" : "Bỏ"}</Button>
+                            <Button type="submit" size="sm" className="ml-auto" disabled={!canSave} title={canSave ? undefined : dirty ? "Cần đặt tên trước khi lưu" : "Chưa có thay đổi"}>Lưu điểm</Button>
+                        </div>
+                    </form>
                 ) : zoneDraft ? (
-                    <>
-                        <div className="ws-phead">
-                            <input aria-label="Tên vùng" className="ws-name" placeholder="Tên vùng" autoFocus={!zoneDraft.id} value={zoneDraft.name ?? ""} onChange={e => setZone({ name: e.target.value })} />
-                            <span className="k12 k-m">{zoneDraft.id ? "Vùng" : "Vùng mới"}, {floorLabel(model, floor)}</span>
+                    <form className="flex min-h-0 flex-1 flex-col" onSubmit={e => { e.preventDefault(); if (canSave) save(); }}>
+                        <div className="flex items-start gap-2 border-b p-4">
+                            <div className="min-w-0 flex-1">
+                                <Input aria-label="Tên vùng" placeholder="Tên vùng" autoFocus={!zoneDraft.id} value={zoneDraft.name ?? ""} onChange={e => setZone({ name: e.target.value })}
+                                    className="h-8 border-transparent px-1.5 text-base font-semibold shadow-none hover:border-input focus-visible:border-ring md:text-base" />
+                                <p className="mt-1 px-1.5 text-xs text-muted-foreground">{zoneDraft.id ? "Vùng" : "Vùng mới"}, {floorLabel(model, floor)}</p>
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Đóng" onClick={close}><X /></Button>
                         </div>
-                        <form className="ws-pbody" onSubmit={e => { e.preventDefault(); if (canSave) save(); }}>
-                            <ColorPicker label="Màu nền" value={zoneDraft.color ?? COLORS[1]!} onChange={c => setZone({ color: c })} />
-                            <div className="k-row"><span className="k12 k-m" style={{ width: 64 }}>Góc</span><span className="k14">{zoneDraft.polygon?.length ?? 0} góc, toạ độ pixel bản vẽ</span></div>
-                            <button type="submit" hidden />
-                        </form>
-                        <div className="ws-pfoot">
-                            <button type="button" className="k-btn d sm" style={{ paddingLeft: 0 }} onClick={() => void removeZone()}><Lc name="trash" size={16} />{zoneDraft.id ? "Xoá vùng…" : "Bỏ vùng mới"}</button>
-                            <button type="button" className="k-btn t sm ws-right" onClick={() => void leaveSelection().then(ok => ok && setSelection(null))}>Đóng</button>
-                        </div>
-                    </>
-                ) : (
-                    <div className="ws-pidle">
-                        <p className="k14 k-m">Chọn một điểm trên mặt bằng để sửa thuộc tính.</p>
-                        {floorUnreachable.length > 0 && (
-                            <div className="ws-grp" style={{ textAlign: "left" }}>
-                                <span className="k-label">Chưa có lối đi gần</span>
-                                <div>
-                                    {floorUnreachable.slice(0, 8).map(p => (
-                                        <button key={p.id} type="button" className="ws-tl" onClick={() => void selectPlace(p.id)}><span className="ws-ellipsis">{p.name}</span></button>
+                        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                            <div className="grid gap-2">
+                                <Label>Màu nền</Label>
+                                <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Màu nền">
+                                    {COLORS.map(c => (
+                                        <button key={c} type="button" role="radio" aria-checked={(zoneDraft.color ?? "").toLowerCase() === c} aria-label={c}
+                                            className="size-6 rounded-md ring-offset-2 ring-offset-background aria-checked:ring-2 aria-checked:ring-ring" style={{ background: c }} onClick={() => setZone({ color: c })} />
                                     ))}
                                 </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{zoneDraft.polygon?.length ?? 0} góc, toạ độ theo pixel bản vẽ.</p>
+                        </div>
+                        <div className="flex items-center gap-2 border-t p-3">
+                            <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void removeZone()}><Trash2 />{zoneDraft.id ? "Xoá" : "Bỏ"}</Button>
+                            <Button type="submit" size="sm" className="ml-auto" disabled={!canSave}>Lưu vùng</Button>
+                        </div>
+                    </form>
+                ) : (
+                    <div className="flex flex-1 flex-col gap-6 p-4">
+                        <div className="flex flex-col items-center gap-2 pt-10 text-center">
+                            <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"><MousePointer2 className="size-5" /></span>
+                            <p className="text-sm font-medium">Chưa chọn gì</p>
+                            <p className="text-sm text-muted-foreground">Bấm một điểm hoặc vùng trên mặt bằng để sửa.</p>
+                        </div>
+                        {floorUnreachable.length > 0 && (
+                            <div>
+                                <p className="mb-1 px-2 text-xs font-medium text-muted-foreground">Chưa có lối đi gần ({floorUnreachable.length})</p>
+                                {floorUnreachable.slice(0, 8).map(p => (
+                                    <button key={p.id} type="button" className="flex h-8 w-full items-center rounded-md px-2 text-left text-sm hover:bg-muted" onClick={() => void selectPlace(p.id)}>
+                                        <span className="truncate">{p.name}</span>
+                                    </button>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -398,10 +453,22 @@ export default function EditorPage() {
     );
 }
 
-function ToolButton({ icon, label, pressed, disabled, onClick }: { icon: LucideName; label: string; pressed: boolean; disabled?: boolean; onClick(): void }) {
+function Field({ id, label, value, onChange, placeholder, type = "text" }: { id: string; label: string; value?: string | null; onChange(v: string): void; placeholder?: string; type?: string }) {
     return (
-        <button type="button" className="k-ib sm t" aria-label={label} title={label} aria-pressed={pressed} disabled={disabled} onClick={onClick}>
-            <Lc name={icon} size={16} />
-        </button>
+        <div className="grid gap-1.5">
+            <Label htmlFor={id}>{label}</Label>
+            <Input id={id} type={type} className="h-8" value={value ?? ""} placeholder={placeholder} onChange={e => onChange(e.target.value)} />
+        </div>
+    );
+}
+
+function ToolButton({ icon: Icon, label, pressed, disabled, onClick }: { icon: LucideIcon; label: string; pressed: boolean; disabled?: boolean; onClick(): void }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button type="button" variant={pressed ? "default" : "ghost"} size="icon" className="size-8" aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={onClick}><Icon /></Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{label}</TooltipContent>
+        </Tooltip>
     );
 }

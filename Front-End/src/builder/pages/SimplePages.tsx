@@ -1,25 +1,35 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import {
+    Building2, Check, CircleAlert, CircleCheck, Clock, Eye, Layers, LoaderCircle, MapPin, Plus, QrCode, Route, RouteOff, Search
+} from "lucide-react";
 import { analyzeVenue, buildVenueModel, type VenueDto, type VenueMapDto } from "@indoor-map/core";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authApi, catalogApi, locationApi, planApi, venueApi, walkwayApi } from "../../console/api";
 import { useAuth } from "../../console/auth";
 import { ApiError } from "../../console/http";
-import { ErrorNote, useAction } from "../../console/ui";
-import Lc from "../../design/Lc";
+import { EmptyState, ErrorState, Page, Section, Stat } from "../../console/page";
+import { HeaderStatus, SaveState } from "../../console/Shell";
+import { useAction } from "../../console/ui";
 import { useWorkspace } from "../Workspace";
-import { VenueStatus } from "./VenuesPage";
-import "./global.css";
 
-function Badge({ children, tone, icon }: { children: string; tone?: "ok" | "warn" | "danger"; icon?: "clock" | "circle-check" | "lock" }) {
-    return (
-        <span className={`k-badge ${tone ? `k-${tone}` : "k-m"}`}>
-            {icon && <Lc name={icon} size={14} />}{children}
-        </span>
-    );
-}
-
-function Skel({ w, h = 12 }: { w: number | string; h?: number }) {
-    return <span className="k-skel" style={{ width: w, height: h }} />;
+function VenueBadge({ status }: { status?: string }) {
+    if (status === "PUBLISHED") {
+        return <Badge className="gap-1.5 bg-success/10 text-success"><span className="size-1.5 rounded-full bg-success" aria-hidden="true" />Công khai</Badge>;
+    }
+    if (status === "HIDDEN") return <Badge className="gap-1.5 bg-destructive/10 text-destructive"><span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" />Bị ẩn</Badge>;
+    return <Badge className="gap-1.5 bg-warning/10 text-warning"><span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />Bản nháp</Badge>;
 }
 
 // ---------------------------------------------------------------- mốc camera (giai đoạn 2, chưa có API)
@@ -35,56 +45,56 @@ export function LandmarksPage() {
     const floor = floors.find(f => f.id === floorId) ?? floors.find(f => f.plan) ?? floors[0];
     const src = planSrc(floor?.plan);
     return (
-        <div className="k-page" style={{ minHeight: "100%" }}>
-            <div className="k-title">
-                <h1 className="k24">Mốc camera</h1>
-                <Badge tone="warn" icon="clock">Chưa khả dụng</Badge>
-                <span className="k14 k-m">Giai đoạn 2</span>
-            </div>
-            <section aria-labelledby="ua-t" className="k-card tight kg-tinted">
-                <h2 id="ua-t" className="k16">Chỉ đường bằng camera chưa dùng được</h2>
-                <p className="k14 k-m">Hiện khách định vị bằng mã QR và bước chân. Mốc camera sẽ mở ở giai đoạn 2.</p>
-            </section>
-            <div className="kg-lm">
-                <section aria-labelledby="map-t" className="k-card kg-lm-map">
-                    <div className="kg-lm-head">
-                        <h2 id="map-t" className="k16">Mốc trên tầng</h2>
+        <Page>
+            <Alert>
+                <Clock />
+                <AlertTitle>Chưa khả dụng</AlertTitle>
+                <AlertDescription>Chỉ đường bằng camera mở ở giai đoạn 2. Hiện khách định vị bằng mã QR và bước chân.</AlertDescription>
+            </Alert>
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <Section title="Mốc trên tầng" flush actions={(
+                    <>
                         {floors.length > 0 && (
-                            <select aria-label="Tầng" className="k-input" value={floor?.id ?? ""} onChange={e => setFloorId(Number(e.target.value))}>
-                                {floors.map(f => <option key={f.id} value={f.id}>{f.buildingCode} / {f.name}</option>)}
-                            </select>
+                            <Select value={floor ? String(floor.id) : undefined} onValueChange={v => setFloorId(Number(v))}>
+                                <SelectTrigger size="sm" className="w-48" aria-label="Tầng"><SelectValue /></SelectTrigger>
+                                <SelectContent>{floors.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.buildingCode} {f.name}</SelectItem>)}</SelectContent>
+                            </Select>
                         )}
-                        <span className="end"><button type="button" className="k-btn" disabled title="Chưa khả dụng"><Lc name="plus" size={16} />Thêm mốc</button></span>
+                        <Button variant="outline" size="sm" disabled title="Chưa khả dụng"><Plus />Thêm mốc</Button>
+                    </>
+                )}>
+                    <div className="relative flex aspect-4/3 items-center justify-center overflow-hidden rounded-b-xl bg-muted/40">
+                        <Badge variant="outline" className="absolute top-3 left-3 bg-background">Chưa có mốc</Badge>
+                        {src ? <img src={src} alt={`Mặt bằng ${floor?.buildingCode ?? ""} ${floor?.name ?? ""}`} className="size-full object-contain p-6" />
+                            : <p className="text-sm text-muted-foreground">{floors.length ? "Tầng này chưa có mặt bằng." : "Địa điểm chưa có tầng."}</p>}
                     </div>
-                    <div className="kg-lm-canvas">
-                        <span className="kg-lm-label k12 k-b k-m">Chưa có mốc</span>
-                        {src ? <img src={src} alt={`Mặt bằng ${floor?.buildingCode ?? ""} ${floor?.name ?? ""}`} />
-                            : <p className="k14 k-m">{floors.length ? "Tầng này chưa có mặt bằng." : "Địa điểm chưa có tầng."}</p>}
-                    </div>
-                </section>
-                <aside aria-label="Cài đặt camera" className="k-stack kg-lm-aside">
-                    <section aria-labelledby="set-t" aria-disabled="true" className="k-card">
-                        <h2 id="set-t" className="k16">Cài đặt cho địa điểm</h2>
-                        <div className="kg-dim">
-                            <label className="k-row k14" style={{ justifyContent: "space-between" }}>
-                                <span>Bật chỉ đường camera cho khách</span><input type="checkbox" role="switch" className="kg-switch" disabled />
-                            </label>
-                            <label className="k-row k14" style={{ justifyContent: "space-between" }}>
-                                <span>Bắt quét QR trước khi dùng camera</span><input type="checkbox" role="switch" className="kg-switch" disabled />
-                            </label>
-                            <div className="k-field" style={{ marginTop: 16 }}>
-                                <label htmlFor="thr" className="k-line" style={{ justifyContent: "space-between" }}>Ngưỡng khớp tối thiểu<span style={{ fontWeight: 400 }}>—</span></label>
-                                <input id="thr" type="range" min={0.5} max={0.95} step={0.01} defaultValue={0.8} disabled className="kg-range" />
+                </Section>
+                <div className="flex flex-col gap-6">
+                    <Section title="Cài đặt camera">
+                        <div aria-disabled="true" className="grid gap-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <Label htmlFor="lm-on" className="font-normal">Bật chỉ đường camera</Label>
+                                <Switch id="lm-on" disabled />
+                            </div>
+                            <div className="flex items-center justify-between gap-4">
+                                <Label htmlFor="lm-qr" className="font-normal">Bắt quét QR trước</Label>
+                                <Switch id="lm-qr" disabled />
+                            </div>
+                            <div className="grid gap-3">
+                                <div className="flex items-center justify-between gap-4">
+                                    <Label htmlFor="lm-thr" className="font-normal">Ngưỡng khớp tối thiểu</Label>
+                                    <span className="text-sm text-muted-foreground">—</span>
+                                </div>
+                                <Slider id="lm-thr" aria-label="Ngưỡng khớp tối thiểu" min={0.5} max={0.95} step={0.01} defaultValue={[0.8]} disabled />
                             </div>
                         </div>
-                    </section>
-                    <section aria-labelledby="priv-t" className="k-card">
-                        <h2 id="priv-t" className="k16">Quyền ảnh và riêng tư</h2>
-                        <p className="k14 k-m">Chỉ chụp cảnh cố định khi địa điểm cho phép; mặt người được làm mờ, ảnh không hiện cho khách.</p>
-                    </section>
-                </aside>
+                    </Section>
+                    <Section title="Quyền ảnh và riêng tư">
+                        <p className="text-sm text-muted-foreground">Chỉ chụp cảnh cố định khi địa điểm cho phép. Mặt người được làm mờ, ảnh không hiện cho khách.</p>
+                    </Section>
+                </div>
             </div>
-        </div>
+        </Page>
     );
 }
 
@@ -141,120 +151,165 @@ function useVenueStats(venue: VenueDto | undefined) {
     return { summary, error: current?.error, loading: !!venue && !current, retry: () => setAttempt(a => a + 1) };
 }
 
+function StatSkeleton() {
+    return (
+        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
+            <Skeleton className="size-9 rounded-lg" />
+            <div className="space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-10" /></div>
+        </div>
+    );
+}
+
+const USAGE = [
+    { label: "Lượt xem bản đồ", icon: Eye },
+    { label: "Lượt chỉ đường", icon: Route },
+    { label: "Từ khoá khách tìm", icon: Search },
+    { label: "Tuyến không tìm được", icon: RouteOff }
+];
+
 export function StatsPage() {
     const [venues, setVenues] = useState<VenueDto[] | null>(null);
     const [listError, setListError] = useState<unknown>(null);
+    const [listAttempt, setListAttempt] = useState(0);
     const [venueId, setVenueId] = useState<number | null>(null);
     useEffect(() => {
-        venueApi.mine().then(setVenues).catch(setListError);
-    }, []);
+        let alive = true;
+        venueApi.mine().then(list => {
+            if (!alive) return;
+            setVenues(list);
+            setListError(null);
+        }).catch(e => alive && setListError(e));
+        return () => {
+            alive = false;
+        };
+    }, [listAttempt]);
     const venue = venues?.find(v => v.id === venueId) ?? venues?.[0];
     const { summary, error, loading, retry } = useVenueStats(venue);
 
+    if (listError) return <Page><ErrorState error={listError} onRetry={() => setListAttempt(a => a + 1)} /></Page>;
+    if (venues && venues.length === 0) {
+        return (
+            <Page>
+                <EmptyState icon={<Building2 />} title="Chưa có địa điểm nào" description="Số liệu bản đồ hiện khi bạn có địa điểm."
+                    action={<Button asChild><Link to="/builder/new"><Plus />Tạo địa điểm</Link></Button>} />
+            </Page>
+        );
+    }
+
     return (
-        <>
-            <div className="k-title">
-                <h1 className="k24">Thống kê</h1>
-                {venues && venues.length > 0 && (
-                    <div className="k-acts">
-                        <label htmlFor="st-venue" className="k14 k-m">Địa điểm</label>
-                        <select id="st-venue" className="k-input kg-select" value={venue?.id ?? ""} onChange={e => setVenueId(Number(e.target.value))}>
-                            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                        </select>
-                    </div>
-                )}
+        <Page>
+            <div className="flex items-center gap-2">
+                {venues ? (
+                    <Select value={venue ? String(venue.id) : undefined} onValueChange={v => setVenueId(Number(v))}>
+                        <SelectTrigger className="w-full max-w-sm" aria-label="Địa điểm"><SelectValue /></SelectTrigger>
+                        <SelectContent>{venues.map(v => <SelectItem key={v.id} value={String(v.id)}>{v.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                ) : <Skeleton className="h-9 w-full max-w-sm" />}
+                {venue && <VenueBadge status={venue.status} />}
             </div>
-            {listError ? <ErrorNote error={listError} /> : null}
-            {venues && venues.length === 0 && (
-                <div className="k-card kg-empty">
-                    <h2 className="k16">Chưa có địa điểm nào</h2>
-                    <p className="k14 k-m">Số liệu bản đồ hiện khi bạn có địa điểm.</p>
-                    <div style={{ marginTop: 8 }}><Link to="/builder/new" className="k-btn">Tạo địa điểm</Link></div>
-                </div>
-            )}
-            {(!venues || venue) && !listError && (
-                <section aria-labelledby="sd-t" className="k-stack">
-                    <div className="k-line" style={{ gap: 16 }}>
-                        <h2 id="sd-t" className="k16">Dữ liệu bản đồ</h2>
-                        {venue && <VenueStatus status={venue.status} />}
+
+            {error ? <ErrorState error={error} onRetry={retry} /> : (
+                <>
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4" aria-busy={loading || !venues || undefined}>
+                        {summary ? (
+                            <>
+                                <Stat icon={<Building2 />} tone="blue" label="Toà nhà" value={summary.rows.length} hint={summary.rows.map(r => r.code).join(", ") || "Chưa có"} />
+                                <Stat icon={<Layers />} tone="green" label="Tầng" value={summary.bundle.floors.length} hint={`${summary.withPlan}/${summary.bundle.floors.length} có mặt bằng`} />
+                                <Stat icon={<MapPin />} tone="amber" label="Điểm quan tâm" value={summary.bundle.locations.length.toLocaleString("vi-VN")}
+                                    hint={summary.blocked ? <span className="text-warning">{summary.blocked} điểm chưa tới được</span> : "Đều tới được"} />
+                            </>
+                        ) : [0, 1, 2].map(i => <StatSkeleton key={i} />)}
+                        <Stat icon={<QrCode />} tone="violet" label="Mã QR định vị" value={<span className="text-muted-foreground" aria-label="Không có số liệu">—</span>} hint="Chưa khả dụng" />
                     </div>
-                    {error ? <ErrorNote error={error} onRetry={retry} /> : (
-                        <div className="k-card kg-flush" aria-busy={loading || !venues || undefined}>
-                            <div className="kg-kpis">
-                                {summary ? (
-                                    <>
-                                        <div className="k-kpi"><span className="k28">{summary.rows.length}</span><span className="k12 k-m">Toà nhà</span><span className="k12 k-m">{summary.rows.map(r => r.code).join(", ") || "Chưa có"}</span></div>
-                                        <div className="k-kpi"><span className="k28">{summary.bundle.floors.length}</span><span className="k12 k-m">Tầng</span><span className="k12 k-m">{summary.withPlan}/{summary.bundle.floors.length} có mặt bằng</span></div>
-                                        <div className="k-kpi">
-                                            <span className="k28">{summary.bundle.locations.length}</span><span className="k12 k-m">Điểm quan tâm</span>
-                                            {summary.blocked ? <span className="k12 k-warn">{summary.blocked} điểm chưa tới được</span> : <span className="k12 k-m">Đều tới được</span>}
-                                        </div>
-                                    </>
-                                ) : ["Toà nhà", "Tầng", "Điểm quan tâm"].map(label => (
-                                    <div key={label} className="k-kpi"><Skel w={48} h={32} /><span className="k12 k-m">{label}</span><Skel w={120} /></div>
+
+                    <Section title="Theo toà nhà" flush>
+                        <Table aria-busy={!summary || undefined}>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-6">Toà nhà</TableHead>
+                                    <TableHead className="text-right">Tầng</TableHead>
+                                    <TableHead className="text-right">Điểm</TableHead>
+                                    <TableHead className="w-64 pr-6">Điểm tới được</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {!summary ? [0, 1, 2].map(i => (
+                                    <TableRow key={i}>
+                                        <TableCell className="pl-6"><Skeleton className="h-4 w-40" /></TableCell>
+                                        <TableCell><Skeleton className="ml-auto h-4 w-6" /></TableCell>
+                                        <TableCell><Skeleton className="ml-auto h-4 w-8" /></TableCell>
+                                        <TableCell className="pr-6"><Skeleton className="h-2 w-40" /></TableCell>
+                                    </TableRow>
+                                )) : summary.rows.length === 0 ? (
+                                    <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Chưa có toà nhà.</TableCell></TableRow>
+                                ) : summary.rows.map(r => (
+                                    <TableRow key={r.id}>
+                                        <TableCell className="pl-6"><span className="mr-2 font-medium">{r.code}</span><span className="text-muted-foreground">{r.name}</span></TableCell>
+                                        <TableCell className="text-right tabular-nums">{r.floors}</TableCell>
+                                        <TableCell className="text-right tabular-nums">{r.points.toLocaleString("vi-VN")}</TableCell>
+                                        <TableCell className="pr-6">
+                                            {r.reach == null ? <span className="text-muted-foreground">Chưa có điểm trên bản đồ</span> : (
+                                                <div className="flex items-center gap-3">
+                                                    <Progress value={r.reach} className="h-1.5 w-32" aria-label={`${r.code}: ${r.reach}% điểm tới được`} />
+                                                    <span className={`tabular-nums ${r.reach === 100 ? "" : "text-warning"}`}>{r.reach}%</span>
+                                                </div>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
                                 ))}
-                                <div className="k-kpi"><span className="k28 k-m" aria-label="Không có số liệu">—</span><span className="k12 k-m">Mã QR định vị</span><span className="k12 k-m">Chưa khả dụng</span></div>
-                            </div>
-                            <table className="k-tbl kg-in" aria-label="Theo toà nhà">
-                                <thead><tr><th scope="col">Toà nhà</th><th scope="col" className="num">Tầng</th><th scope="col" className="num">Điểm</th><th scope="col" style={{ width: 240 }}>Điểm tới được</th></tr></thead>
-                                <tbody>
-                                    {!summary ? [0, 1, 2].map(i => (
-                                        <tr key={i}><td><Skel w={140} /></td><td className="num"><Skel w={24} /></td><td className="num"><Skel w={32} /></td><td><Skel w={160} /></td></tr>
-                                    )) : summary.rows.map(r => (
-                                        <tr key={r.id}>
-                                            <td><span className="k-b">{r.code}</span> <span className="k-m">{r.name}</span></td>
-                                            <td className="num">{r.floors}</td>
-                                            <td className="num">{r.points}</td>
-                                            <td>{r.reach == null ? <span className="k-m">Chưa có điểm trên bản đồ</span> : (
-                                                <><span className="kg-meter" aria-hidden="true"><span style={{ width: `${r.reach}%` }} /></span><span className={r.reach === 100 ? undefined : "k-warn"}>{r.reach}%</span></>
-                                            )}</td>
-                                        </tr>
-                                    ))}
-                                    {summary && !summary.rows.length && <tr><td colSpan={4} className="k-m">Chưa có toà nhà.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </section>
+                            </TableBody>
+                        </Table>
+                    </Section>
+                </>
             )}
-            <section aria-labelledby="su-t" className="k-stack">
-                <div className="k-line" style={{ gap: 16 }}><h2 id="su-t" className="k16">Thống kê sử dụng</h2><Badge>Chưa khả dụng</Badge></div>
-                <div className="k-card kg-usage">
-                    <div>
-                        <div><h3 className="k16">Chưa ghi nhận hoạt động của khách</h3><p className="k14 k-m" style={{ marginTop: 4 }}>Sẽ có khi:</p></div>
-                        <ul className="kg-plain" style={{ gap: 16 }}>
-                            <li><span className="k14 k-b" style={{ display: "block" }}>Hệ thống bật ghi nhận sự kiện</span><span className="k12 k-m">Cần backend lưu lượt xem, tìm kiếm, chỉ đường</span></li>
-                            <li><span className="k14 k-b" style={{ display: "block" }}>Địa điểm có chính sách riêng tư</span><span className="k12 k-m">Báo cho khách; chỉ lưu số liệu ẩn danh</span></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <p className="k-sec">Số liệu sẽ hiện</p>
-                        <ul className="kg-plain k14 k-m"><li>Lượt xem bản đồ</li><li>Lượt chỉ đường</li><li>Từ khoá khách tìm</li><li>Tuyến không tìm được</li></ul>
-                        <label className="k-line k14 k-m kg-switch-row">
-                            <span style={{ flex: 1 }}>Ghi nhận sự kiện ẩn danh</span><input type="checkbox" role="switch" className="kg-switch" disabled />
-                        </label>
-                    </div>
+
+            <Section title="Thống kê sử dụng">
+                <div className="grid gap-6">
+                    <Alert>
+                        <Clock />
+                        <AlertTitle>Chưa khả dụng</AlertTitle>
+                        <AlertDescription>Cần hệ thống ghi nhận sự kiện ẩn danh của khách.</AlertDescription>
+                    </Alert>
+                    <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                        {USAGE.map(({ label, icon: Icon }) => (
+                            <div key={label} className="flex items-center gap-3">
+                                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Icon className="size-4" /></span>
+                                <div className="min-w-0">
+                                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                                    <dd className="text-lg font-semibold text-muted-foreground" aria-label="Không có số liệu">—</dd>
+                                </div>
+                            </div>
+                        ))}
+                    </dl>
                 </div>
-            </section>
-        </>
+            </Section>
+        </Page>
     );
 }
 
 // ---------------------------------------------------------------- tài khoản
 export function AccountTabs({ current }: { current: "profile" | "notifications" }) {
     return (
-        <nav className="k-tabs" aria-label="Mục tài khoản">
-            <Link to="/builder/account" className="k-tab" aria-current={current === "profile" ? "page" : undefined}>Hồ sơ</Link>
-            <Link to="/builder/notifications" className="k-tab" aria-current={current === "notifications" ? "page" : undefined}>Thông báo</Link>
-        </nav>
+        <Tabs value={current}>
+            <TabsList aria-label="Mục tài khoản">
+                <TabsTrigger value="profile" asChild><Link to="/builder/account">Hồ sơ</Link></TabsTrigger>
+                <TabsTrigger value="notifications" asChild><Link to="/builder/notifications">Thông báo</Link></TabsTrigger>
+            </TabsList>
+        </Tabs>
     );
+}
+
+function UserStatusBadge({ status }: { status?: string }) {
+    if (status === "ACTIVE") return <Badge className="gap-1 bg-success/10 text-success"><CircleCheck />Hoạt động</Badge>;
+    if (status === "PENDING") return <Badge className="gap-1 bg-warning/10 text-warning"><Clock />Chờ duyệt</Badge>;
+    return <Badge className="bg-destructive/10 text-destructive">Bị khoá</Badge>;
 }
 
 export function AccountPage() {
     const { user, setUser } = useAuth();
     const { busy, run } = useAction();
     const [name, setName] = useState(user?.fullName ?? "");
-    const [savedAt, setSavedAt] = useState<string | null>(null);
+    const [saved, setSaved] = useState(false);
     const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
     const [pwBusy, setPwBusy] = useState(false);
     const [pwError, setPwError] = useState<{ current?: string; form?: string } | null>(null);
@@ -264,10 +319,10 @@ export function AccountPage() {
 
     const saveName = async (e: FormEvent) => {
         e.preventDefault();
-        const saved = await run(() => authApi.updateProfile(name.trim()));
-        if (saved) {
-            setUser(saved);
-            setSavedAt(new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
+        const result = await run(() => authApi.updateProfile(name.trim()));
+        if (result) {
+            setUser(result);
+            setSaved(true);
         }
     };
     const savePassword = async (e: FormEvent) => {
@@ -290,77 +345,66 @@ export function AccountPage() {
     };
 
     if (!user) return null;
+    const dirty = name.trim() !== user.fullName;
+    const role = user.role === "SYSTEM_ADMIN" ? "Quản trị hệ thống" : "Quản trị địa điểm";
     const since = user.createdAt ? `, từ ${new Date(user.createdAt).toLocaleDateString("vi-VN")}` : "";
+    const saveButton = (
+        <Button type="submit" form="pf-form" disabled={busy || !name.trim() || !dirty} aria-busy={busy || undefined}>
+            {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}Lưu họ tên
+        </Button>
+    );
+
     return (
-        <>
-            <div className="k-title"><h1 className="k24">Tài khoản</h1></div>
+        <Page width="narrow" actions={saveButton}>
+            {dirty ? <HeaderStatus><SaveState state="dirty" /></HeaderStatus> : saved && <HeaderStatus><SaveState state="saved" /></HeaderStatus>}
             <AccountTabs current="profile" />
-            <div className="k-stack" style={{ gap: 32 }}>
-                <section className="kg-sec" aria-labelledby="s-info">
-                    <div><h2 id="s-info" className="k16">Thông tin cá nhân</h2></div>
-                    <form className="k-card" onSubmit={saveName}>
-                        <div className="k-line" style={{ gap: 16 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <span className="k14 k-b" style={{ display: "block" }}>{user.fullName}</span>
-                                <span className="k12 k-m">{user.role === "SYSTEM_ADMIN" ? "Quản trị hệ thống" : "Quản trị địa điểm"}{since}</span>
-                            </div>
-                            {user.status === "ACTIVE" ? <Badge tone="ok" icon="circle-check">Hoạt động</Badge> : <Badge tone="warn">{user.status === "PENDING" ? "Chờ duyệt" : "Bị khoá"}</Badge>}
-                        </div>
-                        <div className="k-grid2">
-                            <div className="k-field">
-                                <label htmlFor="pf-name">Họ và tên</label>
-                                <input id="pf-name" className="k-input" type="text" autoComplete="name" required value={name} onChange={e => { setName(e.target.value); setSavedAt(null); }} />
-                            </div>
-                            <div className="k-field">
-                                <label htmlFor="pf-email">Email đăng nhập</label>
-                                <input id="pf-email" className="k-input" type="text" value={user.email} disabled aria-describedby="em-h" />
-                                <span id="em-h" className="k-hint">Không đổi được.</span>
-                            </div>
-                        </div>
-                        <div className="kg-cardfoot">
-                            {savedAt && <span role="status" className="k-line k12 k-m"><Lc name="check" size={16} color="var(--ok)" />Đã lưu họ tên lúc {savedAt}</span>}
-                            <span className="end">
-                                <button type="submit" className="k-btn" disabled={busy || !name.trim() || name.trim() === user.fullName} aria-busy={busy || undefined}>Lưu họ tên</button>
-                            </span>
-                        </div>
-                    </form>
-                </section>
-                <section className="kg-sec" aria-labelledby="s-pw">
-                    <div><h2 id="s-pw" className="k16">Đổi mật khẩu</h2></div>
-                    <form className="k-card" onSubmit={savePassword}>
-                        <div className="k-field">
-                            <label htmlFor="pw-cur">Mật khẩu hiện tại</label>
-                            <input id="pw-cur" className="k-input" type="password" autoComplete="current-password" required value={pw.current}
+
+            <Section title={user.fullName} description={`${role}${since}`} actions={<UserStatusBadge status={user.status} />}>
+                <form id="pf-form" onSubmit={saveName} aria-label="Thông tin cá nhân" className="grid grid-cols-2 gap-4">
+                    <div className="grid content-start gap-2">
+                        <Label htmlFor="pf-name">Họ và tên</Label>
+                        <Input id="pf-name" type="text" autoComplete="name" required value={name} onChange={e => { setName(e.target.value); setSaved(false); }} />
+                    </div>
+                    <div className="grid content-start gap-2">
+                        <Label htmlFor="pf-email">Email đăng nhập</Label>
+                        <Input id="pf-email" type="text" value={user.email} disabled aria-describedby="em-h" />
+                        <p id="em-h" className="text-xs text-muted-foreground">Không đổi được.</p>
+                    </div>
+                </form>
+            </Section>
+
+            <Section title="Đổi mật khẩu">
+                <form onSubmit={savePassword} aria-label="Đổi mật khẩu" className="grid gap-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid content-start gap-2">
+                            <Label htmlFor="pw-cur">Mật khẩu hiện tại</Label>
+                            <Input id="pw-cur" type="password" autoComplete="current-password" required value={pw.current}
                                 aria-invalid={pwError?.current ? true : undefined} aria-describedby={pwError?.current ? "pw-err" : undefined}
                                 onChange={e => { setPw(p => ({ ...p, current: e.target.value })); setPwError(null); }} />
-                            {pwError?.current && <span id="pw-err" className="k-line k12 k-danger"><Lc name="circle-alert" size={16} />{pwError.current}</span>}
+                            {pwError?.current && <p id="pw-err" className="flex items-center gap-1.5 text-xs text-destructive"><CircleAlert className="size-3.5" aria-hidden="true" />{pwError.current}</p>}
                         </div>
-                        <div className="k-grid2">
-                            <div className="k-field">
-                                <label htmlFor="pw-new">Mật khẩu mới</label>
-                                <input id="pw-new" className="k-input" type="password" autoComplete="new-password" required value={pw.next} aria-invalid={weak || undefined} aria-describedby="pw-h"
-                                    onChange={e => { setPw(p => ({ ...p, next: e.target.value })); setPwDone(false); }} />
-                                <span id="pw-h" className={weak ? "k12 k-danger" : "k-hint"}>Ít nhất 8 ký tự, có chữ và số</span>
-                            </div>
-                            <div className="k-field">
-                                <label htmlFor="pw-rep">Nhập lại mật khẩu mới</label>
-                                <input id="pw-rep" className="k-input" type="password" autoComplete="new-password" required value={pw.confirm} aria-invalid={mismatch || undefined}
-                                    onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
-                                {mismatch && <span className="k12 k-danger">Chưa khớp</span>}
-                            </div>
+                        <div className="col-start-1 grid content-start gap-2">
+                            <Label htmlFor="pw-new">Mật khẩu mới</Label>
+                            <Input id="pw-new" type="password" autoComplete="new-password" required value={pw.next} aria-invalid={weak || undefined} aria-describedby="pw-h"
+                                onChange={e => { setPw(p => ({ ...p, next: e.target.value })); setPwDone(false); }} />
+                            <p id="pw-h" className={`text-xs ${weak ? "text-destructive" : "text-muted-foreground"}`}>Ít nhất 8 ký tự, có chữ và số</p>
                         </div>
-                        <div className="kg-cardfoot">
-                            {pwDone && <span role="status" className="k-line k12 k-m"><Lc name="check" size={16} color="var(--ok)" />Đã đổi mật khẩu</span>}
-                            {(pwError?.current || pwError?.form) && <span role="alert" className="k12 k-b k-danger">{pwError.form ?? "Chưa đổi được mật khẩu"}</span>}
-                            <span className="end">
-                                <button type="submit" className="k-btn p" disabled={pwBusy || weak || mismatch || !pw.current || !pw.next || !pw.confirm} aria-busy={pwBusy || undefined}>
-                                    {pwBusy && <span className="cb-spinner is-inline" aria-hidden="true" />}Đổi mật khẩu
-                                </button>
-                            </span>
+                        <div className="grid content-start gap-2">
+                            <Label htmlFor="pw-rep">Nhập lại mật khẩu mới</Label>
+                            <Input id="pw-rep" type="password" autoComplete="new-password" required value={pw.confirm} aria-invalid={mismatch || undefined}
+                                aria-describedby={mismatch ? "pw-rep-err" : undefined} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
+                            {mismatch && <p id="pw-rep-err" className="text-xs text-destructive">Chưa khớp</p>}
                         </div>
-                    </form>
-                </section>
-            </div>
-        </>
+                    </div>
+                    <div className="flex items-center justify-end gap-3">
+                        {pwDone && <span role="status" className="flex items-center gap-1.5 text-xs text-success"><Check className="size-3.5" aria-hidden="true" />Đã đổi mật khẩu</span>}
+                        {(pwError?.current || pwError?.form) && <span role="alert" className="text-xs font-medium text-destructive">{pwError.form ?? "Chưa đổi được mật khẩu"}</span>}
+                        <Button type="submit" variant="outline" disabled={pwBusy || weak || mismatch || !pw.current || !pw.next || !pw.confirm} aria-busy={pwBusy || undefined}>
+                            {pwBusy && <LoaderCircle className="animate-spin" aria-hidden="true" />}Đổi mật khẩu
+                        </Button>
+                    </div>
+                </form>
+            </Section>
+        </Page>
     );
 }

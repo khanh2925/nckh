@@ -18,8 +18,8 @@ function VenuesMap({ venues, me }: { venues: VenueDto[]; me: LatLng | null }) {
         if (!box.current) return undefined;
         const map = L.map(box.current, { zoomControl: false, attributionControl: true, center: [10.8165, 106.66], zoom: 13, rotateControl: false });
         map.attributionControl?.setPrefix(false);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-            subdomains: "abcd", maxZoom: 20, className: "wf-tiles-base", attribution: "&copy; OpenStreetMap &copy; CARTO"
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 20, maxNativeZoom: 19, className: "wf-tiles-base", attribution: "&copy; OpenStreetMap"
         }).addTo(map);
         layer.current = L.layerGroup().addTo(map);
         mapRef.current = map;

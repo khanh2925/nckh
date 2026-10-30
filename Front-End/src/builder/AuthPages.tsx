@@ -1,49 +1,66 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Check, CircleAlert, CircleDot, Clock, Eye, EyeOff, Info, LoaderCircle, Lock, RefreshCw, type LucideIcon } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { authApi } from "../console/api";
 import { useAuth } from "../console/auth";
 import { ApiError } from "../console/http";
-import Lc, { type LucideName } from "../design/Lc";
+import { BrandMark } from "../console/Shell";
 import AuthArt from "./AuthArt";
-import "./pages/global.css";
 
-// Đăng nhập, đăng ký, quên mật khẩu, bảo trì: cột trái form (tối đa 400), cột phải mặt bằng minh hoạ.
+// Đăng nhập, đăng ký, quên mật khẩu, bảo trì: theo khối "login" của shadcn/ui.
+// Cột trái: logo + form (tối đa max-w-sm, căn giữa). Cột phải (màn rộng): mặt bằng minh hoạ.
 
 export function AuthFrame({ children }: { children: ReactNode }) {
     return (
-        <div className="cb-auth">
-            <section className="cb-auth-form">
-                <div className="cs-brand">
-                    <Link to="/" className="cs-logo" aria-label="Indoor Map, mở bản đồ cho khách"><Lc name="map-pin" size={18} stroke={2.2} /></Link>
-                    <span>Indoor Map</span>
+        <div className="grid min-h-svh bg-background lg:grid-cols-2">
+            <div className="flex flex-col gap-4 p-6 md:p-10">
+                <div className="flex justify-center md:justify-start">
+                    <Link to="/" className="flex items-center gap-2 text-sm font-medium" aria-label="Indoor Map, mở bản đồ cho khách">
+                        <BrandMark />Indoor Map
+                    </Link>
                 </div>
-                <div className="cb-auth-body"><div className="k-stack">{children}</div></div>
-            </section>
-            <aside className="cb-auth-art" aria-hidden="true"><AuthArt /></aside>
+                <div className="flex flex-1 items-center justify-center">
+                    <div className="w-full max-w-sm">{children}</div>
+                </div>
+            </div>
+            <div className="relative hidden overflow-hidden border-l bg-muted lg:block" aria-hidden="true">
+                <div className="absolute inset-0"><AuthArt /></div>
+            </div>
         </div>
     );
 }
 
 export function AuthHead({ id, title, sub }: { id: string; title: string; sub?: ReactNode }) {
-    return <div><h1 id={id} className="k24">{title}</h1>{sub && <p className="k14 k-m" style={{ marginTop: 8 }}>{sub}</p>}</div>;
+    return (
+        <div className="flex flex-col items-center gap-1 text-center">
+            <h1 id={id} className="text-lg font-semibold">{title}</h1>
+            {sub && <p className="text-sm text-balance text-muted-foreground">{sub}</p>}
+        </div>
+    );
 }
 
 type Tone = "danger" | "warn" | "";
-export function AuthNote({ tone, icon, title, children }: { tone: Tone; icon: LucideName; title: string; children?: ReactNode }) {
-    const color = tone === "danger" ? "var(--danger)" : tone === "warn" ? "var(--warn)" : "var(--muted)";
+export function AuthNote({ tone, icon: Icon, title, children }: { tone: Tone; icon: LucideIcon; title: string; children?: ReactNode }) {
     return (
-        <div className="k-note" role={tone === "danger" ? "alert" : "status"}>
-            <Lc name={icon} size={16} color={color} />
-            <div><div className="k-b">{title}</div>{children && <div>{children}</div>}</div>
-        </div>
+        <Alert variant={tone === "danger" ? "destructive" : "default"} role={tone === "danger" ? "alert" : "status"}>
+            <Icon className={tone === "warn" ? "text-warning" : undefined} />
+            <AlertTitle>{title}</AlertTitle>
+            {children && <AlertDescription>{children}</AlertDescription>}
+        </Alert>
     );
 }
 
 function SubmitButton({ busy, disabled, children }: { busy?: boolean; disabled?: boolean; children: ReactNode }) {
     return (
-        <button type="submit" className="k-btn p kg-full" disabled={disabled || busy} aria-busy={busy || undefined}>
-            {busy && <span className="cb-spinner is-inline" aria-hidden="true" />}{children}
-        </button>
+        <Button type="submit" className="w-full" disabled={disabled || busy} aria-busy={busy || undefined}>
+            {busy && <LoaderCircle className="animate-spin" aria-hidden="true" />}{children}
+        </Button>
     );
 }
 
@@ -51,20 +68,21 @@ function PasswordInput({ id, value, onChange, autoComplete, invalid, describedBy
     id: string; value: string; onChange: (v: string) => void; autoComplete: string; invalid?: boolean; describedBy?: string;
 }) {
     const [show, setShow] = useState(false);
+    const label = show ? "Ẩn mật khẩu" : "Hiện mật khẩu";
     return (
-        <div className="kg-pw">
-            <input id={id} className="k-input" type={show ? "text" : "password"} autoComplete={autoComplete} required value={value} maxLength={100}
+        <div className="relative">
+            <Input id={id} type={show ? "text" : "password"} autoComplete={autoComplete} required value={value} maxLength={100} className="pr-10"
                 aria-invalid={invalid || undefined} aria-describedby={describedBy} onChange={e => onChange(e.target.value)} />
-            <button type="button" className="k-ib sm t" aria-label={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"} title={show ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-                aria-pressed={show} aria-controls={id} onClick={() => setShow(s => !s)}>
-                <Lc name={show ? "eye-off" : "eye"} size={16} />
-            </button>
+            <Button type="button" variant="ghost" size="icon" className="absolute top-1/2 right-0.5 size-8 -translate-y-1/2 text-muted-foreground"
+                aria-label={label} title={label} aria-pressed={show} aria-controls={id} onClick={() => setShow(s => !s)}>
+                {show ? <EyeOff /> : <Eye />}
+            </Button>
         </div>
     );
 }
 
 function Alt({ text, to, link }: { text: string; to: string; link: string }) {
-    return <p className="k14 k-m kg-center">{text} <Link to={to} className="k-b kg-under" style={{ color: "var(--ink)" }}>{link}</Link></p>;
+    return <p className="text-center text-sm text-muted-foreground">{text} <Link to={to} className="font-medium text-foreground underline underline-offset-4">{link}</Link></p>;
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -85,11 +103,11 @@ function classify(err: unknown): LoginError {
 
 function LoginAlert({ error }: { error: LoginError }) {
     switch (error.kind) {
-        case "wrong": return <AuthNote tone="danger" icon="circle-alert" title="Email hoặc mật khẩu chưa đúng" />;
-        case "pending": return <AuthNote tone="warn" icon="clock" title="Tài khoản đang chờ duyệt">Bạn đăng nhập được sau khi quản trị hệ thống duyệt.</AuthNote>;
-        case "locked": return <AuthNote tone="danger" icon="lock" title="Tài khoản đã bị khoá">Liên hệ quản trị hệ thống để mở lại.</AuthNote>;
-        case "throttle": return <AuthNote tone="warn" icon="clock" title="Tạm khoá đăng nhập">{error.message}</AuthNote>;
-        default: return <AuthNote tone="danger" icon="circle-alert" title="Chưa đăng nhập được">{error.message}</AuthNote>;
+        case "wrong": return <AuthNote tone="danger" icon={CircleAlert} title="Email hoặc mật khẩu chưa đúng" />;
+        case "pending": return <AuthNote tone="warn" icon={Clock} title="Tài khoản đang chờ duyệt">Bạn đăng nhập được sau khi quản trị hệ thống duyệt.</AuthNote>;
+        case "locked": return <AuthNote tone="danger" icon={Lock} title="Tài khoản đã bị khoá">Liên hệ quản trị hệ thống để mở lại.</AuthNote>;
+        case "throttle": return <AuthNote tone="warn" icon={Clock} title="Tạm khoá đăng nhập">{error.message}</AuthNote>;
+        default: return <AuthNote tone="danger" icon={CircleAlert} title="Chưa đăng nhập được">{error.message}</AuthNote>;
     }
 }
 
@@ -125,31 +143,33 @@ export function LoginPage() {
 
     return (
         <AuthFrame>
-            <form onSubmit={submit} aria-labelledby="login-title" className="k-stack" noValidate>
+            <form onSubmit={submit} aria-labelledby="login-title" className="flex flex-col gap-6" noValidate>
                 <AuthHead id="login-title" title="Đăng nhập" />
-                <div aria-live="assertive" className="k-stack" style={{ gap: 8 }}>
+                <div aria-live="assertive" className="grid gap-2 empty:hidden">
                     {error ? <LoginAlert error={error} /> : (
                         <>
-                            {params.get("registered") && <AuthNote tone="warn" icon="clock" title="Tài khoản đang chờ duyệt">Đã gửi đăng ký. Bạn đăng nhập được sau khi quản trị hệ thống duyệt.</AuthNote>}
-                            {params.get("expired") && <AuthNote tone="" icon="info" title="Phiên đăng nhập đã kết thúc">Đăng nhập lại để tiếp tục.</AuthNote>}
+                            {params.get("registered") && <AuthNote tone="warn" icon={Clock} title="Tài khoản đang chờ duyệt">Đã gửi đăng ký. Bạn đăng nhập được sau khi quản trị hệ thống duyệt.</AuthNote>}
+                            {params.get("expired") && <AuthNote tone="" icon={Info} title="Phiên đăng nhập đã kết thúc">Đăng nhập lại để tiếp tục.</AuthNote>}
                         </>
                     )}
                 </div>
-                <div className="k-field">
-                    <label htmlFor="email">Email</label>
-                    <input id="email" className="k-input" type="email" inputMode="email" spellCheck={false} autoComplete="username" required value={email}
-                        placeholder="ten@donvi.vn" aria-invalid={emailBad || undefined} aria-describedby={emailBad ? "email-err" : undefined}
-                        onChange={e => setEmail(e.target.value)} onBlur={() => setEmailTouched(true)} />
-                    {emailBad && <span id="email-err" className="k-line k12 k-danger"><Lc name="circle-alert" size={16} />Email chưa đúng định dạng, ví dụ ten@donvi.vn</span>}
-                </div>
-                <div className="k-field">
-                    <div className="k-line">
-                        <label htmlFor="pw" className="k-label">Mật khẩu</label>
-                        <Link to="/forgot" className="k12 k-b" style={{ marginLeft: "auto" }}>Quên mật khẩu?</Link>
+                <div className="grid gap-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" inputMode="email" spellCheck={false} autoComplete="username" required value={email}
+                            placeholder="ten@donvi.vn" aria-invalid={emailBad || undefined} aria-describedby={emailBad ? "email-err" : undefined}
+                            onChange={e => setEmail(e.target.value)} onBlur={() => setEmailTouched(true)} />
+                        {emailBad && <p id="email-err" className="flex items-center gap-1.5 text-xs text-destructive"><CircleAlert className="size-3.5" aria-hidden="true" />Email chưa đúng định dạng, ví dụ ten@donvi.vn</p>}
                     </div>
-                    <PasswordInput id="pw" value={password} onChange={setPassword} autoComplete="current-password" invalid={error?.kind === "wrong"} />
+                    <div className="grid gap-2">
+                        <div className="flex items-center">
+                            <Label htmlFor="pw">Mật khẩu</Label>
+                            <Link to="/forgot" className="ml-auto text-sm underline-offset-4 hover:underline">Quên mật khẩu?</Link>
+                        </div>
+                        <PasswordInput id="pw" value={password} onChange={setPassword} autoComplete="current-password" invalid={error?.kind === "wrong"} />
+                    </div>
+                    <SubmitButton busy={busy} disabled={!email.trim() || !password}>Đăng nhập</SubmitButton>
                 </div>
-                <SubmitButton busy={busy} disabled={!email.trim() || !password}>Đăng nhập</SubmitButton>
                 <Alt text="Chưa có tài khoản?" to="/register" link="Đăng ký" />
             </form>
         </AuthFrame>
@@ -157,12 +177,13 @@ export function LoginPage() {
 }
 
 // ---------------------------------------------------------------- đăng ký
-function Rules({ id, items, column }: { id: string; items: [string, boolean][]; column?: boolean }) {
+function Rules({ id, items }: { id: string; items: [string, boolean][] }) {
     return (
-        <ul id={id} aria-live="polite" className={`kg-rules k12${column ? " is-col" : ""}`}>
+        <ul id={id} aria-live="polite" className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
             {items.map(([label, ok]) => (
-                <li key={label} className={ok ? "k-ok" : "k-m"}>
-                    <Lc name={ok ? "check" : "circle-dot"} size={14} />{label}<span className="sr-only">{ok ? ", đạt" : ", chưa đạt"}</span>
+                <li key={label} className={`flex items-center gap-1.5 ${ok ? "text-success" : "text-muted-foreground"}`}>
+                    {ok ? <Check className="size-3.5" aria-hidden="true" /> : <CircleDot className="size-3.5" aria-hidden="true" />}
+                    {label}<span className="sr-only">{ok ? ", đạt" : ", chưa đạt"}</span>
                 </li>
             ))}
         </ul>
@@ -199,33 +220,36 @@ export function RegisterPage() {
 
     return (
         <AuthFrame>
-            <form onSubmit={submit} aria-labelledby="reg-title" className="k-stack">
+            <form onSubmit={submit} aria-labelledby="reg-title" className="flex flex-col gap-6">
                 <AuthHead id="reg-title" title="Tạo tài khoản" sub="Quản trị hệ thống duyệt xong mới đăng nhập được." />
-                {error && <AuthNote tone="danger" icon="circle-alert" title="Chưa gửi được đăng ký">{error}</AuthNote>}
-                <div className="k-field">
-                    <label htmlFor="name">Họ và tên</label>
-                    <input id="name" className="k-input" type="text" autoComplete="name" maxLength={120} required value={form.fullName} onChange={set("fullName")} />
+                {error && <AuthNote tone="danger" icon={CircleAlert} title="Chưa gửi được đăng ký">{error}</AuthNote>}
+                <div className="grid gap-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="name">Họ và tên</Label>
+                        <Input id="name" type="text" autoComplete="name" maxLength={120} required value={form.fullName} onChange={set("fullName")} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" inputMode="email" spellCheck={false} autoComplete="username" required value={form.email}
+                            placeholder="ten@donvi.vn" onChange={set("email")} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="pw">Mật khẩu</Label>
+                        <PasswordInput id="pw" value={form.password} onChange={setPw("password")} autoComplete="new-password" describedBy="pw-rules" />
+                        <Rules id="pw-rules" items={[["Ít nhất 8 ký tự", longEnough], ["Có chữ và số", mixed]]} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="pw2">Nhập lại mật khẩu</Label>
+                        <Input id="pw2" type="password" autoComplete="new-password" required value={form.confirm} onChange={set("confirm")}
+                            aria-invalid={(form.confirm.length > 0 && !matches) || undefined} aria-describedby="pw2-ok" />
+                        <Rules id="pw2-ok" items={[["Khớp với mật khẩu", matches]]} />
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <Checkbox id="agree" required checked={agree} onCheckedChange={v => setAgree(v === true)} />
+                        <Label htmlFor="agree" className="leading-snug font-normal">Tôi có quyền công bố sơ đồ mặt bằng của địa điểm sẽ dựng</Label>
+                    </div>
+                    <SubmitButton busy={busy} disabled={!valid}>Tạo tài khoản</SubmitButton>
                 </div>
-                <div className="k-field">
-                    <label htmlFor="email">Email</label>
-                    <input id="email" className="k-input" type="email" inputMode="email" spellCheck={false} autoComplete="username" required value={form.email} onChange={set("email")} />
-                </div>
-                <div className="k-field">
-                    <label htmlFor="pw">Mật khẩu</label>
-                    <PasswordInput id="pw" value={form.password} onChange={setPw("password")} autoComplete="new-password" describedBy="pw-rules" />
-                    <Rules id="pw-rules" items={[["Ít nhất 8 ký tự", longEnough], ["Có chữ và số", mixed]]} />
-                </div>
-                <div className="k-field">
-                    <label htmlFor="pw2">Nhập lại mật khẩu</label>
-                    <input id="pw2" className="k-input" type="password" autoComplete="new-password" required value={form.confirm} onChange={set("confirm")}
-                        aria-invalid={(form.confirm.length > 0 && !matches) || undefined} aria-describedby="pw2-ok" />
-                    <Rules id="pw2-ok" column items={[["Khớp với mật khẩu", matches]]} />
-                </div>
-                <label className="kg-agree k14">
-                    <input type="checkbox" className="k-check" required checked={agree} onChange={e => setAgree(e.target.checked)} />
-                    <span>Tôi có quyền công bố sơ đồ mặt bằng của địa điểm sẽ dựng</span>
-                </label>
-                <SubmitButton busy={busy} disabled={!valid}>Tạo tài khoản</SubmitButton>
                 <Alt text="Đã có tài khoản?" to="/login" link="Đăng nhập" />
             </form>
         </AuthFrame>
@@ -242,15 +266,17 @@ export function ForgotPage() {
     };
     return (
         <AuthFrame>
-            <form onSubmit={submit} aria-labelledby="fg-title" className="k-stack" style={{ gap: 24 }}>
+            <form onSubmit={submit} aria-labelledby="fg-title" className="flex flex-col gap-6">
                 <AuthHead id="fg-title" title="Quên mật khẩu" sub="Nhập email đăng nhập để nhận link đặt lại." />
-                <div className="k-field">
-                    <label htmlFor="fg-email">Email</label>
-                    <input id="fg-email" className="k-input" type="email" inputMode="email" spellCheck={false} autoComplete="username" required value={email}
-                        placeholder="ten@donvi.vn" onChange={e => { setEmail(e.target.value); setAsked(false); }} />
+                <div className="grid gap-6">
+                    <div className="grid gap-2">
+                        <Label htmlFor="fg-email">Email</Label>
+                        <Input id="fg-email" type="email" inputMode="email" spellCheck={false} autoComplete="username" required value={email}
+                            placeholder="ten@donvi.vn" onChange={e => { setEmail(e.target.value); setAsked(false); }} />
+                    </div>
+                    {asked && <AuthNote tone="warn" icon={Clock} title="Chưa khả dụng">Liên hệ quản trị hệ thống để đặt lại mật khẩu.</AuthNote>}
+                    <SubmitButton disabled={!EMAIL_RE.test(email.trim())}>Gửi link đặt lại</SubmitButton>
                 </div>
-                {asked && <AuthNote tone="warn" icon="clock" title="Chưa khả dụng">Liên hệ quản trị hệ thống để đặt lại mật khẩu.</AuthNote>}
-                <SubmitButton disabled={!EMAIL_RE.test(email.trim())}>Gửi link đặt lại</SubmitButton>
                 <Alt text="Nhớ ra rồi?" to="/login" link="Đăng nhập" />
             </form>
         </AuthFrame>
@@ -264,13 +290,19 @@ export function MaintenancePage() {
     const back = next && next.startsWith("/") && !next.startsWith("//") ? next : "/builder";
     return (
         <AuthFrame>
-            <div role="alert" aria-labelledby="e-title" className="k-stack" style={{ gap: 24 }}>
+            <div role="alert" aria-labelledby="e-title" className="flex flex-col gap-6">
                 <AuthHead id="e-title" title="Máy chủ đang gặp sự cố" sub="Chưa kết nối được. Thử lại sau ít phút." />
-                <ul className="k-card tight" style={{ listStyle: "none", margin: 0, gap: 0, paddingTop: 4, paddingBottom: 4 }}>
-                    <li className="k-row k14"><span style={{ flex: 1, minWidth: 0 }}>Builder và quản trị</span><span className="k-badge k-warn"><Lc name="clock" size={14} />Tạm dừng</span></li>
-                    <li className="k-row k14"><span style={{ flex: 1, minWidth: 0 }}>Bản đồ cho khách</span><Link to="/" className="k12 k-b kg-under">Mở bản đồ</Link></li>
+                <ul className="divide-y rounded-xl border text-sm">
+                    <li className="flex items-center justify-between gap-4 px-4 py-3">
+                        <span className="min-w-0">Builder và quản trị</span>
+                        <Badge className="gap-1 bg-warning/10 text-warning"><Clock />Tạm dừng</Badge>
+                    </li>
+                    <li className="flex items-center justify-between gap-4 px-4 py-3">
+                        <span className="min-w-0">Bản đồ cho khách</span>
+                        <Link to="/" className="font-medium underline underline-offset-4">Mở bản đồ</Link>
+                    </li>
                 </ul>
-                <Link to={back} className="k-btn p kg-full"><Lc name="refresh-cw" size={16} />Thử lại</Link>
+                <Button asChild className="w-full"><Link to={back}><RefreshCw />Thử lại</Link></Button>
             </div>
         </AuthFrame>
     );

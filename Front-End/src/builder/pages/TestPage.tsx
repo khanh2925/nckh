@@ -2,19 +2,28 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type * as Leaflet from "leaflet";
 import { distance, formatMeters, planRoute, searchPlaces, type Place, type PlannedRoute, type StepKind } from "@indoor-map/core";
+import {
+    ArrowDownUp, ArrowRight, ArrowUp, ArrowUpDown, ArrowUpLeft, ArrowUpRight, ChevronsUp, CircleAlert, CornerUpLeft, CornerUpRight, Flag, ListChecks, Navigation,
+    Route, Spline, TriangleAlert, type LucideIcon
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import L from "../../lib/leaflet";
 import { HeaderActions } from "../../console/Shell";
-import { Button } from "../../console/ui";
-import Lc, { type LucideName } from "../../design/Lc";
 import EditorMap from "../EditorMap";
-import { floorLabel, GuestLink } from "../FloorList";
+import { floorLabel } from "../FloorList";
 import { mapColors, signIcon } from "../layers";
 import { useWorkspace } from "../Workspace";
-import "./workspace.css";
 
-const STEP_ICON: Record<StepKind, LucideName> = {
-    depart: "navigation", straight: "arrow-up", left: "corner-up-left", right: "corner-up-right", "slight-left": "arrow-up-left", "slight-right": "arrow-up-right",
-    uturn: "corner-up-left", "floor-up": "chevrons-up", "floor-down": "arrow-up-down", arrive: "flag"
+const STEP_ICON: Record<StepKind, LucideIcon> = {
+    depart: Navigation, straight: ArrowUp, left: CornerUpLeft, right: CornerUpRight, "slight-left": ArrowUpLeft, "slight-right": ArrowUpRight,
+    uturn: CornerUpLeft, "floor-up": ChevronsUp, "floor-down": ArrowUpDown, arrive: Flag
 };
 const DETOUR = 1.8;
 
@@ -25,17 +34,21 @@ function PlacePicker({ label, value, onChange }: { label: string; value: Place |
     const hits = useMemo(() => (query ? searchPlaces(model, query, { limit: 8 }) : []), [model, query]);
     const id = `pick-${label}`;
     return (
-        <div className="k-field ws-picker">
-            <label htmlFor={id}>{label}</label>
-            <input id={id} className="k-input" autoComplete="off" role="combobox" aria-expanded={open && hits.length > 0}
+        <div className="relative grid gap-2">
+            <Label htmlFor={id}>{label}</Label>
+            <Input id={id} className="h-8" autoComplete="off" role="combobox" aria-expanded={open && hits.length > 0}
                 value={open ? query : value ? `${value.name}, ${floorLabel(model, model.floorsById.get(value.floorId))}` : ""}
                 placeholder="Gõ tên địa điểm" onFocus={() => { setOpen(true); setQuery(""); }} onBlur={() => window.setTimeout(() => setOpen(false), 150)} onChange={e => setQuery(e.target.value)} />
             {open && hits.length > 0 && (
-                <ul className="cb-dropdown" role="listbox">
+                <ul role="listbox" className="absolute top-full right-0 left-0 z-50 mt-1 max-h-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
                     {hits.map(({ place }) => (
-                        <li key={place.id}><button type="button" role="option" aria-selected={false} onMouseDown={() => { onChange(place); setOpen(false); }}>
-                            <b>{place.name}</b><small>{floorLabel(model, model.floorsById.get(place.floorId))}</small>
-                        </button></li>
+                        <li key={place.id}>
+                            <button type="button" role="option" aria-selected={false} onMouseDown={() => { onChange(place); setOpen(false); }}
+                                className="flex w-full flex-col items-start rounded-sm px-2 py-1.5 text-left hover:bg-accent hover:text-accent-foreground">
+                                <span className="w-full truncate text-sm font-medium">{place.name}</span>
+                                <span className="text-xs text-muted-foreground">{floorLabel(model, model.floorsById.get(place.floorId))}</span>
+                            </button>
+                        </li>
                     ))}
                 </ul>
             )}
@@ -102,145 +115,217 @@ export default function TestPage() {
         return { failed, detours, passed, listed, pair, pairRoute: r && !("error" in r) ? r : null };
     }, [model, pairs, filter, pairIndex]);
 
-    const chip = (value: PairFilter, label: string, n: number) => (
-        <button type="button" className="k-chip" aria-pressed={filter === value} onClick={() => { setFilter(value); setPairIndex(0); }}>{label} {n}</button>
-    );
-    const pairTitle = (p: PairResult) => <><span className="ws-ellipsis">{p.from.name}</span><Lc name="arrow-right" size={14} style={{ flexShrink: 0 }} /><span className="ws-ellipsis">{p.to.name}</span></>;
     const turnWarning = route?.steps.some(s => (s.kind === "left" || s.kind === "right") && !s.title.includes(" tại "));
+    const c = mapColors();
+    const single = tab === "single";
+    const fallbackFloor = model.defaultFloor?.id ?? null;
+    const mapFloor = single ? shownLeg?.floorId ?? from?.floorId ?? fallbackFloor : pairRoute?.legs[0]?.floorId ?? pair?.from.floorId ?? fallbackFloor;
+    const fitKey = single ? `s-${from?.id}-${to?.id}-${legIndex}` : pair ? `b-${pair.from.id}-${pair.to.id}` : "b-none";
+    const filters: [PairFilter, string, number][] = pairs
+        ? [["bad", "Có lỗi", failed.length + detours.length], ["none", "Không có đường", failed.length], ["detour", "Đi vòng", detours.length], ["ok", "Đạt", passed.length], ["all", "Tất cả", pairs.length]]
+        : [];
 
     return (
-        <div className="k-page ws-page-full" style={{ minHeight: 640 }}>
-            <HeaderActions><GuestLink venue={data.venue} /></HeaderActions>
-            <div className="k-title">
-                <h1 className="k24">Thử chỉ đường</h1>
-                <div className="k-acts">
-                    {tab === "batch" && <Button variant="primary" disabled={model.locations.length < 2} onClick={runPairs}>{pairs ? "Chạy lại 50 cặp" : "Chạy 50 cặp"}</Button>}
-                </div>
-            </div>
-            <div role="tablist" aria-label="Cách thử" className="k-tabs">
-                <button type="button" role="tab" aria-selected={tab === "single"} className="k-tab" onClick={() => setTab("single")}>Thử một tuyến</button>
-                <button type="button" role="tab" aria-selected={tab === "batch"} className="k-tab" onClick={() => setTab("batch")}>Kiểm tra hàng loạt</button>
-            </div>
+        <div className="flex min-h-0 flex-1">
+            {!single && (
+                <HeaderActions>
+                    <Button disabled={model.locations.length < 2} onClick={runPairs}>{pairs ? "Chạy lại 50 cặp" : "Chạy 50 cặp"}</Button>
+                </HeaderActions>
+            )}
 
-            {tab === "single" ? (
-                <div className="ws-row ws-fill">
-                    <section aria-label="Tuyến trên mặt bằng" className="k-card ws-card0 ws-grow" style={{ display: "flex" }}>
-                        <div className="ws-cardhead is-24" style={{ borderBottom: 0 }}>
-                            {route && route.legs.length > 1 ? (
-                                <div role="group" aria-label="Chặng" className="k-line" style={{ flexWrap: "wrap" }}>
-                                    {route.legs.map((l, i) => <button key={i} type="button" className="k-chip" aria-pressed={i === legIndex} onClick={() => setLeg(i)}>Chặng {i + 1}, {floorLabel(model, model.floorsById.get(l.floorId), " ")}</button>)}
-                                </div>
-                            ) : <span className="k14 k-m">{route ? floorLabel(model, model.floorsById.get(route.legs[0]!.floorId)) : "Chọn điểm đi và điểm đến"}</span>}
-                            <span className="k12 k-m ws-right">{data.walkways.nodes.length.toLocaleString("vi-VN")} nút lối đi</span>
-                        </div>
-                        <div className="ws-mapwrap">
-                            <EditorMap model={model} floorId={shownLeg?.floorId ?? from?.floorId ?? model.defaultFloor?.id ?? null} fitKey={`${from?.id}-${to?.id}-${legIndex}`}>
-                                {map => <RouteLayer map={map} route={route} legIndex={legIndex} from={from} to={to} />}
-                            </EditorMap>
-                        </div>
-                    </section>
-                    <aside aria-label="Tuyến thử" className="k-card ws-card0" style={{ width: 360, flexShrink: 0, minHeight: 0, display: "flex" }}>
-                        <div className="k-stack" style={{ padding: 24, borderBottom: "1px solid var(--rule)", flexShrink: 0 }}>
-                            <PlacePicker label="Từ" value={from} onChange={p => { setFrom(p); setLeg(0); }} />
-                            <PlacePicker label="Đến" value={to} onChange={p => { setTo(p); setLeg(0); }} />
-                            <label className="k-line k14"><input type="checkbox" className="k-check" checked={avoidStairs} onChange={e => setAvoidStairs(e.target.checked)} />Tránh thang cuốn, thang bộ (xe lăn)</label>
-                            <Button icon="arrow-down-up" disabled={!from || !to} onClick={() => { setFrom(to); setTo(from); setLeg(0); }}>Đảo chiều</Button>
-                        </div>
-                        <div className="ws-grow" style={{ minHeight: 0, overflowY: "auto", padding: "16px 24px" }}>
-                            {result && "error" in result && <div className="k-note" role="alert"><Lc name="circle-alert" size={16} color="var(--danger)" /><div>{result.error}</div></div>}
-                            {route ? (
-                                <>
-                                    <div className="k-grid3" style={{ paddingBottom: 16 }}>
-                                        <Num k="Dài" v={`${route.distance} m`} />
-                                        <Num k="Ước tính" v={`${Math.max(1, Math.round(route.seconds / 60))} phút`} />
-                                        <Num k="Đổi tầng" v={String(route.legs.length - 1)} />
-                                    </div>
-                                    <ol className="ws-turns">
-                                        {route.steps.map((s, i) => (
-                                            <li key={i} className="k-row">
-                                                <Lc name={STEP_ICON[s.kind]} size={16} />
-                                                <div className="ws-col"><span className="k14">{s.title}</span><span className="k12 k-m">{s.kind.startsWith("floor") ? s.detail : s.distance ? formatMeters(s.distance) : s.detail}</span></div>
-                                            </li>
-                                        ))}
-                                    </ol>
-                                    {turnWarning && (
-                                        <div className="k-note ws-mt8" role="note">
-                                            <Lc name="triangle-alert" size={16} color="var(--warn)" />
-                                            <div>Có lượt rẽ không có mốc nào gần, khách chỉ thấy “Rẽ trái”. Thêm một điểm dễ thấy gần đó.</div>
-                                        </div>
-                                    )}
-                                </>
-                            ) : !result && <p className="k14 k-m">Chọn hai điểm để xem tuyến trên bản nháp, chưa cần xuất bản.</p>}
-                        </div>
-                    </aside>
+            {/* Trái: cách thử và điều kiện */}
+            <aside aria-label="Cách thử" className="flex w-64 shrink-0 flex-col border-r bg-background">
+                <div className="border-b p-3">
+                    <Tabs value={tab} onValueChange={v => setTab(v as "single" | "batch")}>
+                        <TabsList className="w-full" aria-label="Cách thử">
+                            <TabsTrigger value="single">Một tuyến</TabsTrigger>
+                            <TabsTrigger value="batch">Hàng loạt</TabsTrigger>
+                        </TabsList>
+                    </Tabs>
                 </div>
-            ) : (
-                <div className="ws-col ws-fill" style={{ gap: 16 }}>
-                    {pairs && (
-                        <div role="group" aria-label="Lọc kết quả" className="k-line" style={{ flexWrap: "wrap" }}>
-                            {chip("bad", "Có lỗi", failed.length + detours.length)}{chip("none", "Không có đường", failed.length)}{chip("detour", "Đi vòng", detours.length)}
-                            {chip("ok", "Đạt", passed.length)}{chip("all", "Tất cả", pairs.length)}
-                            <span className="k12 k-m ws-right"><b className="k-b" style={{ color: "var(--ink)" }}>Đi vòng</b> là dài hơn 1,8 lần đường chim bay</span>
+                {single ? (
+                    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
+                        <PlacePicker label="Từ" value={from} onChange={p => { setFrom(p); setLeg(0); }} />
+                        <PlacePicker label="Đến" value={to} onChange={p => { setTo(p); setLeg(0); }} />
+                        <Button variant="outline" size="sm" className="w-full" disabled={!from || !to} onClick={() => { setFrom(to); setTo(from); setLeg(0); }}><ArrowDownUp />Đảo chiều</Button>
+                        <div className="flex items-center justify-between gap-2">
+                            <Label htmlFor="avoid-stairs" className="font-normal">Tránh thang cuốn, thang bộ</Label>
+                            <Switch id="avoid-stairs" checked={avoidStairs} onCheckedChange={setAvoidStairs} />
                         </div>
-                    )}
-                    <div className="ws-row ws-fill">
-                        <section aria-labelledby="pair-t" className="k-card ws-card0 ws-grow" style={{ display: "flex" }}>
-                            <div className="ws-cardhead is-24" style={{ borderBottom: 0, gap: 16 }}>
-                                <h2 id="pair-t" className="k16 k-line" style={{ minWidth: 0 }}>{pair ? pairTitle(pair) : "Kiểm tra hàng loạt"}</h2>
-                                {pair && (pair.ok
-                                    ? (pair.detour ?? 1) > DETOUR ? <span className="k-badge k-warn">Đi vòng {pair.detour!.toFixed(1).replace(".", ",")}×</span> : <span className="k-badge k-ok">Đạt</span>
-                                    : <span className="k-badge k-danger">Không có đường</span>)}
-                                <Link to={`/builder/v/${venueId}/walkways${pair ? `?floor=${pair.from.floorId}` : ""}`} className="k-btn sm ws-right">Sửa lối đi</Link>
+                    </div>
+                ) : (
+                    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                        <p className="px-2 pt-1 pb-2 text-xs font-medium text-muted-foreground">Lọc kết quả</p>
+                        {pairs ? filters.map(([value, label, n]) => (
+                            <button key={value} type="button" aria-pressed={filter === value} onClick={() => { setFilter(value); setPairIndex(0); }}
+                                className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm ${filter === value ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}>
+                                <span className="min-w-0 flex-1 truncate">{label}</span>
+                                <span className={`text-xs tabular-nums ${filter === value ? "" : "text-muted-foreground"}`}>{n}</span>
+                            </button>
+                        )) : <p className="px-2 py-2 text-sm text-muted-foreground">Chưa chạy.</p>}
+                    </div>
+                )}
+                <div className="space-y-1 border-t p-3 text-xs text-muted-foreground">
+                    {single
+                        ? <p>{data.walkways.nodes.length.toLocaleString("vi-VN")} nút lối đi, chưa cần xuất bản</p>
+                        : <p><span className="font-medium text-foreground">Đi vòng</span> là dài hơn 1,8 lần đường chim bay</p>}
+                </div>
+            </aside>
+
+            {/* Giữa: tuyến trên mặt bằng */}
+            <section aria-label="Tuyến trên mặt bằng" className="relative min-w-0 flex-1 bg-muted/40 [&_.cb-map]:absolute [&_.cb-map]:inset-0 [&_.cb-map]:min-h-0">
+                <EditorMap model={model} floorId={mapFloor} fitKey={fitKey}>
+                    {map => single
+                        ? <RouteLayer key="single" map={map} route={route} legIndex={legIndex} from={from} to={to} />
+                        : <RouteLayer key="batch" map={map} route={pairRoute} legIndex={0} from={pair?.from ?? null} to={pair?.to ?? null} straight />}
+                </EditorMap>
+
+                {single ? (
+                    <div className="absolute top-3 left-3 z-[800] flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border bg-background p-1 shadow-sm">
+                        {route && route.legs.length > 1 ? (
+                            <ToggleGroup type="single" size="sm" value={String(legIndex)} onValueChange={v => v && setLeg(Number(v))} aria-label="Chặng" className="overflow-x-auto">
+                                {route.legs.map((l, i) => (
+                                    <ToggleGroupItem key={i} value={String(i)} className="px-2.5 whitespace-nowrap data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                                        Chặng {i + 1}, {floorLabel(model, model.floorsById.get(l.floorId), " ")}
+                                    </ToggleGroupItem>
+                                ))}
+                            </ToggleGroup>
+                        ) : <span className="px-2 py-1 text-sm">{route ? floorLabel(model, model.floorsById.get(route.legs[0]!.floorId)) : "Chọn điểm đi và điểm đến"}</span>}
+                    </div>
+                ) : pair && (
+                    <>
+                        <div className="absolute top-3 left-3 z-[800] flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-lg border bg-background py-1 pr-1 pl-3 shadow-sm">
+                            <PairTitle pair={pair} className="text-sm font-medium" />
+                            <PairBadge pair={pair} />
+                            <Button asChild variant="ghost" size="sm"><Link to={`/builder/v/${venueId}/walkways?floor=${pair.from.floorId}`}><Spline />Sửa lối đi</Link></Button>
+                        </div>
+                        <ul className="absolute bottom-4 left-4 z-[800] space-y-1.5 rounded-lg border bg-background px-3 py-2 text-xs shadow-sm">
+                            {pair.meters != null && (
+                                <li className="flex items-center gap-2">
+                                    <span aria-hidden="true" className="h-1 w-5 rounded-full" style={{ background: c.signal, boxShadow: `0 0 0 1px ${c.graphite}` }} />Tuyến {pair.meters} m
+                                </li>
+                            )}
+                            <li className="flex items-center gap-2"><span aria-hidden="true" className="w-5 border-t-2 border-dashed" style={{ borderColor: c.danger }} />Chim bay {Math.round(pair.straight)} m</li>
+                        </ul>
+                    </>
+                )}
+            </section>
+
+            {/* Phải: chỉ dẫn từng bước, hoặc danh sách cặp */}
+            <aside aria-label={single ? "Tuyến thử" : "Kết quả hàng loạt"} className="flex w-80 shrink-0 flex-col border-l bg-background">
+                {single ? (
+                    route ? (
+                        <>
+                            <div className="grid grid-cols-3 gap-2 border-b p-4">
+                                <Num label="Dài" value={`${route.distance} m`} />
+                                <Num label="Ước tính" value={`${Math.max(1, Math.round(route.seconds / 60))} phút`} />
+                                <Num label="Đổi tầng" value={String(route.legs.length - 1)} />
                             </div>
-                            <div className="ws-mapwrap">
-                                <EditorMap model={model} floorId={pairRoute?.legs[0]?.floorId ?? pair?.from.floorId ?? model.defaultFloor?.id ?? null} fitKey={pair ? `${pair.from.id}-${pair.to.id}` : "none"}>
-                                    {map => <RouteLayer map={map} route={pairRoute} legIndex={0} from={pair?.from ?? null} to={pair?.to ?? null} straight />}
-                                </EditorMap>
-                                {pair && (
-                                    <div className="ws-float is-tl is-col">
-                                        {pair.meters != null && <span className="k-line"><span aria-hidden="true" className="ws-legend" style={{ height: 4, borderRadius: 999, background: "var(--route)", boxShadow: "0 0 0 1px var(--graphite)" }} />Tuyến {pair.meters} m</span>}
-                                        <span className="k-line"><span aria-hidden="true" className="ws-legend" style={{ borderTop: "2px dashed var(--danger)" }} />Chim bay {Math.round(pair.straight)} m</span>
-                                    </div>
+                            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+                                <ol className="space-y-1">
+                                    {route.steps.map((s, i) => {
+                                        const Icon = STEP_ICON[s.kind];
+                                        return (
+                                            <li key={i} className="flex items-start gap-3 py-1.5">
+                                                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"><Icon className="size-4" /></span>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm">{s.title}</p>
+                                                    <p className="text-xs text-muted-foreground">{s.kind.startsWith("floor") ? s.detail : s.distance ? formatMeters(s.distance) : s.detail}</p>
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ol>
+                                {turnWarning && (
+                                    <Alert>
+                                        <TriangleAlert className="text-warning" />
+                                        <AlertDescription>Có lượt rẽ không có mốc gần, khách chỉ thấy “Rẽ trái”. Thêm một điểm dễ thấy gần đó.</AlertDescription>
+                                    </Alert>
                                 )}
                             </div>
-                        </section>
-                        <section aria-labelledby="list-t" className="k-card ws-card0" style={{ width: 360, flexShrink: 0, minHeight: 0, display: "flex" }}>
-                            <div className="ws-cardhead is-24">
-                                <h2 id="list-t" className="k16">{pairs ? `${listed.length} cặp` : "Chưa chạy"}</h2>
-                                {ranAt && <span className="k12 k-m">chạy lúc {ranAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</span>}
-                            </div>
-                            {pairs ? (
-                                <ul className="ws-list ws-grow" style={{ overflowY: "auto", minHeight: 0 }}>
-                                    {listed.map((p, i) => (
-                                        <li key={`${p.from.id}-${p.to.id}-${i}`}>
-                                            <button type="button" className="ws-pr" aria-pressed={p === pair} title="Xem trên bản đồ" onClick={() => setPairIndex(i)}>
-                                                <span className="ws-grow ws-col">
-                                                    <span className={`k-line${p === pair ? " k-b" : ""}`} style={{ gap: 4, minWidth: 0 }}>{pairTitle(p)}</span>
-                                                    <span className="k12 k-m ws-ellipsis">{p.ok ? `${p.meters} m` : p.error}</span>
-                                                </span>
-                                                {p.ok
-                                                    ? (p.detour ?? 1) > DETOUR ? <span className="k12 k-b k-warn is-nowrap">Đi vòng {p.detour!.toFixed(1).replace(".", ",")}×</span> : <span className="k12 k-m is-nowrap">Đạt</span>
-                                                    : <span className="k12 k-b k-danger is-nowrap">Không có đường</span>}
-                                            </button>
-                                        </li>
-                                    ))}
-                                    {!listed.length && <li className="k14 k-m" style={{ padding: 24 }}>Không có cặp nào trong nhóm này.</li>}
-                                </ul>
-                            ) : (
-                                <div className="ws-pidle" style={{ flex: 1 }}>
-                                    <p className="k14 k-m">Chạy 50 cặp điểm ngẫu nhiên trong cùng toà nhà để tìm chỗ lối đi bị đứt hoặc đi vòng.</p>
-                                </div>
+                        </>
+                    ) : (
+                        <div className="flex flex-col gap-4 p-4">
+                            {result && "error" in result && (
+                                <Alert variant="destructive">
+                                    <CircleAlert />
+                                    <AlertDescription>{result.error}</AlertDescription>
+                                </Alert>
                             )}
-                        </section>
-                    </div>
-                </div>
-            )}
+                            {!result && <Idle icon={Route} title="Chưa có tuyến" text="Chọn điểm đi và điểm đến." />}
+                        </div>
+                    )
+                ) : pairs ? (
+                    <>
+                        <div className="border-b p-4">
+                            <h2 className="text-base font-semibold">{listed.length} cặp</h2>
+                            {ranAt && <p className="mt-1 text-xs text-muted-foreground">Chạy lúc {ranAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</p>}
+                        </div>
+                        <ul className="min-h-0 flex-1 overflow-y-auto p-2">
+                            {listed.map((p, i) => (
+                                <li key={`${p.from.id}-${p.to.id}-${i}`}>
+                                    <button type="button" aria-pressed={p === pair} onClick={() => setPairIndex(i)}
+                                        className={`flex w-full items-start gap-2 rounded-md px-2 py-2 text-left ${p === pair ? "bg-primary/10" : "hover:bg-muted"}`}>
+                                        <span className="min-w-0 flex-1">
+                                            <PairTitle pair={p} className={`text-sm ${p === pair ? "font-medium text-primary" : ""}`} />
+                                            <span className="block truncate text-xs text-muted-foreground">{p.ok ? `${p.meters} m` : p.error}</span>
+                                        </span>
+                                        <PairStatus pair={p} />
+                                    </button>
+                                </li>
+                            ))}
+                            {!listed.length && <li className="px-2 py-4 text-sm text-muted-foreground">Không có cặp nào trong nhóm này.</li>}
+                        </ul>
+                    </>
+                ) : (
+                    <Idle icon={ListChecks} title="Chưa chạy" text="Chạy 50 cặp ngẫu nhiên để tìm chỗ lối đi bị đứt hoặc đi vòng." />
+                )}
+            </aside>
         </div>
     );
 }
 
-function Num({ k, v }: { k: string; v: string }) {
-    return <div className="ws-col"><span className="k12 k-m">{k}</span><span className="k16">{v}</span></div>;
+function Num({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-md bg-muted/50 px-2 py-1.5">
+            <p className="text-base font-semibold tabular-nums">{value}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+        </div>
+    );
+}
+
+function Idle({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
+    return (
+        <div className="flex flex-col items-center gap-2 p-4 pt-14 text-center">
+            <span className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground"><Icon className="size-5" /></span>
+            <p className="text-sm font-medium">{title}</p>
+            <p className="text-sm text-muted-foreground">{text}</p>
+        </div>
+    );
+}
+
+function PairTitle({ pair, className = "" }: { pair: PairResult; className?: string }) {
+    return (
+        <span className={`flex min-w-0 items-center gap-1 ${className}`}>
+            <span className="truncate">{pair.from.name}</span>
+            <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-label="đến" />
+            <span className="truncate">{pair.to.name}</span>
+        </span>
+    );
+}
+
+const detourText = (p: PairResult) => `Đi vòng ${p.detour!.toFixed(1).replace(".", ",")}×`;
+
+function PairBadge({ pair }: { pair: PairResult }) {
+    if (!pair.ok) return <Badge className="bg-destructive/10 text-destructive">Không có đường</Badge>;
+    if ((pair.detour ?? 1) > DETOUR) return <Badge className="bg-warning/10 text-warning">{detourText(pair)}</Badge>;
+    return <Badge className="bg-success/10 text-success">Đạt</Badge>;
+}
+
+function PairStatus({ pair }: { pair: PairResult }) {
+    if (!pair.ok) return <span className="shrink-0 text-xs font-medium text-destructive">Không có đường</span>;
+    if ((pair.detour ?? 1) > DETOUR) return <span className="shrink-0 text-xs font-medium text-warning">{detourText(pair)}</span>;
+    return <span className="shrink-0 text-xs text-muted-foreground">Đạt</span>;
 }
 
 /** Tuyến vàng viền than chì; điểm đi ô sáng, điểm đến ô biển than chì chữ vàng; straight = nét đứt đường chim bay */

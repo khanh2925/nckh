@@ -1,6 +1,0 @@
-/* Trang 404 (ngoài ConsoleRoot): dùng bộ .k-* / .cs-* của console.css, ở đây chỉ bố cục riêng. */
-.pt-panel { align-items: flex-start; padding: 32px; }
-.pt-copy { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
-.pt-url { height: 32px; padding: 0 12px; border-radius: 6px; background: var(--surface-2); max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pt-acts { display: flex; align-items: center; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
-@media (max-width: 600px) { .pt-panel { padding: 24px; } .pt-page { padding: 24px 16px; } }

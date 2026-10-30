@@ -1,39 +1,36 @@
 import { Link, useLocation } from "react-router-dom";
-import Lc from "../design/Lc";
-import "../console/console.css";
-import "./portal.css";
+import { Link2 } from "lucide-react";
+import "@fontsource-variable/inter";
+import "../console/app.css";
+import { Button } from "@/components/ui/button";
+import { BrandMark } from "../console/Shell";
 
-// Trang 404 cho mọi đường dẫn không có (nằm ngoài ConsoleRoot: không biết người xem đã đăng nhập hay chưa,
-// nên chỉ có header, không có sidebar và tài khoản).
+// Trang 404 cho mọi đường dẫn không có. Nằm ngoài ConsoleRoot (không biết người xem đã đăng nhập hay chưa),
+// nên chỉ có logo, không có sidebar và tài khoản. Dùng cùng theme shadcn với Builder (lớp .cb-root bật theme).
 export default function ComingSoon() {
     const { pathname } = useLocation();
     return (
-        <div className="cb-root">
-            <div className="cs-app">
-                <header className="cs-head">
-                    <Link to="/" className="cs-logo" aria-label="Indoor Map, mở bản đồ cho khách"><Lc name="map-pin" size={18} stroke={2.2} /></Link>
-                    <nav className="cs-crumbs" aria-label="Vị trí"><b aria-current="page">Không tìm thấy trang</b></nav>
-                </header>
-                <div className="cs-body">
-                    <main className="cs-main">
-                        <div className="k-page pt-page">
-                            <div className="k-title"><h1 className="k24">Không tìm thấy trang</h1></div>
-                            <section className="k-card pt-panel">
-                                <div className="pt-copy">
-                                    <h2 className="k16">Trang này không tồn tại hoặc đã bị xoá</h2>
-                                    <p className="k14 k-m">Kiểm tra lại đường dẫn, hoặc mở địa điểm từ danh sách.</p>
-                                </div>
-                                <span className="k-line k14 k-m pt-url"><Lc name="link" size={16} color="var(--muted)" />{window.location.host}{pathname}</span>
-                                <div className="pt-acts">
-                                    <Link to="/builder" className="k-btn p">Về Địa điểm của tôi</Link>
-                                    <Link to="/" className="k-btn t">Mở bản đồ cho khách</Link>
-                                    <span className="k12 k-m">Mã lỗi 404</span>
-                                </div>
-                            </section>
-                        </div>
-                    </main>
+        <div className="cb-root flex min-h-svh flex-col bg-background text-foreground">
+            <header className="flex h-14 items-center gap-2 border-b px-4">
+                <Link to="/" aria-label="Indoor Map, mở bản đồ cho khách"><BrandMark /></Link>
+                <span className="text-sm font-medium">Indoor Map</span>
+            </header>
+            <main className="flex flex-1 items-center justify-center p-6">
+                <div className="w-full max-w-md space-y-6 text-center">
+                    <div className="space-y-2">
+                        <p className="text-sm font-medium text-primary">404</p>
+                        <h1 className="text-2xl font-semibold tracking-tight">Không tìm thấy trang</h1>
+                        <p className="text-sm text-muted-foreground">Trang này không tồn tại hoặc đã bị xoá.</p>
+                    </div>
+                    <p className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                        <Link2 className="size-3.5 shrink-0" /><span className="truncate">{window.location.host}{pathname}</span>
+                    </p>
+                    <div className="flex justify-center gap-2">
+                        <Button asChild variant="outline"><Link to="/">Mở bản đồ cho khách</Link></Button>
+                        <Button asChild><Link to="/builder">Về Địa điểm của tôi</Link></Button>
+                    </div>
                 </div>
-            </div>
+            </main>
         </div>
     );
 }

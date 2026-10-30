@@ -1,13 +1,22 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { ArrowDown, ArrowUp, Building2, CircleCheck, Layers, Map as MapIcon, MapPin, MoreHorizontal, Pencil, Plus, Spline, Trash2, TriangleAlert } from "lucide-react";
 import { floorWord, type BuildingDto, type FloorDto } from "@indoor-map/core";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { planApi } from "../../console/api";
-import { HeaderActions } from "../../console/Shell";
-import { Button, useAction } from "../../console/ui";
-import Lc from "../../design/Lc";
-import { Dialog, GuestLink, RowMenu } from "../FloorList";
+import { EmptyState, Page, Section, Stat } from "../../console/page";
+import { useAction } from "../../console/ui";
 import { useWorkspace } from "../Workspace";
-import "./workspace.css";
 
 type Modal =
     | { kind: "building"; id?: number; code: string; name: string }
@@ -25,6 +34,12 @@ function qrIds(venueId: number): string[] {
     }
 }
 
+function PlanBadge({ floor }: { floor: FloorDto }) {
+    if (!floor.plan) return <Badge className="gap-1 bg-warning/10 text-warning"><TriangleAlert />Chưa có mặt bằng</Badge>;
+    if (!floor.plan.anchor) return <Badge className="gap-1 bg-warning/10 text-warning"><TriangleAlert />Chưa chấm mốc</Badge>;
+    return <Badge className="gap-1 bg-success/10 text-success"><CircleCheck />Đã căn chỉnh</Badge>;
+}
+
 // Toà nhà và tầng: danh sách toà (sắp thứ tự), lối nối giữa toà, số liệu và bảng tầng của toà đang chọn.
 export default function BuildingsPage() {
     const { venueId, data, model, reload } = useWorkspace();
@@ -37,9 +52,8 @@ export default function BuildingsPage() {
     const [qr] = useState(() => new Set(qrIds(venueId)));
     const base = `/builder/v/${venueId}`;
 
-    const nodesOf = (floorIds: Set<number>) => data.walkways.nodes.filter(n => floorIds.has(n.floorId));
     const floorIds = new Set(floors.map(f => f.id));
-    const buildingNodes = nodesOf(floorIds);
+    const buildingNodes = data.walkways.nodes.filter(n => floorIds.has(n.floorId));
     const buildingPlaces = floors.reduce((s, f) => s + (model.locationCount.get(f.id) ?? 0), 0);
     const buildingQr = buildingNodes.filter(n => qr.has(n.id)).length;
 
@@ -132,186 +146,208 @@ export default function BuildingsPage() {
         }
     };
 
-    const header = (
-        <HeaderActions>
-            <GuestLink venue={data.venue} />
-            <Button variant="primary" onClick={() => setModal({ kind: "building", code: "", name: "" })}>Thêm toà nhà</Button>
-        </HeaderActions>
-    );
+    const addBuilding = <Button onClick={() => setModal({ kind: "building", code: "", name: "" })}><Plus />Thêm toà nhà</Button>;
+    const close = (open: boolean) => !open && setModal(null);
 
     return (
-        <div className="k-page">
-            {header}
+        <Page actions={addBuilding}>
             {!building ? (
-                <section className="k-card ws-empty">
-                    <h2 className="k16">Chưa có toà nhà</h2>
-                    <p className="k14 k-m">Mỗi địa điểm gồm một hoặc nhiều toà nhà, mỗi toà có các tầng. Thêm toà đầu tiên để bắt đầu.</p>
-                </section>
+                <EmptyState icon={<Building2 />} title="Chưa có toà nhà" description="Mỗi địa điểm gồm một hoặc nhiều toà nhà, mỗi toà có các tầng." action={addBuilding} />
             ) : (
-                <div className="ws-split">
-                    <aside className="k-stack">
-                        <section aria-labelledby="bl-title" className="k-card tight">
-                            <h2 id="bl-title" className="k16" style={{ padding: "0 8px" }}>Toà nhà</h2>
-                            <ul className="ws-list ws-grp" style={{ gap: 4 }}>
-                                {buildings.map((b, i) => {
-                                    const cur = b.id === building.id;
-                                    return (
-                                        <li key={b.id} className="ws-bl" aria-current={cur}>
-                                            <button type="button" aria-current={cur} className={cur ? "k-b" : undefined} onClick={() => setSelectedId(b.id)}>
-                                                <span className="k-m k-b" style={{ minWidth: 24 }}>{b.code}</span>
-                                                <span className="ws-grow ws-ellipsis">{b.name}</span>
-                                                <span className="k12 k-m" style={{ fontWeight: 400 }}>{data.floors.filter(f => f.buildingId === b.id).length} tầng</span>
-                                            </button>
-                                            <button type="button" className="k-ib sm t" aria-label={`Đưa ${b.code} lên`} title="Đưa lên" disabled={i === 0 || busy} onClick={() => void move(i, -1)}><Lc name="arrow-up" size={16} /></button>
-                                            <button type="button" className="k-ib sm t" aria-label={`Đưa ${b.code} xuống`} title="Đưa xuống" disabled={i === buildings.length - 1 || busy} onClick={() => void move(i, 1)}><Lc name="arrow-up" size={16} style={{ transform: "rotate(180deg)" }} /></button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        </section>
-                        {buildings.length > 1 && (
-                            <section aria-labelledby="link-title" className="k-card tight">
-                                <h2 id="link-title" className="k16">Lối nối giữa toà</h2>
-                                <div>
-                                    {links.map(({ a, b, n }) => (
-                                        <div key={`${a.id}-${b.id}`} className="k-row k14">
-                                            <span>{a.code} – {b.code}</span>
-                                            {n ? <span className="k-m ws-right">{n} lối</span> : <span className="k-badge k-warn ws-right"><Lc name="triangle-alert" size={14} />Chưa nối</span>}
+                <div className="grid items-start gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+                    <div className="flex flex-col gap-4">
+                        <nav aria-label="Toà nhà" className="rounded-xl border bg-card p-1">
+                            {buildings.map((b, i) => {
+                                const cur = b.id === building.id;
+                                return (
+                                    <div key={b.id} className={`group flex items-center rounded-lg ${cur ? "bg-primary/10 text-primary" : "hover:bg-muted/60"}`}>
+                                        <button type="button" aria-current={cur} onClick={() => setSelectedId(b.id)}
+                                            className="flex h-9 min-w-0 flex-1 items-center gap-2 px-2 text-left text-sm">
+                                            <span className={`w-7 shrink-0 text-xs font-medium ${cur ? "" : "text-muted-foreground"}`}>{b.code}</span>
+                                            <span className={`truncate ${cur ? "font-medium" : ""}`}>{b.name}</span>
+                                        </button>
+                                        <div className={`flex pr-1 ${cur ? "" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"}`}>
+                                            <Button variant="ghost" size="icon" className="size-7" aria-label={`Đưa ${b.code} lên`} disabled={i === 0 || busy} onClick={() => void move(i, -1)}><ArrowUp /></Button>
+                                            <Button variant="ghost" size="icon" className="size-7" aria-label={`Đưa ${b.code} xuống`} disabled={i === buildings.length - 1 || busy} onClick={() => void move(i, 1)}><ArrowDown /></Button>
                                         </div>
+                                    </div>
+                                );
+                            })}
+                        </nav>
+                        {buildings.length > 1 && (
+                            <div className="rounded-xl border bg-card">
+                                <div className="flex items-center justify-between border-b px-4 py-3">
+                                    <h2 className="text-sm font-medium">Lối nối giữa toà</h2>
+                                    <Button asChild variant="link" size="sm" className="h-auto px-0"><Link to={`${base}/walkways`}>Sửa</Link></Button>
+                                </div>
+                                <ul className="divide-y text-sm">
+                                    {links.map(({ a, b, n }) => (
+                                        <li key={`${a.id}-${b.id}`} className="flex items-center justify-between px-4 py-2">
+                                            <span>{a.code} – {b.code}</span>
+                                            {n ? <span className="text-muted-foreground tabular-nums">{n} lối</span>
+                                                : <span className="inline-flex items-center gap-1 text-warning"><TriangleAlert className="size-3.5" />Chưa nối</span>}
+                                        </li>
                                     ))}
-                                </div>
-                                <div><Link to={`${base}/walkways`} className="k-btn t sm" style={{ marginLeft: -12 }}>Sửa trong Lối đi</Link></div>
-                            </section>
+                                </ul>
+                            </div>
                         )}
-                    </aside>
+                    </div>
 
-                    <div className="k-stack" style={{ gap: 24, minWidth: 0 }}>
-                        <div className="k-title">
-                            <h1 className="k24"><span className="k-m" style={{ marginRight: 8 }}>{building.code}</span>{building.name}</h1>
-                            <div className="k-acts"><Button onClick={() => setModal({ kind: "building", id: building.id, code: building.code, name: building.name })}>Sửa mã và tên</Button></div>
+                    <div className="flex min-w-0 flex-col gap-6">
+                        <div className="flex items-center justify-between gap-4">
+                            <h2 className="truncate text-lg font-semibold"><span className="mr-2 text-muted-foreground">{building.code}</span>{building.name}</h2>
+                            <Button variant="outline" size="sm" onClick={() => setModal({ kind: "building", id: building.id, code: building.code, name: building.name })}><Pencil />Sửa tên</Button>
                         </div>
-                        <div className="k-card">
-                            <div className="k-grid4">
-                                <Stat n={floors.length} label="Tầng" />
-                                <Stat n={`${floors.filter(f => f.plan?.anchor).length}/${floors.length}`} label="Có mặt bằng" />
-                                <Stat n={buildingPlaces.toLocaleString("vi-VN")} label="Điểm quan tâm" />
-                                <Stat n={buildingNodes.length.toLocaleString("vi-VN")} label="Nút lối đi" />
-                            </div>
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <Stat icon={<Layers />} tone="blue" label="Tầng" value={floors.length} />
+                            <Stat icon={<MapIcon />} tone="green" label="Có mặt bằng" value={`${floors.filter(f => f.plan?.anchor).length}/${floors.length}`} />
+                            <Stat icon={<MapPin />} tone="amber" label="Điểm quan tâm" value={buildingPlaces.toLocaleString("vi-VN")} />
+                            <Stat icon={<Spline />} tone="violet" label="Nút lối đi" value={buildingNodes.length.toLocaleString("vi-VN")} />
                         </div>
 
-                        <section aria-labelledby="fl-title" className="k-card ws-card0" style={{ overflow: "visible" }}>
-                            <div className="ws-cardhead">
-                                <h2 id="fl-title" className="k16">Tầng</h2>
-                                <button type="button" className="k-btn sm ws-right" onClick={() => setModal({ kind: "floor", level: "", name: "" })}><Lc name="plus" size={16} />Thêm tầng</button>
-                            </div>
+                        <Section title="Tầng" flush actions={<Button variant="outline" size="sm" onClick={() => setModal({ kind: "floor", level: "", name: "" })}><Plus />Thêm tầng</Button>}>
                             {floors.length ? (
-                                <table className="k-tbl">
-                                    <thead><tr><th scope="col">Mức</th><th scope="col">Tên tầng</th><th scope="col">Mặt bằng</th><th scope="col" className="num">Điểm</th><th scope="col" className="num">Nút lối đi</th><th scope="col"><span className="sr-only">Thao tác</span></th></tr></thead>
-                                    <tbody>
-                                        {floors.map(f => {
-                                            const file = f.plan?.imageUrl && !f.plan.imageUrl.startsWith("data:") ? f.plan.imageUrl.split("/").pop() : null;
-                                            return (
-                                                <tr key={f.id}>
-                                                    <td className="k-m k-b">{f.level > 0 ? `+${f.level}` : f.level}</td>
-                                                    <td className="k-b">{f.name}</td>
-                                                    <td>
-                                                        {!f.plan ? <span className="k-badge k-warn"><Lc name="triangle-alert" size={14} />Chưa có mặt bằng</span>
-                                                            : f.plan.anchor ? <span className="k-badge k-ok"><Lc name="circle-check" size={14} />Đã căn chỉnh</span>
-                                                                : <span className="k-badge k-warn"><Lc name="triangle-alert" size={14} />Chưa chấm mốc</span>}
-                                                        {file && <span className="k12 k-m" style={{ marginLeft: 8 }}>{file}</span>}
-                                                    </td>
-                                                    <td className="num">{model.locationCount.get(f.id) ?? 0}</td>
-                                                    <td className="num">{data.walkways.nodes.filter(n => n.floorId === f.id).length}</td>
-                                                    <td className="is-act">
-                                                        <span className="k-line" style={{ justifyContent: "flex-end", gap: 4 }}>
-                                                            <Link to={`${base}/plan?floor=${f.id}`} className="k-btn t sm">{f.plan ? "Căn chỉnh" : "Tải bản vẽ"}</Link>
-                                                            <RowMenu label={`Thao tác khác với ${f.name}`}>
-                                                                <Link role="menuitem" to={`${base}/editor?floor=${f.id}`}>Sửa điểm và vùng</Link>
-                                                                <Link role="menuitem" to={`${base}/walkways?floor=${f.id}`}>Sửa lối đi</Link>
-                                                                <button role="menuitem" type="button" onClick={() => setModal({ kind: "floor", id: f.id, level: String(f.level), name: f.name })}>Đổi tên, mức tầng</button>
-                                                                <button role="menuitem" type="button" className="is-danger" onClick={() => setModal({ kind: "deleteFloor", floor: f })}>Xoá tầng…</button>
-                                                            </RowMenu>
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                <Table>
+                                    <TableHeader className="bg-muted/50">
+                                        <TableRow>
+                                            <TableHead className="w-16 pl-6">Mức</TableHead>
+                                            <TableHead>Tên tầng</TableHead>
+                                            <TableHead>Mặt bằng</TableHead>
+                                            <TableHead className="text-right">Điểm</TableHead>
+                                            <TableHead className="text-right">Nút lối đi</TableHead>
+                                            <TableHead className="w-0"><span className="sr-only">Thao tác</span></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {floors.map(f => (
+                                            <TableRow key={f.id}>
+                                                <TableCell className="pl-6 text-muted-foreground tabular-nums">{f.level > 0 ? `+${f.level}` : f.level}</TableCell>
+                                                <TableCell className="font-medium">{f.name}</TableCell>
+                                                <TableCell><PlanBadge floor={f} /></TableCell>
+                                                <TableCell className="text-right tabular-nums">{model.locationCount.get(f.id) ?? 0}</TableCell>
+                                                <TableCell className="text-right tabular-nums">{data.walkways.nodes.filter(n => n.floorId === f.id).length}</TableCell>
+                                                <TableCell className="pr-6">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button asChild variant="outline" size="sm"><Link to={`${base}/plan?floor=${f.id}`}>{f.plan ? "Căn chỉnh" : "Tải bản vẽ"}</Link></Button>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="size-8" aria-label={`Thao tác khác với ${f.name}`}><MoreHorizontal /></Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-52">
+                                                                <DropdownMenuItem asChild><Link to={`${base}/editor?floor=${f.id}`}><MapPin />Sửa điểm và vùng</Link></DropdownMenuItem>
+                                                                <DropdownMenuItem asChild><Link to={`${base}/walkways?floor=${f.id}`}><Spline />Sửa lối đi</Link></DropdownMenuItem>
+                                                                <DropdownMenuItem onSelect={() => setModal({ kind: "floor", id: f.id, level: String(f.level), name: f.name })}><Layers />Đổi tên, mức tầng</DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem variant="destructive" onSelect={() => setModal({ kind: "deleteFloor", floor: f })}><Trash2 />Xoá tầng…</DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             ) : (
-                                <div className="ws-empty k-stack" style={{ padding: 32 }}>
-                                    <p className="k14 k-m">{building.code} chưa có tầng. Thêm tầng rồi tải bản vẽ mặt bằng cho từng tầng.</p>
-                                </div>
+                                <p className="px-6 py-10 text-center text-sm text-muted-foreground">{building.code} chưa có tầng. Thêm tầng rồi tải bản vẽ mặt bằng cho từng tầng.</p>
                             )}
-                        </section>
+                        </Section>
 
-                        <section aria-label="Xoá toà nhà" className="k-card">
-                            <div className="k-line" style={{ gap: 16 }}>
-                                <div style={{ minWidth: 0 }}>
-                                    <div className="k14 k-b">Xoá toà nhà {building.code}</div>
-                                    <div className="k12 k-m">Ảnh hưởng {floors.length} tầng, {buildingPlaces} điểm{buildingQr ? `, ${buildingQr} mã QR` : ""}</div>
-                                </div>
-                                <button type="button" className="k-btn d ws-right" aria-haspopup="dialog" onClick={() => setModal({ kind: "deleteBuilding", typed: "" })}><Lc name="trash" size={16} />Xoá toà nhà…</button>
+                        <div className="flex items-center justify-between gap-4 rounded-xl border border-destructive/30 px-6 py-4">
+                            <div className="min-w-0">
+                                <p className="text-sm font-medium">Xoá toà nhà {building.code}</p>
+                                <p className="text-sm text-muted-foreground">Xoá cùng {floors.length} tầng, {buildingPlaces} điểm{buildingQr ? `, ${buildingQr} mã QR` : ""}.</p>
                             </div>
-                        </section>
+                            <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setModal({ kind: "deleteBuilding", typed: "" })}><Trash2 />Xoá toà nhà…</Button>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {modal?.kind === "building" && (
-                <Dialog title={modal.id ? "Sửa mã và tên toà nhà" : "Thêm toà nhà"} onClose={() => setModal(null)} onSubmit={e => void saveBuilding(e)}
-                    actions={<><Button onClick={() => setModal(null)}>Huỷ</Button><Button type="submit" variant="primary" busy={busy} disabled={!modal.code.trim() || !modal.name.trim()}>{modal.id ? "Lưu" : "Thêm toà nhà"}</Button></>}>
-                    <div style={{ display: "grid", gridTemplateColumns: "120px minmax(0, 1fr)", gap: 16 }}>
-                        <div className="k-field"><label htmlFor="bld-code">Mã</label><input id="bld-code" className="k-input" maxLength={20} required placeholder="T1" value={modal.code} onChange={e => setModal({ ...modal, code: e.target.value.toUpperCase() })} /></div>
-                        <div className="k-field"><label htmlFor="bld-name">Tên toà nhà</label><input id="bld-name" className="k-input" required placeholder="Ga nội địa" value={modal.name} onChange={e => setModal({ ...modal, name: e.target.value })} /></div>
-                    </div>
-                </Dialog>
-            )}
+            <Dialog open={modal?.kind === "building"} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {modal?.kind === "building" && (
+                        <form onSubmit={e => void saveBuilding(e)} className="grid gap-4">
+                            <DialogHeader>
+                                <DialogTitle>{modal.id ? "Sửa toà nhà" : "Thêm toà nhà"}</DialogTitle>
+                                <DialogDescription>Mã ngắn hiện trên bản đồ và chỉ dẫn, ví dụ T1.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
+                                <div className="grid gap-2"><Label htmlFor="bld-code">Mã</Label><Input id="bld-code" maxLength={20} required placeholder="T1" value={modal.code} onChange={e => setModal({ ...modal, code: e.target.value.toUpperCase() })} /></div>
+                                <div className="grid gap-2"><Label htmlFor="bld-name">Tên toà nhà</Label><Input id="bld-name" required placeholder="Ga nội địa" value={modal.name} onChange={e => setModal({ ...modal, name: e.target.value })} /></div>
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setModal(null)}>Huỷ</Button>
+                                <Button type="submit" disabled={busy || !modal.code.trim() || !modal.name.trim()}>{modal.id ? "Lưu" : "Thêm toà nhà"}</Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
 
-            {modal?.kind === "floor" && building && (
-                <Dialog title={modal.id ? "Đổi tên, mức tầng" : `Thêm tầng vào ${building.code}`} onClose={() => setModal(null)} onSubmit={e => void saveFloor(e)}
-                    actions={<><Button onClick={() => setModal(null)}>Huỷ</Button><Button type="submit" variant="primary" busy={busy} disabled={modal.level === "" || Number.isNaN(Number(modal.level))}>{modal.id ? "Lưu" : "Thêm tầng"}</Button></>}>
-                    <div className="k-stack">
-                        <div style={{ display: "grid", gridTemplateColumns: "120px minmax(0, 1fr)", gap: 16 }}>
-                            <div className="k-field"><label htmlFor="fl-level">Mức tầng</label><input id="fl-level" className="k-input" inputMode="numeric" required placeholder="+1" value={modal.level} onChange={e => setModal({ ...modal, level: e.target.value.replace("+", "") })} /></div>
-                            <div className="k-field"><label htmlFor="fl-name">Tên tầng</label><input id="fl-name" className="k-input" placeholder={modal.level !== "" && !Number.isNaN(Number(modal.level)) ? floorWord(Number(modal.level)) : "Tầng 1, Đi"} value={modal.name} onChange={e => setModal({ ...modal, name: e.target.value })} /></div>
-                        </div>
-                        <span className="k-hint">Trệt là 0, hầm là −1. Mức dùng để sắp thứ tự và biết lên hay xuống khi đổi tầng.</span>
-                    </div>
-                </Dialog>
-            )}
+            <Dialog open={modal?.kind === "floor"} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {modal?.kind === "floor" && building && (
+                        <form onSubmit={e => void saveFloor(e)} className="grid gap-4">
+                            <DialogHeader>
+                                <DialogTitle>{modal.id ? "Đổi tên, mức tầng" : `Thêm tầng vào ${building.code}`}</DialogTitle>
+                                <DialogDescription>Trệt là 0, hầm là −1. Mức dùng để biết lên hay xuống khi đổi tầng.</DialogDescription>
+                            </DialogHeader>
+                            <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
+                                <div className="grid gap-2"><Label htmlFor="fl-level">Mức</Label><Input id="fl-level" inputMode="numeric" required placeholder="1" value={modal.level} onChange={e => setModal({ ...modal, level: e.target.value.replace("+", "") })} /></div>
+                                <div className="grid gap-2"><Label htmlFor="fl-name">Tên tầng</Label><Input id="fl-name" placeholder={modal.level !== "" && !Number.isNaN(Number(modal.level)) ? floorWord(Number(modal.level)) : "Tầng 1"} value={modal.name} onChange={e => setModal({ ...modal, name: e.target.value })} /></div>
+                            </div>
+                            <DialogFooter>
+                                <Button type="button" variant="outline" onClick={() => setModal(null)}>Huỷ</Button>
+                                <Button type="submit" disabled={busy || modal.level === "" || Number.isNaN(Number(modal.level))}>{modal.id ? "Lưu" : "Thêm tầng"}</Button>
+                            </DialogFooter>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
 
-            {modal?.kind === "deleteFloor" && (
-                <Dialog alert title={`Xoá ${modal.floor.name}?`} onClose={() => setModal(null)}
-                    actions={<><Button onClick={() => setModal(null)}>Huỷ</Button><Button variant="danger" busy={busy} onClick={() => void removeFloor(modal.floor)}>Xoá tầng</Button></>}>
-                    <p className="k14 k-m"><b className="k-b k-danger">Không hoàn tác được.</b> {model.locationCount.get(modal.floor.id) ?? 0} điểm, các vùng và lối đi của tầng này cũng bị xoá.</p>
-                </Dialog>
-            )}
+            <Dialog open={modal?.kind === "deleteFloor"} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {modal?.kind === "deleteFloor" && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Xoá {modal.floor.name}?</DialogTitle>
+                                <DialogDescription>Không hoàn tác được. {model.locationCount.get(modal.floor.id) ?? 0} điểm, các vùng và lối đi của tầng này cũng bị xoá.</DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setModal(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy} onClick={() => void removeFloor(modal.floor)}>Xoá tầng</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
 
-            {modal?.kind === "deleteBuilding" && building && (
-                <Dialog alert title={`Xoá toà nhà ${building.code}, ${building.name}?`} onClose={() => setModal(null)}
-                    actions={<><Button onClick={() => setModal(null)}>Huỷ</Button><Button variant="danger" busy={busy} disabled={modal.typed.trim() !== building.code} title={modal.typed.trim() === building.code ? undefined : `Gõ ${building.code} để bật nút`} onClick={() => void removeBuilding()}>Xoá vĩnh viễn {building.code}</Button></>}>
-                    <p className="k14 k-m"><b className="k-b k-danger">Không hoàn tác được.</b> Toàn bộ dữ liệu bên trong toà bị xoá.</p>
-                    <div className="ws-box">
-                        <table className="k-tbl">
-                            <tbody>
-                                <tr><th scope="row" className="k14" style={{ fontWeight: 400 }}>Tầng</th><td className="num k-b">{floors.length}</td><td className="k-m">Xoá cùng mặt bằng</td></tr>
-                                <tr><th scope="row" className="k14" style={{ fontWeight: 400 }}>Điểm quan tâm</th><td className="num k-b">{buildingPlaces}</td><td className="k-m">Xoá cùng các vùng</td></tr>
-                                <tr><th scope="row" className="k14" style={{ fontWeight: 400 }}>Nút lối đi</th><td className="num k-b">{buildingNodes.length}</td><td className="k-m">Xoá, kể cả lối sang toà khác</td></tr>
-                                {buildingQr > 0 && <tr><th scope="row" className="k14 k-danger" style={{ fontWeight: 400 }}>Mã QR đã chọn</th><td className="num k-b k-danger">{buildingQr}</td><td className="k-danger">Hết hiệu lực</td></tr>}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div className="k-field">
-                        <label htmlFor="del-confirm">Gõ {building.code} để xác nhận</label>
-                        <input id="del-confirm" className="k-input" autoComplete="off" spellCheck={false} placeholder={building.code} value={modal.typed} onChange={e => setModal({ ...modal, typed: e.target.value })} />
-                    </div>
-                </Dialog>
-            )}
-        </div>
+            <Dialog open={modal?.kind === "deleteBuilding"} onOpenChange={close}>
+                <DialogContent className="sm:max-w-md">
+                    {modal?.kind === "deleteBuilding" && building && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Xoá toà nhà {building.code}?</DialogTitle>
+                                <DialogDescription>Không hoàn tác được. Toàn bộ dữ liệu bên trong toà bị xoá.</DialogDescription>
+                            </DialogHeader>
+                            <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 rounded-lg border px-4 py-3 text-sm">
+                                <dt className="text-muted-foreground">Tầng (kèm mặt bằng)</dt><dd className="text-right font-medium tabular-nums">{floors.length}</dd>
+                                <dt className="text-muted-foreground">Điểm quan tâm (kèm vùng)</dt><dd className="text-right font-medium tabular-nums">{buildingPlaces}</dd>
+                                <dt className="text-muted-foreground">Nút lối đi</dt><dd className="text-right font-medium tabular-nums">{buildingNodes.length}</dd>
+                                {buildingQr > 0 && <><dt className="text-destructive">Mã QR hết hiệu lực</dt><dd className="text-right font-medium text-destructive tabular-nums">{buildingQr}</dd></>}
+                            </dl>
+                            <div className="grid gap-2">
+                                <Label htmlFor="del-confirm">Gõ <span className="font-semibold">{building.code}</span> để xác nhận</Label>
+                                <Input id="del-confirm" autoComplete="off" spellCheck={false} placeholder={building.code} value={modal.typed} onChange={e => setModal({ ...modal, typed: e.target.value })} />
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setModal(null)}>Huỷ</Button>
+                                <Button variant="destructive" disabled={busy || modal.typed.trim() !== building.code} onClick={() => void removeBuilding()}>Xoá vĩnh viễn</Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </Page>
     );
-}
-
-function Stat({ n, label }: { n: number | string; label: string }) {
-    return <div className="k-kpi"><span className="k28">{n}</span><span className="k12 k-m">{label}</span></div>;
 }

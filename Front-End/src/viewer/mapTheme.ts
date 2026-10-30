@@ -2,30 +2,32 @@ import { LUCIDE, type LucideName } from "../design/lucide";
 import type { PlanPalette } from "../lib/planSvg";
 
 // Màu bản đồ dạng chuỗi hex: Leaflet và SVG mặt bằng cần màu cụ thể, không đọc được var(--...).
-// Giá trị = token trong design/tokens.css (than chì #23272D, vàng tín hiệu #FFC629) đã trộn sẵn như tools/tokens.py.
+// Giá trị = token trong design/tokens.css (neutral-900 #171717, xanh dương blue-600 #155DFC), cùng theme với Builder/Admin.
 export const MAP = {
-    graphite: "#23272D",
-    signal: "#FFC629",
+    graphite: "#171717",
+    signal: "#155DFC",
+    /** viền tuyến: xanh đậm blue-900 */
+    routeEdge: "#1E3A8A",
     surface: "#FFFFFF",
-    paper: "#F4F5F2",
-    muted: "#5B6169",
-    danger: "#B42318",
-    /** --m-edge: than chì 34% */
-    edge: "#B4B6B8",
+    paper: "#FAFAFA",
+    muted: "#737373",
+    danger: "#DC2626",
+    /** --m-edge: chữ đậm 34% */
+    edge: "#B3B3B3",
     /** --m-hatch */
-    hatch: "#CACCCB"
+    hatch: "#CCCCCC"
 } as const;
 
-/** Bảng màu mặt bằng theo kiểu biển chỉ dẫn (vmap_common.plan_paths) */
+/** Bảng màu mặt bằng: nền trắng, tường đậm, khu tiện ích/thương mại tô xanh nhạt theo màu chủ đạo */
 export const PLAN_PALETTE: PlanPalette = {
     floor: "#FFFFFF",
     wall: MAP.graphite,
     edge: MAP.edge,
     gate: "#F6F6F7",
     amenity: "#E7E7E8",
-    lounge: "#FFFAEE",
-    retail: "#FFF3D0",
-    core: "#FFE8A9",
+    lounge: "#F0F6FF",
+    retail: "#E3EEFF",
+    core: "#C7DBFF",
     service: "#DDDEDC",
     hatch: MAP.hatch
 };

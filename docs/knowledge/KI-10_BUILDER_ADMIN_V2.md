@@ -1,24 +1,24 @@
 # KI-10 · Builder & Admin v2 (web) — React + TypeScript
 
 Đợt 2 của frontend v2: màn hình quản trị địa điểm (Builder, vai trò `VENUE_ADMIN`) và quản trị hệ thống
-(Admin, vai trò `SYSTEM_ADMIN`) theo bản thiết kế hướng **"Biển chỉ dẫn"** (bản 31, 2026-10-28), dùng chung bảng màu với Viewer
-(`src/design/tokens.css`). Chỉ làm frontend: phần nào backend chưa có API thì hiện "Chưa khả dụng" (`<NotYet>`), không giả số liệu.
+(Admin, vai trò `SYSTEM_ADMIN`). Giao diện dựng trên **shadcn/ui** (Tailwind v4, Radix, phông Inter, màu chủ đạo xanh dương).
+Chỉ làm frontend: phần nào backend chưa có API thì hiện "Chưa khả dụng" (`Alert`), không giả số liệu.
 
-## Bộ giao diện màn máy tính
+## Bộ giao diện (shadcn/ui) — mọi màn máy tính dùng chung
 
-- `console/console.css`: lớp `.k-*` khớp 1:1 bản thiết kế; lớp `.cb-*` cũ vẽ lại theo cùng giá trị (biến cũ `--cobalt`, `--line`… trỏ về token mới).
-  Cỡ chữ 12/14/16/20/24/28, độ đậm 400/600, bo góc 4/6/12/999, cao 32/40, một màu viền `--rule`, vàng chỉ cho **một** nút chính mỗi màn.
-- `console/Shell.tsx`: **một khung cho mọi màn** — header 64 than chì có vạch vàng (logo, breadcrumb, chip trạng thái xuất bản,
-  nút của trang, menu tài khoản) + sidebar 224. Trang đặt nút lên header bằng `<HeaderActions>`, trạng thái lưu bằng
-  `<HeaderStatus><SaveState …/></HeaderStatus>`.
-  - Ngoài địa điểm: sidebar "Quản lý" (`GlobalSidebar`, trong `BuilderShell.tsx`).
-  - Trong địa điểm (`Workspace.tsx`): sidebar "Dựng bản đồ" 6 bước, dấu tick khi bước xong tính từ dữ liệu thật
-    (có tầng, mọi tầng có mặt bằng, có điểm, có lối đi, đã xuất bản) + "Công cụ". Màn editor/walkways/journeys dùng rail 64.
-  - Admin: sidebar "Quản trị hệ thống", số "N chờ" ở Người dùng.
-- Icon giao diện: `src/design/Lc.tsx` (Lucide). `UiIcon`/`Button icon=` nhận tên Lucide; tên `bi-*` (biểu tượng loại lưu trong CSDL) vẫn vẽ bằng Bootstrap Icons.
-- CSS bố cục riêng: `builder/pages/workspace.css` (`ws-*`), `builder/pages/global.css` (`kg-*`), `admin/admin.css` (`ka-*`).
-- Màu Leaflet đọc biến CSS qua `mapColors()` (`builder/layers.tsx`); hex trong TSX chỉ còn là màu dữ liệu (màu loại, màu vùng).
-- Điện thoại (< 900 px) mở `/builder` hoặc `/admin` sau khi đăng nhập: màn "Mở Builder trên máy tính" (`ConsoleRoot.tsx`); đăng nhập/đăng ký vẫn dùng được.
+- Thành phần: `src/components/ui/*` (sinh bằng `npx shadcn add …`, cấu hình `components.json`, alias `@/` = `src/`). Không sửa tay trừ khi cần.
+- Theme: `src/console/app.css` — biến shadcn chỉ bật khi có `.cb-root` (`:root:has(.cb-root)`), vì trùng tên với token
+  của app khách (`--muted`, `--accent`…). Màu chủ đạo, màu trạng thái (`success`, `warning`, `destructive`) đặt ở đây.
+- Khung: `src/console/Shell.tsx` — `ConsoleFrame` theo mẫu shadcn "sidebar-07": sidebar thu gọn được (đầu: logo hoặc menu
+  chọn địa điểm; giữa: `NavGroup`/`NavItem`; đáy: tài khoản) + header 56 (nút thu gọn, breadcrumb = tên trang, nút của trang).
+  Màn sửa trên bản đồ (`editor`, `walkways`, `plan`, `test`, `journeys`) tự thu sidebar về dạng icon.
+- Khuôn trang: `src/console/page.tsx` — `Page` (nút đưa lên header; `wide` 1152 / `narrow` 768; lề 24, khối cách 24),
+  `Section`, `Stat`, `EmptyState`, `ErrorState`. **Tên trang không lặp trong trang** (header đã có).
+- Màn bản đồ chép bố cục `EditorPage`: panel trái 256 · canvas (điều khiển nổi) · panel phải 320.
+- Marker Leaflet: `builder/map.css` + `mapColors()` trong `builder/layers.tsx` (màu theo theme).
+- `console/ui.tsx` chỉ còn: `FeedbackProvider`/`useFeedback` (sonner + AlertDialog), `useAction`, `COLORS`, `ICONS`.
+- Icon giao diện: `lucide-react`. Bootstrap Icons chỉ cho biểu tượng loại địa điểm lưu trong CSDL (`type.icon`).
+- Trang 404 (`portal/ComingSoon.tsx`) dùng cùng theme (tự gắn `.cb-root`).
 
 ## Cấu trúc
 
@@ -28,9 +28,10 @@ Front-End/src/
     http.ts             fetch + Bearer token (localStorage "indoor-map.token"), lỗi {message} -> ApiError, 401 -> đăng xuất
     api.ts              authApi, venueApi, planApi, catalogApi, locationApi, walkwayApi, adminApi
     auth.tsx            AuthProvider (gọi /me khi mở), useAuth, RequireAuth({role}) -> /login?next=
-    ui.tsx              Button, Field, Select, Card, Table, Status, Kpi, NotYet, toast + confirm, ColorPicker, IconPicker
-    console.css         bộ giao diện màn máy tính (.k-*, .cb-*, khung .cs-*)
-    Shell.tsx           ConsoleFrame, HeaderActions, HeaderStatus, SaveState, sidebar/rail
+    ui.tsx              FeedbackProvider (toast + confirm), useAction, COLORS, ICONS
+    app.css             Tailwind + theme shadcn
+    page.tsx            Page, Section, Stat, EmptyState, ErrorState
+    Shell.tsx           ConsoleFrame, NavGroup, NavItem, HeaderActions, HeaderStatus, SaveState
     ConsoleRoot.tsx     provider, .cb-root, chặn màn hình điện thoại
     routes.tsx          bảng route (lazy)
   builder/
@@ -39,7 +40,8 @@ Front-End/src/
     layers.tsx          ClickLayer, PlacesLayer (kéo được), ZonesLayer, DraftPolygonLayer, WalkwayPreviewLayer
     AuthPages.tsx       đăng nhập, đăng ký (tài khoản mới ở trạng thái PENDING), quên mật khẩu, bảo trì
     AuthArt.tsx         hình minh hoạ màn đăng nhập (mặt bằng T1 thật + tuyến tới Cửa 12)
-    FloorList.tsx       FloorList, FloorChips, FloorSelect, GuestLink, Dialog, RowMenu
+    FloorList.tsx       floorLabel()
+    map.css             marker Leaflet của trình biên tập
     pages/              từng màn hình (bảng dưới)
   admin/AdminPages.tsx  tổng quan, kiểm duyệt, người dùng, danh mục mẫu, cấu hình, nhật ký
 packages/core/src/
@@ -55,7 +57,7 @@ packages/core/src/
 | Quên mật khẩu | `/forgot` | `AuthPages.tsx` | **chưa có API** (gửi đi hiện "Chưa khả dụng") |
 | Bảo trì / lỗi máy chủ | `/maintenance` | `AuthPages.tsx` | **chưa có API** chế độ bảo trì |
 | Địa điểm của tôi | `/builder` | `VenuesPage.tsx` | `/api/my/venues` |
-| Tạo địa điểm (2 bước: thông tin, phạm vi) | `/builder/new` | `VenueCreatePage.tsx` | `POST /api/venues` |
+| Tạo địa điểm (3 bước: thông tin, vị trí — tìm địa chỉ qua Nominatim/OSM hoặc chấm ghim, phạm vi) | `/builder/new` | `VenueCreatePage.tsx` | `POST /api/venues` |
 | Thống kê | `/builder/stats` | `SimplePages.tsx` | số liệu từ dữ liệu địa điểm; lượt dùng **chưa có API** |
 | Tài khoản | `/builder/account` | `SimplePages.tsx` | `/api/auth/me`, đổi mật khẩu |
 | Thông báo | `/builder/notifications` | `NotificationsPage.tsx` | **chưa có API** |
@@ -71,7 +73,7 @@ packages/core/src/
 | In tem mã QR (`?codes=`) | `/builder/v/:id/qr-print` | `QrPrintPage.tsx` | — |
 | Loại và tiện ích | `/builder/v/:id/types` | `TypesPage.tsx` | types, facilities, copy mẫu |
 | Mốc camera | `/builder/v/:id/landmarks` | `SimplePages.tsx` | **chưa có API** |
-| Cài đặt địa điểm (thông tin, phạm vi, xoá) | `/builder/v/:id/settings` | `VenueSettingsPage.tsx` | `PUT/DELETE /api/venues/{id}` |
+| Cài đặt địa điểm (thông tin, vị trí ghim, phạm vi, xoá) | `/builder/v/:id/settings` | `VenueSettingsPage.tsx` | `PUT/DELETE /api/venues/{id}` |
 | Khác biệt bản nháp | `/builder/v/:id/diff` | `DiffPage.tsx` | **chưa có API** (sửa là lưu thẳng, không có bản công khai riêng) |
 | Admin · Tổng quan | `/admin` | `AdminPages.tsx` | `/api/admin/*` |
 | Admin · Kiểm duyệt | `/admin/review` | | đổi trạng thái, chuyển chủ sở hữu |

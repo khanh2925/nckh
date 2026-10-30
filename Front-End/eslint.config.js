@@ -16,5 +16,7 @@ export default tseslint.config(
             "react-refresh/only-export-components": ["warn", { allowConstantExport: true }]
         }
     },
+    // Thành phần shadcn/ui sinh bằng CLI: xuất kèm biến thể (buttonVariants…) theo đúng mẫu gốc
+    { files: ["src/components/ui/**"], rules: { "react-refresh/only-export-components": "off" } },
     { files: ["vite.config.ts"], languageOptions: { globals: globals.node } }
 );

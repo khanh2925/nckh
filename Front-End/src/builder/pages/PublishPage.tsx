@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import QRCode from "qrcode";
 import { analyzeVenue } from "@indoor-map/core";
+import { Building2, CircleAlert, CircleCheck, Copy, Download, EyeOff, Info, Layers, MapPin, Spline, TriangleAlert } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { venueApi } from "../../console/api";
-import { HeaderActions } from "../../console/Shell";
-import { Button, NotYet, useAction, useFeedback } from "../../console/ui";
-import Lc from "../../design/Lc";
-import { GuestLink } from "../FloorList";
+import { Page, Section, Stat } from "../../console/page";
+import { useAction, useFeedback } from "../../console/ui";
 import { useWorkspace } from "../Workspace";
-import "./workspace.css";
 
 type Level = "block" | "warn" | "ok";
 interface Check {
@@ -16,6 +18,12 @@ interface Check {
     title: string;
     detail: string;
     to: string;
+}
+
+function LevelBadge({ level }: { level: Level }) {
+    if (level === "block") return <Badge className="gap-1 bg-destructive/10 text-destructive"><CircleAlert />Chặn</Badge>;
+    if (level === "warn") return <Badge className="gap-1 bg-warning/10 text-warning"><TriangleAlert />Cảnh báo</Badge>;
+    return <Badge className="gap-1 bg-success/10 text-success"><CircleCheck />Đạt</Badge>;
 }
 
 // Xuất bản: kiểm tra bản nháp (tính ngay trên trình duyệt), xuất bản, gỡ xuất bản, mã QR vào bản đồ.
@@ -86,120 +94,122 @@ export default function PublishPage() {
         }
     };
 
-    const group = (label: string, list: Check[], color: string) => list.length > 0 && (
-        <tbody>
-            <tr className="ws-tbl-grp"><th colSpan={2} scope="colgroup" style={{ color }}>{label} {list.length}</th></tr>
-            {list.map(c => (
-                <tr key={c.title}>
-                    <td><div className="k-b">{c.title}</div>{c.detail && <div className="k12 k-m">{c.detail}</div>}</td>
-                    <td className="is-act"><Link to={c.to} className="k-btn t sm">Sửa</Link></td>
-                </tr>
-            ))}
-        </tbody>
+    const actions = (
+        <>
+            <Button asChild variant="outline"><Link to={`${base}/diff`}>Xem khác biệt</Link></Button>
+            {status !== "PUBLISHED" && (
+                <Button disabled={busy || status === "HIDDEN" || blocks.length > 0} title={blocks.length ? "Còn mục chặn" : undefined} onClick={() => void publish()}>Xuất bản</Button>
+            )}
+        </>
     );
 
     return (
-        <div className="k-page">
-            <HeaderActions><GuestLink venue={data.venue} /></HeaderActions>
-            <h1 className="k24">Xuất bản</h1>
-            <div className="ws-split is-aside">
-                <div className="k-stack" style={{ gap: 24, minWidth: 0 }}>
-                    <section aria-labelledby="dr-t" className="k-card">
-                        <div className="k-line" style={{ gap: 16, flexWrap: "wrap" }}>
-                            <div style={{ minWidth: 0 }}>
-                                <h2 id="dr-t" className="k16">{status === "PUBLISHED" ? "Đang công khai" : status === "HIDDEN" ? "Bị ẩn" : "Bản nháp"}</h2>
-                                <div className="k14 k-m">{status === "PUBLISHED" ? "Chỉnh sửa hiện cho khách ngay khi lưu." : "Khách chưa xem được bản đồ này."}</div>
-                            </div>
-                            <div className="k-line ws-right">
-                                <Button to={`${base}/diff`}>Xem khác biệt</Button>
-                                {status !== "PUBLISHED" && (
-                                    <Button variant="primary" busy={busy} disabled={status === "HIDDEN" || blocks.length > 0} title={blocks.length ? "Còn mục chặn" : undefined} onClick={() => void publish()}>Xuất bản</Button>
-                                )}
-                            </div>
-                        </div>
-                        <div className="k-grid4">
-                            <Stat n={model.buildings.length} label="toà nhà" />
-                            <Stat n={model.floors.length} label="tầng" />
-                            <Stat n={total.toLocaleString("vi-VN")} label="điểm" />
-                            <Stat n={`${Math.round(report.meters).toLocaleString("vi-VN")} m`} label="lối đi" />
-                        </div>
-                        {status !== "PUBLISHED" && (
-                            <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 16 }}>
-                                {status === "HIDDEN" ? (
-                                    <div className="k-line k14 k-danger"><Lc name="eye-off" size={16} />Địa điểm đang bị quản trị hệ thống ẩn.</div>
-                                ) : blocks.length ? (
-                                    <div className="k-line k14 k-danger">
-                                        <Lc name="circle-alert" size={16} /><span>Còn {blocks.length} mục chặn, chưa xuất bản được.</span>
-                                        <button type="button" className="k-btn t sm ws-right" style={{ marginRight: -12 }} onClick={() => void publish(true)}>Vẫn xuất bản…</button>
-                                    </div>
-                                ) : <div className="k-line k14 k-ok"><Lc name="circle-check" size={16} />Sẵn sàng xuất bản.</div>}
-                            </div>
-                        )}
-                    </section>
+        <Page actions={actions}>
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="flex min-w-0 flex-col gap-6">
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                        <Stat icon={<Building2 />} tone="blue" label="Toà nhà" value={model.buildings.length} />
+                        <Stat icon={<Layers />} tone="green" label="Tầng" value={model.floors.length} />
+                        <Stat icon={<MapPin />} tone="amber" label="Điểm" value={total.toLocaleString("vi-VN")} />
+                        <Stat icon={<Spline />} tone="violet" label="Lối đi" value={`${Math.round(report.meters).toLocaleString("vi-VN")} m`} />
+                    </div>
 
-                    <section aria-labelledby="ck-t" className="k-card ws-card0">
-                        <div className="ws-cardhead">
-                            <h2 id="ck-t" className="k16">Kiểm tra bản nháp</h2>
-                            <span className="k12 k-m ws-right">
-                                {blocks.length > 0 && <span className="k-danger k-b">{blocks.length} chặn, </span>}
-                                {warns.length > 0 && <span className="k-warn k-b">{warns.length} cảnh báo, </span>}
-                                {oks.length} đạt
-                            </span>
+                    {status === "HIDDEN" ? (
+                        <Alert variant="destructive">
+                            <EyeOff />
+                            <AlertTitle>Địa điểm đang bị quản trị hệ thống ẩn</AlertTitle>
+                            <AlertDescription>Khách không mở được bản đồ. Bạn vẫn sửa bản nháp được.</AlertDescription>
+                        </Alert>
+                    ) : status === "PUBLISHED" ? (
+                        <div role="status" className="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm">
+                            <CircleCheck className="size-4 shrink-0 text-success" />
+                            <span className="flex-1">Đang công khai. Chỉnh sửa hiện cho khách ngay khi lưu.</span>
                         </div>
-                        <table className="k-tbl">
-                            {group("Chặn", blocks, "var(--danger)")}
-                            {group("Cảnh báo", warns, "var(--warn)")}
-                        </table>
-                        {oks.length > 0 && (
-                            <div className="ws-cardfoot k12 k-m"><Lc name="check" size={16} color="var(--ok)" />{oks.length} mục đạt: {oks.map(c => c.title.toLowerCase()).join(", ")}</div>
-                        )}
-                    </section>
+                    ) : (blocks.length ? (
+                        <div role="status" className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+                            <CircleAlert className="size-4 shrink-0 text-destructive" />
+                            <span className="flex-1">Còn {blocks.length} mục chặn, chưa xuất bản được.</span>
+                            <Button variant="outline" size="sm" disabled={busy} onClick={() => void publish(true)}>Vẫn xuất bản…</Button>
+                        </div>
+                    ) : (
+                        <div role="status" className="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 px-4 py-3 text-sm">
+                            <CircleCheck className="size-4 shrink-0 text-success" />
+                            <span className="flex-1">Sẵn sàng xuất bản.</span>
+                        </div>
+                    ))}
+
+                    <Section title="Kiểm tra bản nháp" flush
+                        description={[blocks.length && `${blocks.length} chặn`, warns.length && `${warns.length} cảnh báo`, `${oks.length} đạt`].filter(Boolean).join(", ")}>
+                        <Table>
+                            <TableHeader className="bg-muted/50">
+                                <TableRow>
+                                    <TableHead className="pl-6">Mục</TableHead>
+                                    <TableHead>Kết quả</TableHead>
+                                    <TableHead className="w-0"><span className="sr-only">Thao tác</span></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {[...blocks, ...warns, ...oks].map(c => (
+                                    <TableRow key={c.title}>
+                                        <TableCell className="pl-6 whitespace-normal">
+                                            <p className="font-medium">{c.title}</p>
+                                            {c.detail && <p className="text-xs text-muted-foreground">{c.detail}</p>}
+                                        </TableCell>
+                                        <TableCell><LevelBadge level={c.level} /></TableCell>
+                                        <TableCell className="pr-6 text-right">
+                                            <Button asChild variant="outline" size="sm"><Link to={c.to}>{c.level === "ok" ? "Mở" : "Sửa"}</Link></Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </Section>
                 </div>
 
-                <aside className="k-stack" style={{ gap: 24 }}>
-                    {status === "HIDDEN" ? (
-                        <section aria-labelledby="sth-t" className="k-card">
-                            <div className="k-line"><h2 id="sth-t" className="k16">Bản công khai</h2><span className="k-badge k-danger ws-right"><Lc name="eye-off" size={14} />Bị ẩn</span></div>
-                            <div className="k-note" role="status"><Lc name="eye-off" size={16} color="var(--danger)" /><div><b className="k-b">Quản trị hệ thống đã ẩn địa điểm này.</b></div></div>
-                            <p className="k14 k-m">Khách không mở được bản đồ. Bạn vẫn sửa bản nháp được.</p>
-                        </section>
-                    ) : (
-                        <section aria-labelledby="st-t" className="k-card">
-                            <div className="k-line"><h2 id="st-t" className="k16">Bản công khai</h2>
-                                {status === "PUBLISHED" ? <span className="k-badge k-ok ws-right"><Lc name="circle-check" size={14} />Đang công khai</span> : <span className="k12 k-m ws-right">Chưa công khai</span>}
-                            </div>
-                            <div className="k-line" style={{ gap: 16 }}>
-                                <div className="ws-qrsvg" style={{ padding: 8, border: "1px solid var(--rule)", borderRadius: 6, width: 104, height: 104, flexShrink: 0 }}
-                                    dangerouslySetInnerHTML={qr ? { __html: qr } : undefined} />
-                                <div style={{ minWidth: 0 }}>
-                                    <div className="k12 k-m">Mã QR vào bản đồ</div>
-                                    <div className="k14 k-b" style={{ wordBreak: "break-all" }}>{url.replace(/^https?:\/\//, "")}</div>
+                <div className="flex flex-col gap-6">
+                    <Section title="Bản công khai"
+                        actions={status === "PUBLISHED" ? <Badge className="gap-1 bg-success/10 text-success"><CircleCheck />Công khai</Badge>
+                            : status === "HIDDEN" ? <Badge className="gap-1 bg-destructive/10 text-destructive"><EyeOff />Bị ẩn</Badge>
+                                : <Badge variant="outline">Chưa công khai</Badge>}>
+                        {status === "HIDDEN" ? (
+                            <p className="text-sm text-muted-foreground">Quản trị hệ thống đã ẩn địa điểm này. Khách không mở được bản đồ.</p>
+                        ) : (
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="size-24 shrink-0 rounded-lg border bg-background p-1.5 [&_svg]:block [&_svg]:size-full" aria-label="Mã QR vào bản đồ" role="img"
+                                        dangerouslySetInnerHTML={qr ? { __html: qr } : undefined} />
+                                    <div className="min-w-0">
+                                        <p className="text-xs text-muted-foreground">Mã QR vào bản đồ</p>
+                                        <p className="text-sm font-medium break-all">{url.replace(/^https?:\/\//, "")}</p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="k-grid2" style={{ gap: 8 }}>
-                                <button type="button" className="k-btn sm" onClick={() => void downloadPng()}><Lc name="download" size={16} />Tải PNG</button>
-                                <button type="button" className="k-btn sm" onClick={() => void copy()}><Lc name="copy" size={16} />Sao chép</button>
-                            </div>
-                            <p className="k12 k-m">Mã này chỉ mở bản đồ. Mã biết khách đứng đâu nằm ở <Link to={`${base}/qr`} className="k-link">Mã QR định vị</Link>.</p>
-                            {status === "PUBLISHED" && (
-                                <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 8 }}>
-                                    <button type="button" className="k-btn d sm" style={{ marginLeft: -12 }} disabled={busy} onClick={() => void unpublish()}>Gỡ xuất bản…</button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => void downloadPng()}><Download />Tải PNG</Button>
+                                    <Button variant="outline" size="sm" onClick={() => void copy()}><Copy />Sao chép</Button>
                                 </div>
-                            )}
-                        </section>
-                    )}
-                    <section aria-labelledby="hi-t" className="k-card ws-card0">
-                        <div className="ws-cardhead"><h2 id="hi-t" className="k16">Lịch sử phát hành</h2></div>
-                        <div style={{ padding: 16 }}>
-                            <NotYet>Backend chưa lưu phiên bản: chưa xem lại hay khôi phục được bản cũ.{data.venue.updatedAt ? ` Lần lưu gần nhất ${new Date(data.venue.updatedAt).toLocaleString("vi-VN")}.` : ""}</NotYet>
-                        </div>
-                    </section>
-                </aside>
-            </div>
-        </div>
-    );
-}
+                                <p className="text-xs text-muted-foreground">
+                                    Mã định vị khách nằm ở <Link to={`${base}/qr`} className="font-medium text-primary underline-offset-4 hover:underline">Mã QR định vị</Link>.
+                                </p>
+                                {status === "PUBLISHED" && (
+                                    <Button variant="ghost" size="sm" className="self-start text-destructive hover:text-destructive" disabled={busy} onClick={() => void unpublish()}>
+                                        <EyeOff />Gỡ xuất bản…
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </Section>
 
-function Stat({ n, label }: { n: number | string; label: string }) {
-    return <div className="k-kpi"><span className="k28">{n}</span><span className="k12 k-m">{label}</span></div>;
+                    <Section title="Lịch sử phát hành">
+                        <Alert>
+                            <Info />
+                            <AlertTitle>Chưa khả dụng</AlertTitle>
+                            <AlertDescription>
+                                Backend chưa lưu phiên bản.{data.venue.updatedAt ? ` Lần lưu gần nhất ${new Date(data.venue.updatedAt).toLocaleString("vi-VN")}.` : ""}
+                            </AlertDescription>
+                        </Alert>
+                    </Section>
+                </div>
+            </div>
+        </Page>
+    );
 }

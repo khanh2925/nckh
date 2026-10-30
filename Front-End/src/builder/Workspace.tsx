@@ -1,14 +1,18 @@
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useLocation, useParams } from "react-router-dom";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, Outlet, useLocation, useParams } from "react-router-dom";
+import { ArrowLeft, Camera, ChevronsUpDown, ExternalLink, List, QrCode, Settings, Workflow, type LucideIcon } from "lucide-react";
 import {
     buildVenueModel, type BuildingDto, type FacilityDto, type FloorDto, type LocationDto, type LocationTypeDto, type VenueDto, type VenueModel,
     type WalkwayNetworkDto, type ZoneDto
 } from "@indoor-map/core";
 import { adminApi, catalogApi, locationApi, planApi, venueApi, walkwayApi } from "../console/api";
 import { useAuth } from "../console/auth";
-import { ConsoleFrame, GlobalSidebar, SideGroup, SideItem, SideSep, Sidebar, StepMark } from "../console/Shell";
-import { Button, ErrorNote, Spinner } from "../console/ui";
-import Lc, { type LucideName } from "../design/Lc";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { BrandMark, ConsoleFrame, GlobalNav, NavGroup, NavItem, StepMark } from "../console/Shell";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorState, Page } from "../console/page";
 
 // Dữ liệu một địa điểm đang biên tập (bản nháp, chưa cần xuất bản). Mọi tab của trình biên tập dùng chung.
 export interface WorkspaceData {
@@ -91,12 +95,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     if (error) {
         return (
-            <ConsoleFrame crumbs={[{ label: "Địa điểm của tôi", to: "/builder" }, { label: "Không mở được địa điểm" }]} nav={<GlobalSidebar />}>
-                <div className="k-page"><ErrorNote error={error} onRetry={() => setAttempt(a => a + 1)} /><div><Button to="/builder" icon="arrow-left">Về Địa điểm của tôi</Button></div></div>
+            <ConsoleFrame crumbs={[{ label: "Địa điểm của tôi", to: "/builder" }, { label: "Không mở được địa điểm" }]} nav={<GlobalNav />}>
+                <Page actions={<Button asChild variant="outline"><Link to="/builder"><ArrowLeft />Về Địa điểm của tôi</Link></Button>}>
+                    <ErrorState error={error} onRetry={() => setAttempt(a => a + 1)} />
+                </Page>
             </ConsoleFrame>
         );
     }
-    if (!data || !model) return <ConsoleFrame crumbs={[{ label: "Địa điểm của tôi", to: "/builder" }, { label: "Đang mở…" }]} nav={<GlobalSidebar />}><Spinner label="Đang tải dữ liệu địa điểm…" /></ConsoleFrame>;
+    if (!data || !model) return (
+        <ConsoleFrame crumbs={[{ label: "Địa điểm của tôi", to: "/builder" }, { label: "Đang mở…" }]} nav={<GlobalNav />}>
+            <Page>
+                <div className="grid grid-cols-4 gap-4" role="status" aria-label="Đang tải dữ liệu địa điểm">
+                    {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+                </div>
+                <Skeleton className="h-64 rounded-xl" />
+            </Page>
+        </ConsoleFrame>
+    );
     return <WorkspaceContext.Provider value={{ venueId, data, model, reload, patch }}>{children}</WorkspaceContext.Provider>;
 }
 
@@ -116,54 +131,61 @@ const STEPS: [string, string, (d: WorkspaceData) => boolean][] = [
     ["test", "Thử chỉ đường", () => false],
     ["publish", "Xuất bản", d => d.venue.status === "PUBLISHED"]
 ];
-const TOOLS: [string, string, LucideName, string?][] = [
-    ["journeys", "Quy trình", "workflow"], ["qr", "Mã QR định vị", "qr-code"], ["types", "Loại và tiện ích", "list"],
-    ["landmarks", "Mốc camera", "camera", "GĐ 2"], ["settings", "Cài đặt địa điểm", "settings"]
+const TOOLS: [string, string, LucideIcon, string?][] = [
+    ["journeys", "Quy trình", Workflow], ["qr", "Mã QR định vị", QrCode], ["types", "Loại và tiện ích", List],
+    ["landmarks", "Mốc camera", Camera, "GĐ 2"], ["settings", "Cài đặt địa điểm", Settings]
 ];
-const SHORT: Record<string, string> = {
-    buildings: "Toà nhà", plan: "Mặt bằng", editor: "Điểm", walkways: "Lối đi", test: "Thử", publish: "Xuất bản",
-    journeys: "Quy trình", qr: "Mã QR", types: "Loại", landmarks: "Mốc", settings: "Cài đặt"
-};
 const LABEL: Record<string, string> = {
     ...Object.fromEntries([...STEPS, ...TOOLS].map(([path, label]) => [path, label])),
     import: "Nhập từ CSV, GeoJSON", diff: "Khác biệt bản nháp", "qr-print": "In tem mã QR"
 };
-/** Màn biên tập canvas: sidebar thu gọn thành rail để canvas rộng */
-const RAIL = new Set(["editor", "walkways", "journeys"]);
+/** Màn biên tập trên bản đồ: thu sidebar về dạng icon để bản đồ rộng */
+const WIDE = new Set(["editor", "walkways", "journeys", "plan", "test"]);
 
-function WorkspaceSidebar({ base, data }: { base: string; data: WorkspaceData }) {
+const STATUS_TEXT: Record<string, string> = { PUBLISHED: "Đang công khai", HIDDEN: "Bị ẩn", DRAFT: "Bản nháp" };
+
+/** Đầu sidebar trong một địa điểm: tên địa điểm + menu chuyển về danh sách / xem như khách */
+function VenueSwitcher({ venue }: { venue: WorkspaceData["venue"] }) {
     return (
-        <Sidebar label="Các bước dựng bản đồ">
-            <SideGroup>Dựng bản đồ</SideGroup>
-            {STEPS.map(([path, label, done], i) => (
-                <Fragment key={path}>
-                    <SideItem to={`${base}/${path}`} mark={<StepMark n={i + 1} done={done(data)} />} label={label} />
-                    {path === "editor" && <SideItem sub to={`${base}/import`} label="Nhập từ CSV, GeoJSON" />}
-                </Fragment>
-            ))}
-            <SideSep />
-            <SideGroup>Công cụ</SideGroup>
-            {TOOLS.map(([path, label, icon, badge]) => <SideItem key={path} to={`${base}/${path}`} icon={icon} label={label} count={badge} />)}
-        </Sidebar>
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+                            <BrandMark />
+                            <span className="grid flex-1 text-left text-sm leading-tight">
+                                <span className="truncate font-medium">{venue.name}</span>
+                                <span className="truncate text-xs text-muted-foreground">{STATUS_TEXT[venue.status ?? "DRAFT"] ?? "Bản nháp"}</span>
+                            </span>
+                            <ChevronsUpDown className="ml-auto size-4" />
+                        </SidebarMenuButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg" align="start" side="bottom" sideOffset={4}>
+                        <DropdownMenuItem asChild><Link to="/builder"><ArrowLeft />Địa điểm của tôi</Link></DropdownMenuItem>
+                        {venue.status === "PUBLISHED" && (
+                            <DropdownMenuItem asChild><a href={`/v/${venue.slug}/map`} target="_blank" rel="noreferrer"><ExternalLink />Xem như khách</a></DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </SidebarMenuItem>
+        </SidebarMenu>
     );
 }
 
-function WorkspaceRail({ base, data }: { base: string; data: WorkspaceData }) {
+function WorkspaceNav({ base, data }: { base: string; data: WorkspaceData }) {
     return (
-        <nav className="cs-rail" aria-label="Các bước dựng bản đồ (thu gọn)">
-            {STEPS.map(([path, label, done], i) => (
-                <NavLink key={path} to={`${base}/${path}`} title={label}><StepMark n={i + 1} done={done(data)} />{SHORT[path]}</NavLink>
-            ))}
-            <div className="cs-sep" role="separator" />
-            {TOOLS.map(([path, label, icon]) => <NavLink key={path} to={`${base}/${path}`} title={label}><Lc name={icon} />{SHORT[path]}</NavLink>)}
-        </nav>
+        <>
+            <NavGroup label="Dựng bản đồ">
+                {STEPS.map(([path, label, done], i) => (
+                    <NavItem key={path} to={`${base}/${path}`} label={label} mark={<StepMark n={i + 1} done={done(data)} />}
+                        sub={path === "editor" ? [{ to: `${base}/import`, label: "Nhập từ CSV, GeoJSON" }] : undefined} />
+                ))}
+            </NavGroup>
+            <NavGroup label="Công cụ">
+                {TOOLS.map(([path, label, icon, badge]) => <NavItem key={path} to={`${base}/${path}`} icon={icon} label={label} badge={badge} />)}
+            </NavGroup>
+        </>
     );
-}
-
-function PublishChip({ status }: { status?: string }) {
-    if (status === "PUBLISHED") return <span className="cs-chip"><Lc name="circle-check" size={15} />Đang công khai</span>;
-    if (status === "HIDDEN") return <span className="cs-chip"><Lc name="eye-off" size={15} />Bị ẩn</span>;
-    return <span className="cs-chip" style={{ color: "var(--hud-muted)" }}>Bản nháp, chưa công khai</span>;
 }
 
 function WorkspaceFrame() {
@@ -171,13 +193,14 @@ function WorkspaceFrame() {
     const { pathname } = useLocation();
     const base = `/builder/v/${venueId}`;
     const page = pathname.slice(base.length + 1).split("/")[0] ?? "";
-    const rail = RAIL.has(page);
+    const wide = WIDE.has(page);
     return (
         <ConsoleFrame
             crumbs={[{ label: data.venue.name, to: `${base}/buildings` }, { label: LABEL[page] ?? "Dựng bản đồ" }]}
-            chip={<PublishChip status={data.venue.status} />}
-            nav={rail ? <WorkspaceRail base={base} data={data} /> : <WorkspaceSidebar base={base} data={data} />}
-            full={rail || page === "plan" || page === "test"}>
+            heading={<VenueSwitcher venue={data.venue} />}
+            nav={<WorkspaceNav base={base} data={data} />}
+            collapsed={wide}
+            full={wide}>
             <Outlet />
         </ConsoleFrame>
     );

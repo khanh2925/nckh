@@ -1,0 +1,26 @@
+/* Marker và lớp Leaflet của Builder (HTML do layers.tsx sinh). Màu theo theme shadcn trong console/app.css. */
+.cb-map { flex: 1; min-height: 480px; }
+.cb-map.leaflet-container { background: var(--muted); font-family: var(--font-sans); }
+.cb-map.is-picking, .cb-map.is-picking .leaflet-interactive { cursor: crosshair !important; }
+.cb-map.is-picking.leaflet-grab { cursor: crosshair; }
+
+/* điểm quan tâm: ô biển bo 4 theo màu loại */
+.ws-mk { position: relative; width: 100%; height: 100%; }
+.ws-pin { width: 100%; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; line-height: 16px; font-weight: 600; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgb(0 0 0 / .3); cursor: pointer; }
+.ws-pin.is-plate { background: var(--foreground); color: #fff; padding: 0 4px; width: auto; min-width: 100%; }
+.ws-pin.is-light { background: #fff; color: var(--foreground); box-shadow: inset 0 0 0 1.5px var(--foreground), 0 0 0 1.5px #fff; }
+.ws-mk.is-selected .ws-pin { outline: 2px solid var(--primary); outline-offset: 2px; }
+.ws-lbl { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); font-size: 12px; line-height: 16px; font-weight: 600; color: var(--foreground); white-space: nowrap; pointer-events: none; display: none;
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; }
+.ws-near .ws-lbl, .ws-mk.is-selected .ws-lbl, .ws-mk.is-tag .ws-lbl, .ws-mk.is-lbl .ws-lbl { display: block; }
+.ws-mk.is-tag .ws-lbl { height: 24px; padding: 0 8px; border-radius: 4px; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .15); text-shadow: none; display: inline-flex; align-items: center; }
+
+/* nút lối đi, đỉnh vùng, nhãn vùng */
+.cb-node { width: 100%; height: 100%; border-radius: 999px; background: #fff; border: 2px solid var(--foreground); cursor: pointer; }
+.cb-node.is-connector { border-width: 3px; background: var(--foreground); }
+.cb-node.is-selected { background: var(--primary); border-color: #fff; box-shadow: 0 0 0 2px var(--primary); }
+.cb-node.is-orphan { border-color: var(--destructive); }
+.cb-node.is-pending { background: var(--primary); }
+.cb-vertex { width: 100%; height: 100%; background: #fff; border: 2px solid var(--primary); border-radius: 2px; }
+.cb-zone-label { background: rgb(255 255 255 / .88); border: 0; box-shadow: none; font-size: 12px; font-weight: 600; color: var(--foreground); padding: 0 6px; border-radius: 4px; }
+.cb-zone-label::before { display: none; }
