@@ -53,6 +53,7 @@ export function positionLabel(model: VenueModel, position: Position | null | und
     const where = floorLabel(floor);
     if (position.source === "qr") return `QR ${position.nodeId ?? ""}${where ? `, ${where}` : ""}`.trim();
     if (position.source === "place") return `${position.label ?? "Địa điểm"}${where ? `, ${where}` : ""}`;
+    if (position.source === "gps") return `Vị trí GPS${position.accuracy ? ` ±${Math.round(position.accuracy)} m` : ""}`;
     return `Vị trí chọn trên bản đồ${where ? `, ${where}` : ""}`;
 }
 
@@ -72,7 +73,8 @@ const GROUPS: Record<string, GroupUi> = {
     health: { label: "Y tế", icon: "plus", unit: "điểm" },
     study: { label: "Học tập", icon: "file-text", unit: "phòng" },
     office: { label: "Văn phòng", icon: "building", unit: "phòng" },
-    leisure: { label: "Giải trí", icon: "sofa", unit: "điểm" }
+    leisure: { label: "Giải trí", icon: "sofa", unit: "điểm" },
+    campus: { label: "Toà nhà, cổng", icon: "building", unit: "điểm" }
 };
 
 export function groupUi(code: string): GroupUi {
@@ -82,7 +84,7 @@ export function groupUi(code: string): GroupUi {
 const TYPE_ICONS: Record<string, LucideName> = {
     gate: "plane", checkin: "luggage", security: "shield-check", baggage: "luggage", ticket: "ticket", restaurant: "utensils", coffee: "coffee",
     shop: "shopping-bag", lounge: "sofa", atm: "store", information: "info", medical: "plus", smoking: "cigarette", restroom: "toilet",
-    elevator: "arrow-up-down", escalator: "chevrons-up", staircase: "footprints"
+    elevator: "arrow-up-down", escalator: "chevrons-up", staircase: "footprints", building: "building", campus_gate: "door-open"
 };
 
 /** Icon Lucide cho một loại địa điểm (dòng danh sách); không có thì theo nhóm */

@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { formatMeters, searchPlaces, type Trip } from "@indoor-map/core";
+import { formatMeters, isStepSkipped, planJourney, searchPlaces, type Trip } from "@indoor-map/core";
 import Lc from "../../design/Lc";
 import { getSettings } from "../../lib/settings";
 import { useModel, useVenue } from "../VenueContext";
 import { useTripEngine, canSimulateByDefault, type TripEngine } from "../useTripEngine";
+import { useJourneyRun } from "../journeyRun";
 import FloorMap from "../components/FloorMap";
 import { Button, Hud, IconButton, Progress, Row, Sheet, Status } from "../components/ui";
 import { clean, decimal, floorInSentence, floorLabel, minutesOf, placeWhere, stepIcon } from "../format";
 
 // Đang đi (2D): HUD than chì có mũi tên lượt kế tiếp + quãng còn lại, bản đồ phẳng xoay theo hướng đi, bảng tiến độ.
-// Tới chỗ thang: Chuyển tầng. Tới nơi: Đã tới.
+// Tới chỗ thang: Chuyển tầng. Tới nơi: Đã tới (đang đi theo quy trình thì là thẻ bước: hướng dẫn + "Đã xong bước này").
 export default function NavigatePage() {
     const { trip, slug } = useVenue();
     if (!trip) return <Navigate to={`/v/${slug}/map`} replace />;
@@ -19,6 +20,9 @@ export default function NavigatePage() {
 
 function Navigating({ trip }: { trip: Trip }) {
     const engine = useTripEngine(trip);
+    const { slug } = useVenue();
+    const [run] = useJourneyRun(slug);
+    if (trip.arrived && run && run.targetId === trip.to.id && run.current != null && !run.finishedAt) return <JourneyStepArrived trip={trip} />;
     if (trip.arrived) return <Arrived trip={trip} />;
     if (engine.view.atFloorChange) return <FloorChange engine={engine} />;
     return <TwoD engine={engine} />;
@@ -41,13 +45,13 @@ export function TripStatusChip({ engine, slug, then, prefix }: { engine: TripEng
         );
     }
     const source = engine.trip.lastFixSource;
-    const from = source === "qr" ? `QR ${engine.trip.from.nodeId ?? ""}`.trim() : source === "pick" ? "Chọn trên bản đồ" : clean(engine.trip.from.label) || "Địa điểm";
+    const from = engine.gpsLive || source === "gps" ? "GPS" : source === "qr" ? `QR ${engine.trip.from.nodeId ?? ""}`.trim() : source === "pick" ? "Chọn trên bản đồ" : clean(engine.trip.from.label) || "Địa điểm";
     const text = engine.simulating
         ? `Mô phỏng đi bộ ${decimal(1.3, 1)} m/s`
         : `${from}${engine.stepsLive ? `, ${engine.steps} bước` : ""}, ±${Math.round(engine.uncertainty)} m`;
     return (
         <span className="wf-chip wf-lift" role="status">
-            {prefix ? <span className="wf-warn">{prefix}</span> : <Lc name={source === "qr" ? "qr-code" : "map-pin"} size={20} />}<span>{text}</span>
+            {prefix ? <span className="wf-warn">{prefix}</span> : <Lc name={engine.gpsLive ? "locate-fixed" : source === "qr" ? "qr-code" : "map-pin"} size={20} />}<span>{text}</span>
         </span>
     );
 }
@@ -120,6 +124,8 @@ function TwoD({ engine }: { engine: TripEngine }) {
     const floorId = here?.floorId ?? trip.route.legs[trip.activeLeg]!.floorId;
     const percent = trip.route.distance > 0 ? (trip.progress / trip.route.distance) * 100 : 100;
     const simulateInline = engine.simulating || canSimulateByDefault || !engine.stepsLive;
+    const [run] = useJourneyRun(slug);
+    const journey = run && run.targetId === trip.to.id && run.current != null ? model.journeys.find(j => j.id === run.journeyId) : undefined;
 
     return (
         <div className="wf-screen">
@@ -160,6 +166,11 @@ function TwoD({ engine }: { engine: TripEngine }) {
                 </Sheet>
             ) : (
                 <Sheet label="Tiến trình">
+                    {journey && run?.current != null && (
+                        <Link to={`/v/${slug}/journeys/${journey.id}`} className="wf-t13" style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--ink)" }}>
+                            <Lc name="workflow" size={16} />Bước {run.current + 1}/{journey.steps.length}: {journey.steps[run.current]?.title}
+                        </Link>
+                    )}
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                         <span className="wf-t28">{minutesOf(view.remainingSeconds)} phút</span>
                         <span className="wf-t15 wf-muted">{Math.round(trip.progress)} / {Math.round(trip.route.distance)} m, tới {trip.to.name}</span>
@@ -288,6 +299,78 @@ function Arrived({ trip }: { trip: Trip }) {
                     <Row title={shared ? "Đã sao chép liên kết" : "Chia sẻ vị trí này"} onClick={() => void share()} />
                 </section>
                 <div className="wf-acts"><Button onClick={() => finish(`/v/${slug}/map?floor=${trip.to.floorId}`)}>Xong, về bản đồ</Button></div>
+            </Sheet>
+        </div>
+    );
+}
+
+/** Tới nơi của một bước trong quy trình: hướng dẫn tại bước, "Đã xong" thì tự lập tuyến tới bước sau từ chỗ đang đứng */
+function JourneyStepArrived({ trip }: { trip: Trip }) {
+    const model = useModel();
+    const { slug, startTrip, endTrip, setPosition } = useVenue();
+    const navigate = useNavigate();
+    const [run, setRun] = useJourneyRun(slug);
+    const [error, setError] = useState<string | null>(null);
+    const journey = run ? model.journeys.find(j => j.id === run.journeyId) : undefined;
+    if (!run || run.current == null || !journey) return <Arrived trip={trip} />;
+    const index = run.current;
+    const step = journey.steps[index]!;
+    const floor = model.floorsById.get(trip.to.floorId);
+    const here = { floorId: trip.to.floorId, lat: trip.to.lat, lng: trip.to.lng, source: "place" as const, label: trip.to.name, placeId: trip.to.id };
+
+    const advance = (how: "done" | "skip") => {
+        const done = how === "done" ? [...run.done, index] : run.done;
+        const skipped = how === "skip" ? [...run.skipped, index] : run.skipped;
+        const meters = run.meters + trip.progress;
+        const plan = planJourney(model, here, journey, run.answers, { pinned: run.pinned, done, skip: skipped, avoidStairs: getSettings().avoidStairs });
+        const next = plan.steps.find(s => !s.skipped && s.place);
+        setPosition(here);
+        if (!next?.place) {
+            if (plan.error) {
+                setError(plan.error);
+                return;
+            }
+            // Chuyến đi được kết thúc ở màn tổng kết: kết thúc ngay ở đây thì màn này tự chuyển về bản đồ trước
+            setRun({ ...run, done, skipped, meters, current: null, targetId: null, finishedAt: trip.arrivedAt ?? trip.startedAt });
+            navigate(`/v/${slug}/journeys/${journey.id}`, { replace: true });
+            return;
+        }
+        const result = startTrip(here, next.place);
+        if (!result || "error" in result) {
+            setError(result?.error ?? "Không tìm được đường tới bước sau.");
+            return;
+        }
+        setRun({ ...run, done, skipped, meters, current: next.index, targetId: next.place.id });
+    };
+    const quit = () => {
+        setRun(null);
+        setPosition(here);
+        endTrip();
+        navigate(`/v/${slug}/map?floor=${trip.to.floorId}`, { replace: true });
+    };
+    // Còn bước nào sau bước này không (bước bị bỏ theo câu trả lời không tính)
+    const isLast = journey.steps.every((s, i) => i <= index || run.done.includes(i) || run.skipped.includes(i) || isStepSkipped(s, run.answers));
+
+    return (
+        <div className="wf-screen">
+            <div className="wf-maparea">
+                <FloorMap model={model} floorId={trip.to.floorId} selectedId={trip.to.id} user={trip.to} focus={{ lat: trip.to.lat, lng: trip.to.lng, zoom: 20.5 }} />
+                <Hud glyph="circle-check" num={`Bước ${index + 1}`} text={`${trip.to.name}, ${floor?.buildingCode ?? ""} ${floorLabel(floor)}`.trim()} />
+            </div>
+            <Sheet labelledBy="js-t">
+                <div>
+                    <Status icon="circle-check" tone="ok">Đã tới, bước {index + 1}/{journey.steps.length}</Status>
+                    <h1 id="js-t" className="wf-t28" style={{ marginTop: 4 }}>{step.title}</h1>
+                    <p className="wf-t13" style={{ marginTop: 4 }}>{trip.to.name}, {placeWhere(model, trip.to)}</p>
+                </div>
+                {step.instruction && <div className="wf-card"><p className="wf-t15">{step.instruction}</p></div>}
+                {step.dwellMinutes ? <p className="wf-t13">Thường mất khoảng {step.dwellMinutes} phút ở bước này (ước tính).</p> : null}
+                {error && <Status icon="circle-alert" tone="danger">{error}</Status>}
+                <div className="wf-stack">
+                    <Button icon="check" onClick={() => advance("done")}>{isLast ? "Đã xong, hoàn thành quy trình" : "Đã xong bước này"}</Button>
+                    {step.optional && <Button variant="secondary" onClick={() => advance("skip")}>Bỏ qua bước này</Button>}
+                    <Button variant="text" onClick={quit}>Thoát quy trình</Button>
+                </div>
             </Sheet>
         </div>
     );

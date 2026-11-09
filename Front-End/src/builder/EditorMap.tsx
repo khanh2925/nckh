@@ -46,9 +46,9 @@ export default function EditorMap({ model, floorId, children, fitKey, className 
         if (!box.current) return undefined;
         const m = L.map(box.current, { zoomControl: false, center: [model.venue.centerLat ?? 10.8, model.venue.centerLng ?? 106.66], zoom: 17, maxZoom: 23, zoomSnap: 0.25, rotateControl: false, doubleClickZoom: false });
         L.control.zoom({ position: "bottomright" }).addTo(m);
-        // Nền đường phố OSM, làm xám nhạt để mặt bằng nổi lên (CARTO không còn cho dùng không cần khoá API)
+        // Nền đường phố OSM, có màu nhưng nhạt để mặt bằng nổi lên (CARTO không còn cho dùng không cần khoá API)
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 23, maxNativeZoom: 19, className: "grayscale opacity-40", attribution: "&copy; OpenStreetMap"
+            maxZoom: 23, maxNativeZoom: 19, className: "opacity-60 saturate-75", attribution: "&copy; OpenStreetMap"
         }).addTo(m);
         const rotatePane = m.getPane("rotatePane");
         m.createPane("planPane", rotatePane).style.zIndex = "350";

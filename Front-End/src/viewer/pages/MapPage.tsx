@@ -112,7 +112,7 @@ export default function MapPage({ mode = "explore", landingCode, landingMissing 
     );
     const onSelect = useCallback((place: Place) => navigate(`/v/${slug}/place/${place.id}`), [navigate, slug]);
     const user = trip ? null : position;
-    const accuracy = user ? positionUncertainty(0, user.source) : null;
+    const accuracy = user ? positionUncertainty(0, user.source, user.accuracy) : null;
 
     const locate = () => {
         if (!position) {
@@ -180,7 +180,7 @@ export default function MapPage({ mode = "explore", landingCode, landingMissing 
             ) : (
                 <Sheet labelledBy={sheetId}>
                     <SheetHead id={sheetId} title="Bạn đang ở đây"
-                        sub={position ? `${clean(building?.name)}, ${floorInSentence(floor)}. Sai số ±${positionUncertainty(0, position.source)} m ước tính` : undefined} />
+                        sub={position ? `${clean(building?.name)}, ${floorInSentence(floor)}. Sai số ±${Math.round(positionUncertainty(0, position.source, position.accuracy))} m ước tính` : undefined} />
                     {trip && <Row title={`Đang chỉ đường tới ${trip.to.name}`} sub="Vị trí trên tuyến đã được cập nhật" lead={<Lc name="navigation" size={20} />} />}
                     <div className="wf-stack">
                         {trip
@@ -208,7 +208,7 @@ export default function MapPage({ mode = "explore", landingCode, landingMissing 
                             to={`/v/${slug}/map?pick=position&floor=${floorId}&return=${encodeURIComponent(`map?floor=${floorId}`)}`} chevron />
                     )}
                     {!trip && position && (
-                        <Row title={positionLabel(model, position)} sub={`Vị trí của bạn, sai số ±${positionUncertainty(0, position.source)} m ước tính`} lead={<Lc name="locate-fixed" size={20} />}
+                        <Row title={positionLabel(model, position)} sub={`Vị trí của bạn, sai số ±${Math.round(positionUncertainty(0, position.source, position.accuracy))} m ước tính`} lead={<Lc name="locate-fixed" size={20} />}
                             to={`/v/${slug}/map?pick=position&floor=${position.floorId}&return=${encodeURIComponent(`map?floor=${position.floorId}`)}`} trailing={<span className="wf-t15 wf-row-val">Đổi</span>} />
                     )}
                     {tiles.length > 0 ? (

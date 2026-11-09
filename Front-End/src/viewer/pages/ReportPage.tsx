@@ -38,7 +38,7 @@ export default function ReportPage() {
                     <section aria-labelledby="rp-attach">
                         <h2 id="rp-attach" className="wf-sec">Gửi kèm</h2>
                         <div className="wf-group">
-                            {here && <Row titleId="rp-pos" title="Vị trí ước tính" sub={`${positionLabel(model, here)}, ±${positionUncertainty(0, here.source)} m`} trailing={<Toggle labelledBy="rp-pos" checked={withPos} onChange={setWithPos} />} />}
+                            {here && <Row titleId="rp-pos" title="Vị trí ước tính" sub={`${positionLabel(model, here)}, ±${Math.round(positionUncertainty(0, here.source, here.accuracy))} m`} trailing={<Toggle labelledBy="rp-pos" checked={withPos} onChange={setWithPos} />} />}
                             {trip && <Row titleId="rp-route" title="Tuyến đang đi" sub={`${positionLabel(model, trip.from)} tới ${trip.to.name}, ${formatMeters(trip.route.distance)}`} trailing={<Toggle labelledBy="rp-route" checked={withRoute} onChange={setWithRoute} />} />}
                         </div>
                     </section>

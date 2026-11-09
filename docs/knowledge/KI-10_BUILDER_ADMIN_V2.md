@@ -68,7 +68,7 @@ packages/core/src/
 | Lối đi, nối tầng | `/builder/v/:id/walkways` | `WalkwaysPage.tsx` | `PUT .../walkways` (thay cả mạng) |
 | Thử chỉ đường (một tuyến / hàng loạt) | `/builder/v/:id/test` | `TestPage.tsx` | — (routing của core trên bản nháp) |
 | Xuất bản | `/builder/v/:id/publish` | `PublishPage.tsx` | publish / unpublish; lịch sử phát hành **chưa có API** |
-| Quy trình | `/builder/v/:id/journeys` | `JourneysPage.tsx` | **chưa có API** |
+| Quy trình | `/builder/v/:id/journeys` | `JourneysPage.tsx` | `journeyApi`: danh sách trái, các bước giữa (thử tuyến từ một điểm + câu trả lời, dùng `planJourney`), thuộc tính bước phải |
 | Mã QR định vị | `/builder/v/:id/qr` | `QrPage.tsx` | — (tính ở client) |
 | In tem mã QR (`?codes=`) | `/builder/v/:id/qr-print` | `QrPrintPage.tsx` | — |
 | Loại và tiện ích | `/builder/v/:id/types` | `TypesPage.tsx` | types, facilities, copy mẫu |
@@ -104,7 +104,7 @@ packages/core/src/
 ## Việc còn chờ backend
 
 API thống kê lượt xem/tìm kiếm, nhật ký hệ thống, cấu hình hệ thống, bảng mã QR, mốc camera, lịch sử phiên bản xuất bản,
-quy trình (journeys), thông báo, đặt lại mật khẩu, chế độ bảo trì, thành viên địa điểm.
+quy trình mẫu theo loại hình (UC029) và phiên bản quy trình (BR-35), thông báo, đặt lại mật khẩu, chế độ bảo trì, thành viên địa điểm.
 
 ## Kiểm thử
 

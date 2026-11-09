@@ -47,10 +47,13 @@ interface FloorMapProps {
 const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 // Nhìn xa (zoom < 19) chỉ hiện mốc định hướng (cửa ra, an ninh, thang máy, thông tin), không nhãn;
 // gần hơn hiện thêm loại quan trọng kèm nhãn; rất gần hiện hết
-const TOP_TYPES = new Set(["gate", "security", "information", "elevator"]);
+const TOP_TYPES = new Set(["gate", "security", "information", "elevator", "building", "campus_gate"]);
+// Bản đồ khuôn viên: tên toà nhà, cổng luôn hiện (khuôn viên rộng, thường xem ở mức thu nhỏ)
+const NAMED_TYPES = new Set(["building", "campus_gate"]);
 const KEY_TYPES = new Set([...TOP_TYPES, "restroom", "checkin", "escalator", "baggage"]);
 const FAR_ZOOM = 19;
 const NEAR_ZOOM = 20.25;
+const OVERVIEW_ZOOM = 17;
 // Ô biển nhạt (nền trắng, pictogram than chì) cho ăn uống, mua sắm, phòng chờ; còn lại ô than chì
 const LIGHT_TYPES = new Set(["coffee", "restaurant", "shop", "lounge"]);
 
@@ -64,7 +67,7 @@ function pictogram(place: Pick<Place, "type" | "name">, type: LocationTypeDto, s
 function placeIcon(place: Place, type: LocationTypeDto): Leaflet.DivIcon {
     const plate = plateText(place);
     const key = KEY_TYPES.has(place.type ?? "");
-    const top = TOP_TYPES.has(place.type ?? "") ? " is-top" : "";
+    const top = (TOP_TYPES.has(place.type ?? "") ? " is-top" : "") + (NAMED_TYPES.has(place.type ?? "") ? " is-named" : "");
     const label = `<span class="wf-lbl">${escapeHtml(place.name)}</span>`;
     if (place.type === "gate" && plate) {
         const width = Math.max(28, plate.length * 8 + 12);
@@ -167,6 +170,7 @@ export default function FloorMap({
             const z = map.getZoom();
             container.current?.classList.toggle("is-far", z < FAR_ZOOM);
             container.current?.classList.toggle("is-near", z >= NEAR_ZOOM);
+            container.current?.classList.toggle("is-overview", z < OVERVIEW_ZOOM);
         };
         map.on("zoomend", zoomClass);
         zoomClass();

@@ -57,7 +57,7 @@ export default function PlacePage() {
     return (
         <div className="wf-screen">
             <div className="wf-maparea">
-                <FloorMap model={model} floorId={shownFloor} selectedId={place.id} user={position} accuracy={position ? positionUncertainty(0, position.source) : null}
+                <FloorMap model={model} floorId={shownFloor} selectedId={place.id} user={position} accuracy={position ? positionUncertainty(0, position.source, position.accuracy) : null}
                     focus={shownFloor === place.floorId ? { lat: place.lat, lng: place.lng, zoom: 20 } : "floor"} fitPadding={[84, 40]}
                     onSelect={p => navigate(`/v/${slug}/place/${p.id}`, { replace: true })} />
                 <div className="wf-bar">
@@ -94,7 +94,7 @@ export default function PlacePage() {
                 {planned && "error" in planned && <Status icon="triangle-alert" tone="warn">{planned.error}</Status>}
 
                 {position ? (
-                    <Row title={`Từ ${positionLabel(model, position)}`} sub={`Sai số ±${positionUncertainty(0, position.source)} m ước tính`}
+                    <Row title={`Từ ${positionLabel(model, position)}`} sub={`Sai số ±${Math.round(positionUncertainty(0, position.source, position.accuracy))} m ước tính`}
                         trailing={<Link className="wf-link wf-t15" to={`/v/${slug}/map?pick=position&floor=${position.floorId}&return=${here}`}>Đổi vị trí</Link>} />
                 ) : (
                     <Row title="Bạn đang ở đâu?" sub="Để biết quãng đường và thời gian đi" lead={<Lc name="locate-fixed" size={20} />}

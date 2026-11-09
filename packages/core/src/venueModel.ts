@@ -2,16 +2,16 @@ import { distance } from "./geo";
 import { createProjection, type FloorProjection } from "./projection";
 import { normalizeText } from "./text";
 import type {
-    BuildingDto, FacilityDto, FloorDto, FloorPoint, LocationDto, LocationTypeDto, VenueDto, VenueMapDto, WalkwayNetworkDto,
+    BuildingDto, FacilityDto, FloorDto, FloorPoint, JourneyDto, LocationDto, LocationTypeDto, VenueDto, VenueMapDto, WalkwayNetworkDto,
     WalkwayNodeDto, ZoneDto
 } from "./types";
 
 /** Tên hiển thị của nhóm loại địa điểm (group_name trong CSDL là mã) */
 const GROUP_LABELS: Record<string, string> = {
     gate: "Cửa ra", procedure: "Thủ tục", food: "Ăn uống", service: "Dịch vụ", restroom: "WC",
-    transport: "Di chuyển", health: "Y tế", study: "Học tập", office: "Văn phòng", leisure: "Giải trí"
+    transport: "Di chuyển", health: "Y tế", study: "Học tập", office: "Văn phòng", leisure: "Giải trí", campus: "Toà nhà, cổng", room: "Phòng"
 };
-const GROUP_ORDER = ["gate", "procedure", "food", "restroom", "service", "transport"];
+const GROUP_ORDER = ["campus", "gate", "procedure", "food", "restroom", "service", "transport"];
 
 export function groupLabel(code?: string): string {
     if (!code) return "Khác";
@@ -48,11 +48,18 @@ export interface VenueModel {
     locationCount: Map<number, number>;
     defaultFloor: Floor | undefined;
     facilities: FacilityDto[];
+    /** Quy trình đã công khai, theo thứ tự chủ địa điểm sắp */
+    journeys: JourneyDto[];
 }
 
 const FALLBACK_TYPE: LocationTypeDto = { code: "other", name: "Địa điểm khác", icon: "bi-geo-alt", color: "#5f6368", groupName: "service" };
 
 /** Gói GET /api/venues/{slug}/map -> các bảng tra cứu nhanh cho giao diện */
+/** Tầng không có bản vẽ là bản đồ ngoài trời (khuôn viên, công viên) vẽ thẳng trên nền bản đồ thật: dùng được GPS */
+export function isOutdoorFloor(floor?: Pick<FloorDto, "plan"> | null): boolean {
+    return Boolean(floor && !floor.plan);
+}
+
 export function buildVenueModel(bundle: VenueMapDto): VenueModel {
     const buildings = [...bundle.buildings].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     const buildingsById = new Map(buildings.map(b => [b.id, b]));
@@ -103,7 +110,8 @@ export function buildVenueModel(bundle: VenueMapDto): VenueModel {
 
     return {
         venue: bundle.venue, buildings, buildingsById, floors, floorsById, floorsOf, typeOf, locations, locationsById, groups,
-        zones: bundle.zones ?? [], walkways, nodesById, locationCount, defaultFloor, facilities: bundle.facilities ?? []
+        zones: bundle.zones ?? [], walkways, nodesById, locationCount, defaultFloor, facilities: bundle.facilities ?? [],
+        journeys: bundle.journeys ?? []
     };
 }
 

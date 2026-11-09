@@ -313,3 +313,102 @@ export function snapToRoute(route: Route, point: FloorPoint): { gap: number; met
     }
     return best;
 }
+
+// Hàng đợi ưu tiên (heap nhị phân) theo chi phí
+class MinHeap {
+    private items: [number, string][] = [];
+    get size(): number {
+        return this.items.length;
+    }
+    push(item: [number, string]): void {
+        const h = this.items;
+        h.push(item);
+        let i = h.length - 1;
+        while (i > 0) {
+            const parent = (i - 1) >> 1;
+            if (h[parent]![0] <= h[i]![0]) break;
+            [h[parent], h[i]] = [h[i]!, h[parent]!];
+            i = parent;
+        }
+    }
+    pop(): [number, string] {
+        const h = this.items;
+        const top = h[0]!;
+        const last = h.pop()!;
+        if (h.length > 0) {
+            h[0] = last;
+            let i = 0;
+            for (;;) {
+                const l = 2 * i + 1;
+                const r = l + 1;
+                let smallest = i;
+                if (l < h.length && h[l]![0] < h[smallest]![0]) smallest = l;
+                if (r < h.length && h[r]![0] < h[smallest]![0]) smallest = r;
+                if (smallest === i) break;
+                [h[smallest], h[i]] = [h[i]!, h[smallest]!];
+                i = smallest;
+            }
+        }
+        return top;
+    }
+}
+
+// Dijkstra từ nhiều nguồn, không dừng sớm: khoảng cách tới MỌI nút (cho bài toán chọn nơi phục vụ của quy trình)
+function shortestAll(neighborsOf: (id: string) => Neighbor[], sources: Map<string, number>): Map<string, number> {
+    const best = new Map(sources);
+    const heap = new MinHeap();
+    for (const [id, cost] of sources) heap.push([cost, id]);
+    while (heap.size > 0) {
+        const [cost, current] = heap.pop();
+        if (cost > (best.get(current) ?? Infinity)) continue;
+        for (const { id, cost: step } of neighborsOf(current)) {
+            const next = cost + step;
+            if (next < (best.get(id) ?? Infinity)) {
+                best.set(id, next);
+                heap.push([next, id]);
+            }
+        }
+    }
+    return best;
+}
+
+/**
+ * Bảng tra quãng đường (m, cộng phí đổi tầng như findRoute) từ một điểm tới nhiều điểm, dùng lại một đồ thị.
+ * Mỗi lần gọi chạy MỘT Dijkstra một-nguồn; điểm không tới được trả về Infinity.
+ */
+export function createDistanceOracle(walkways: WalkwayNetworkDto, options: RouteOptions = {}): (from: FloorPoint, targets: FloorPoint[]) => number[] {
+    const graph = buildGraph(walkways, options);
+    const pieceOf = findPieces(graph);
+    const entriesCache = new Map<string, Map<number, Entry>>();
+    const entriesOf = (p: FloorPoint) => {
+        const key = `${p.floorId}:${p.lat}:${p.lng}`;
+        let found = entriesCache.get(key);
+        if (!found) {
+            found = findEntries(graph, pieceOf, p);
+            entriesCache.set(key, found);
+        }
+        return found;
+    };
+    return (from, targets) => {
+        const starts = entriesOf(from);
+        const sources = new Map<string, number>();
+        for (const e of starts.values()) {
+            for (const node of [e.a, e.b]) {
+                const cost = e.gap + distance(e.spot, node);
+                if (cost < (sources.get(node.id) ?? Infinity)) sources.set(node.id, cost);
+            }
+        }
+        const dist = sources.size > 0 ? shortestAll(id => graph.neighbors.get(id) ?? [], sources) : new Map<string, number>();
+        return targets.map(target => {
+            let best = Infinity;
+            for (const [piece, e] of entriesOf(target)) {
+                const via = Math.min((dist.get(e.a.id) ?? Infinity) + distance(e.spot, e.a), (dist.get(e.b.id) ?? Infinity) + distance(e.spot, e.b));
+                best = Math.min(best, via + e.gap);
+                // cùng một đoạn lối đi: đi thẳng trên đoạn đó
+                const s = starts.get(piece);
+                if (s && s.a === e.a && s.b === e.b) best = Math.min(best, s.gap + distance(s.spot, e.spot) + e.gap);
+            }
+            return best;
+        });
+    };
+}

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LOST_THRESHOLD_METERS, angleDiff, bearing, pointAt, positionUncertainty, viewTrip, type Trip, type TripView } from "@indoor-map/core";
+import { GPS_USABLE_ACCURACY, LOST_THRESHOLD_METERS, angleDiff, isOutdoorFloor, bearing, pointAt, positionUncertainty, viewTrip, type Trip, type TripView } from "@indoor-map/core";
 import { getSettings, updateSettings, useSettings } from "../lib/settings";
-import { hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useCompass, useSensorPermission, useStepDetector, vibrate } from "../lib/sensors";
+import { hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useCompass, useGps, useSensorPermission, useStepDetector, vibrate } from "../lib/sensors";
 import { useVenue } from "./VenueContext";
 
 // "Động cơ" của chuyến đi, dùng chung cho màn 2D và màn camera:
 // - mỗi bước chân (cảm biến gia tốc) tiến thêm stepLength mét dọc tuyến
 // - la bàn cho hướng nhìn; khi mô phỏng thì lấy hướng của tuyến
 // - tới bước mới thì rung + đọc chỉ dẫn (nếu bật trong Cài đặt)
+// - ngoài trời (khuôn viên) GPS đủ tốt thì kéo vị trí theo GPS, bước chân lấp khoảng giữa hai lần đo
 // - ước lượng độ lệch vị trí, quá ngưỡng thì gợi ý quét QR căn lại
 export interface TripEngine {
     trip: Trip;
@@ -17,6 +18,8 @@ export interface TripEngine {
     routeBearing: number | null;
     compassLive: boolean;
     stepsLive: boolean;
+    /** GPS đang đủ tốt để dùng (ngoài trời) */
+    gpsLive: boolean;
     simulating: boolean;
     setSimulating(on: boolean): void;
     needPermission: boolean;
@@ -36,7 +39,7 @@ export interface TripEngine {
 const SIM_SPEED = 1.3; // m/s
 
 export function useTripEngine(trip: Trip): TripEngine {
-    const { advance, slug } = useVenue();
+    const { advance, gpsUpdate, model, slug } = useVenue();
     const settings = useSettings();
     const permission = useSensorPermission();
     const [simulating, setSimulating] = useState(false);
@@ -51,6 +54,16 @@ export function useTripEngine(trip: Trip): TripEngine {
         advance(getSettings().stepLength);
     }, [advance, paused]);
     const stepsLive = useStepDetector(!simulating, onStep);
+
+    // GPS chỉ bật trên tầng ngoài trời (không có bản vẽ); trong nhà nó sai vài chục mét
+    const legFloor = trip.route.legs[trip.activeLeg]?.floorId;
+    const outdoor = legFloor != null && isOutdoorFloor(model?.floorsById.get(legFloor));
+    const gps = useGps(outdoor && !simulating && !trip.arrived);
+    const gpsLive = gps != null && gps.accuracy <= GPS_USABLE_ACCURACY;
+    useEffect(() => {
+        if (!gps || gps.accuracy > GPS_USABLE_ACCURACY || paused || legFloor == null) return;
+        gpsUpdate({ floorId: legFloor, lat: gps.lat, lng: gps.lng, source: "gps", accuracy: gps.accuracy });
+    }, [gps, paused, legFloor, gpsUpdate]);
 
     // Mô phỏng đi bộ (máy tính / trình diễn): tiến đều SIM_SPEED m/s
     useEffect(() => {
@@ -85,9 +98,9 @@ export function useTripEngine(trip: Trip): TripEngine {
         if (settings.voice && message) speak(message);
     }, [view.stepIndex, view.atFloorChange, trip.arrived, message, settings.vibrate, settings.voice]);
 
-    const uncertainty = positionUncertainty(trip.metersSinceFix, trip.lastFixSource);
+    const uncertainty = gpsLive ? Math.max(3, gps.accuracy) : positionUncertainty(trip.metersSinceFix, trip.lastFixSource);
     return {
-        trip, view, heading, routeBearing, compassLive: compass != null && !simulating, stepsLive, simulating, setSimulating,
+        trip, view, heading, routeBearing, compassLive: compass != null && !simulating, stepsLive, gpsLive, simulating, setSimulating,
         needPermission: needsSensorPermission && permission !== "granted",
         enableSensors: async () => {
             await requestSensorPermission();

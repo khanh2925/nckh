@@ -10,5 +10,6 @@ export * from "./venueModel";
 export * from "./qr";
 export * from "./pdr";
 export * from "./trip";
+export * from "./journey";
 export * from "./api";
 export * from "./checks";

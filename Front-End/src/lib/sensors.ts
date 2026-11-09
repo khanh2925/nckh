@@ -5,6 +5,7 @@ import { AdaptiveStepDetector, HeadingFilter } from "@indoor-map/core";
 // tệp này chỉ đọc sự kiện của trình duyệt. App React Native sau này đọc expo-sensors rồi dùng cùng thuật toán.
 // - La bàn: Android "deviceorientationabsolute", iOS webkitCompassHeading. Cần HTTPS.
 // - iOS 13+ bắt buộc xin quyền bằng một cú bấm: gọi requestSensorPermission() trong onClick.
+// - GPS: chỉ chính xác ngoài trời (khuôn viên); trong nhà sai số vài chục mét, phía gọi tự bỏ qua.
 
 type PermissionFn = () => Promise<"granted" | "denied">;
 const orientationPermission = (window.DeviceOrientationEvent as unknown as { requestPermission?: PermissionFn } | undefined)?.requestPermission;
@@ -81,6 +82,41 @@ export function useCompass(enabled = true): { heading: number | null; accuracy: 
     }, [enabled, granted]);
 
     return { heading, accuracy };
+}
+
+export interface GpsFix {
+    lat: number;
+    lng: number;
+    /** Sai số (m) trình duyệt báo */
+    accuracy: number;
+    at: number;
+}
+
+/** Theo dõi GPS liên tục. Trả về lần đo gần nhất, null khi chưa có hoặc bị từ chối. */
+export function useGps(enabled: boolean): GpsFix | null {
+    const [fix, setFix] = useState<GpsFix | null>(null);
+    useEffect(() => {
+        if (!enabled || !navigator.geolocation) return undefined;
+        const id = navigator.geolocation.watchPosition(
+            pos => setFix({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: pos.timestamp }),
+            () => setFix(null),
+            { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 }
+        );
+        return () => navigator.geolocation.clearWatch(id);
+    }, [enabled]);
+    return enabled ? fix : null;
+}
+
+/** Đo GPS một lần (nút "Dùng GPS") */
+export function readGps(timeout = 15000): Promise<GpsFix> {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error("Trình duyệt không cho lấy vị trí"));
+        navigator.geolocation.getCurrentPosition(
+            pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, at: pos.timestamp }),
+            () => reject(new Error("Chưa lấy được GPS. Hãy cho phép truy cập vị trí.")),
+            { enableHighAccuracy: true, maximumAge: 0, timeout }
+        );
+    });
 }
 
 /** Gọi onStep() mỗi bước chân. Trả về true khi đã nhận được số liệu gia tốc. */

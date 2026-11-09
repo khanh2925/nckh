@@ -137,6 +137,41 @@ export interface WalkwayNetworkDto {
     edges: WalkwayEdgeDto[];
 }
 
+/** Câu hỏi có/không trước khi đi theo quy trình ("Bạn đã check-in trực tuyến chưa?") */
+export interface JourneyQuestionDto {
+    id: string;
+    text: string;
+}
+
+/** Một bước của quy trình: đích là một điểm (targetLocationId) HOẶC một loại (targetType = mã loại) */
+export interface JourneyStepDto {
+    title: string;
+    instruction?: string;
+    targetLocationId?: number | null;
+    targetType?: string | null;
+    optional?: boolean;
+    /** Bỏ bước khi mọi điều kiện đều thoả */
+    skipIf?: { questionId: string; answer: boolean }[];
+    /** Thời gian ở bước (xếp hàng, làm thủ tục), ước tính của chủ địa điểm */
+    dwellMinutes?: number | null;
+    mustConfirm?: boolean;
+}
+
+export type JourneyStatus = "DRAFT" | "PUBLISHED";
+
+/** Quy trình (docs/DAC_TA_QUY_TRINH.md): chuỗi bước ở nhiều nơi, theo thứ tự cố định */
+export interface JourneyDto {
+    id: number;
+    name: string;
+    description?: string;
+    icon?: string;
+    status?: JourneyStatus;
+    sortOrder?: number;
+    questions: JourneyQuestionDto[];
+    steps: JourneyStepDto[];
+    updatedAt?: string;
+}
+
 /** GET /api/venues/{slug}/map */
 export interface VenueMapDto {
     venue: VenueDto;
@@ -147,6 +182,8 @@ export interface VenueMapDto {
     facilities: FacilityDto[];
     locations: LocationDto[];
     walkways: WalkwayNetworkDto;
+    /** Quy trình đã công khai */
+    journeys?: JourneyDto[];
 }
 
 // ---------------------------------------------------------------- tài khoản & quản trị

@@ -107,8 +107,8 @@ export class HeadingFilter {
  * Độ không chắc chắn (m) của vị trí ước lượng: ~1 m ngay sau khi quét QR, tăng ~8% quãng đi bằng bước chân
  * (sai số độ dài bước + lệch hướng). Vượt ngưỡng thì nên căn lại.
  */
-export function positionUncertainty(metersSinceFix: number, source: "qr" | "pick" | "place" | "sim" | string): number {
-    const base = source === "qr" ? 1 : source === "pick" ? 5 : 3;
+export function positionUncertainty(metersSinceFix: number, source: "qr" | "pick" | "place" | "sim" | "gps" | string, gpsAccuracy?: number): number {
+    const base = source === "qr" ? 1 : source === "pick" ? 5 : source === "gps" ? gpsAccuracy ?? 8 : 3;
     return base + metersSinceFix * 0.08;
 }
 

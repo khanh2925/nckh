@@ -21,10 +21,11 @@ Xác thực `/api/auth`: `POST /login {email,password}` → `{token,user,expires
 
 Địa điểm: `GET /api/my/venues`; `POST /api/venues` (tự sao chép loại địa điểm mẫu theo `kind`); `PUT/DELETE /api/venues/{id}`;
 `POST /api/venues/{id}/publish|unpublish`. Công khai: `GET /api/venues/{slug}/map` trả về
-`{ venue, buildings, floors, zones, types, facilities, locations, walkways }`.
+`{ venue, buildings, floors, zones, types, facilities, locations, walkways, journeys }` (`journeys` = quy trình đã công khai).
 
 Dưới `/api/venues/{id}`: `buildings`, `floors`, `floors/{fid}/plan` (PUT: svg|imageUrl, width, height, anchor{image,latlng}, end, depthScale),
-`zones`, `types` (+ `POST types/from-templates`), `facilities`, `locations` (+ `POST locations/import`), `walkways` (GET/PUT cả mạng).
+`zones`, `types` (+ `POST types/from-templates`), `facilities`, `locations` (+ `POST locations/import`), `walkways` (GET/PUT cả mạng),
+`journeys` (quy trình: chủ địa điểm thấy cả nháp, người khác chỉ thấy bản công khai).
 Tất cả CRUD chuẩn: GET danh sách, POST tạo, PUT /{id} sửa, DELETE /{id}.
 
 Quản trị hệ thống `/api/admin`: `users?status=` + `PUT users/{id}/status {status}`; `venues` + `PUT venues/{id}/status {status}` + `PUT venues/{id}/owner {ownerId}`;
@@ -35,7 +36,8 @@ Quản trị hệ thống `/api/admin`: `users?status=` + `PUT users/{id}/status
 - `locations.x, y` = pixel trên bản vẽ của tầng; `lat, lng` = WGS84. Mỗi tầng có tham số chiếu riêng (`floors.anchor_*`, `end_*`, `depth_scale`), thay cho anchor cứng trong `mapProjection.js`.
 - `walkway_nodes.id` là chữ, do Builder đặt; nên có tiền tố venue để không trùng giữa các địa điểm.
 - Loại địa điểm (`location_types`) và tiện ích (`facilities`) là dữ liệu theo venue; `type_templates` là danh mục mẫu.
-- Schema và migration: `Back-End/database/v2/`.
+- `journeys`: quy trình nhiều bước (docs/DAC_TA_QUY_TRINH.md). Câu hỏi đầu và các bước lưu JSONB trong dòng (`questions`, `steps`), mỗi bước trỏ tới một điểm (`targetLocationId`) hoặc một mã loại (`targetType`). Bản nháp lưu được khi còn dở; công khai phải có 2–15 bước và mọi bước có đích (BR-30). Xoá điểm/loại đang là đích của quy trình công khai → 409 (BR-36).
+- Schema và migration: `Back-End/database/v2/` (`05_journeys.sql` cho bảng quy trình).
 
 ## Việc còn lại (frontend)
 

@@ -15,6 +15,8 @@ import vn.edu.indoormap.security.VenueAccess;
 import vn.edu.indoormap.service.LocationService;
 
 import java.util.ArrayList;
+import vn.edu.indoormap.service.JourneyService;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,11 +30,12 @@ public class LocationServiceImpl implements LocationService {
     private final FacilityRepository facilities;
     private final LocationMapper mapper;
     private final VenueAccess access;
+    private final JourneyService journeys;
 
     public LocationServiceImpl(LocationRepository locations, FloorRepository floors, LocationTypeRepository types,
-                               FacilityRepository facilities, LocationMapper mapper, VenueAccess access) {
+                               FacilityRepository facilities, LocationMapper mapper, VenueAccess access, JourneyService journeys) {
         this.locations = locations; this.floors = floors; this.types = types;
-        this.facilities = facilities; this.mapper = mapper; this.access = access;
+        this.facilities = facilities; this.mapper = mapper; this.access = access; this.journeys = journeys;
     }
 
     @Override
@@ -74,6 +77,7 @@ public class LocationServiceImpl implements LocationService {
     @Override
     public void delete(Long venueId, Long id) {
         access.editable(venueId);
+        journeys.checkLocationUnused(venueId, id);
         locations.delete(find(venueId, id));
     }
 

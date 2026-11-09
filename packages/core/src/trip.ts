@@ -5,7 +5,7 @@ import type { Place, VenueModel } from "./venueModel";
 
 // Trạng thái một chuyến đi đang chỉ đường, viết dạng hàm thuần (reducer) để web và React Native dùng chung.
 
-export type PositionSource = "qr" | "pick" | "place" | "sim";
+export type PositionSource = "qr" | "pick" | "place" | "sim" | "gps";
 
 export interface Position extends FloorPoint {
     source: PositionSource;
@@ -15,6 +15,8 @@ export interface Position extends FloorPoint {
     /** Khi đứng tại một địa điểm (source = "place") */
     placeId?: number;
     at?: number;
+    /** Sai số GPS (m), khi source = "gps" */
+    accuracy?: number;
 }
 
 export interface PlannedRoute extends Route {
@@ -105,6 +107,31 @@ export function fixTripPosition(model: VenueModel, trip: Trip, point: Position, 
         ...trip, from: point, route: planned, progress: 0, activeLeg: 0, metersSinceFix: 0, lastFixSource: point.source,
         qrFixes: trip.qrFixes + counted, rerouted: trip.rerouted + 1, arrived: false
     };
+}
+
+/** GPS chỉ dùng được ngoài trời; sai số lớn hơn thế (trong nhà, sát toà cao) thì bỏ qua, để bước chân lo */
+export const GPS_USABLE_ACCURACY = 20;
+
+/**
+ * Cập nhật vị trí từ GPS trong lúc đi (khuôn viên, ngoài trời).
+ * Gần tuyến thì kéo vị trí tới chỗ đó trên tuyến (chỉ trong chặng đang đi, không lùi vì GPS rung);
+ * lệch hẳn khỏi tuyến thì lập lại tuyến.
+ */
+export function gpsTripUpdate(model: VenueModel, trip: Trip, point: Position, options: RouteOptions = {}, now = Date.now()): Trip {
+    const accuracy = point.accuracy ?? GPS_USABLE_ACCURACY;
+    if (trip.arrived || accuracy > GPS_USABLE_ACCURACY) return trip;
+    const snap = snapToRoute(trip.route, point);
+    if (!snap) return trip;
+    if (snap.gap > Math.max(25, accuracy * 2)) return fixTripPosition(model, trip, point, options);
+    const leg = trip.route.legs[trip.activeLeg];
+    if (!leg) return trip;
+    const start = legStart(trip.route, trip.activeLeg);
+    const end = start + leg.distance;
+    const meters = Math.min(end, Math.max(start, snap.meters));
+    // GPS rung qua lại vài mét: chỉ lùi khi lùi rõ ràng (hơn sai số)
+    const progress = meters < trip.progress && trip.progress - meters < accuracy ? trip.progress : meters;
+    const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 6));
+    return { ...trip, progress, metersSinceFix: 0, lastFixSource: "gps", arrived, arrivedAt: arrived ? now : undefined };
 }
 
 export interface TripView {

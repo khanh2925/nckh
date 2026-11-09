@@ -17,7 +17,7 @@ chữ neutral-900 `#171717`, màu chủ đạo xanh dương `#155DFC`, một ph�
   bo 4 px; nhìn xa chỉ hiện mốc định hướng (cửa ra, an ninh, thang máy, thông tin), gần hơn hiện thêm loại quan trọng và nhãn;
   tuyến xanh dương viền xanh đậm; vị trí khách = chấm xanh viền trắng + quầng sai số + nón hướng nhìn. Không nghiêng 3D.
   Màu Leaflet/SVG (cần hex) ở `viewer/mapTheme.ts`.
-- Không giả số liệu: chức năng chưa có API hiện "Chưa khả dụng" (Quy trình/hành trình, báo lỗi bản đồ, nhận diện mốc).
+- Không giả số liệu: chức năng chưa có API hiện "Chưa khả dụng" (báo lỗi bản đồ, nhận diện mốc).
 
 ## Cấu trúc
 
@@ -63,7 +63,7 @@ Front-End/
 | Camera, Camera-Lost | `/v/:slug/camera` | `CameraPage.tsx` |
 | Share, SharedRoute | `/v/:slug/share?to=`, `/v/:slug/shared?den=&tu=` | `SharePage.tsx`, `SharedRoutePage.tsx` |
 | Stride (đo bước chân) | `/v/:slug/stride`, `/settings/stride` | `StridePage.tsx` |
-| Journeys, JourneyRun (chưa có API) | `/v/:slug/journeys`, `/journeys/:id` | `JourneysPage.tsx` |
+| Journeys, JourneyRun | `/v/:slug/journeys`, `/journeys/:id` | `JourneysPage.tsx`, `journeyRun.ts`; thẻ bước khi tới nơi trong `NavigatePage.tsx` |
 | Report (chưa có API, không gửi gì) | `/v/:slug/report` | `ReportPage.tsx` |
 | Settings | `/settings` | `SettingsPage.tsx` |
 | Error | địa điểm không tồn tại / lỗi mạng | `ErrorScreen` trong `ui.tsx` |
@@ -83,6 +83,31 @@ Front-End/
 5. **Camera (AR-lite, thử nghiệm)**: mũi tên vẽ trên sàn, góc = hướng đoạn tuyến phía trước − hướng la bàn.
    Chưa có nhận diện cảnh bằng AI (giai đoạn sau: DINOv2/NetVLAD so khớp ảnh mốc do chủ địa điểm chụp).
 6. **Mô phỏng đi bộ** (1,3 m/s): cho máy tính không có cảm biến và khi trình diễn.
+7. **GPS ngoài trời (khuôn viên)**: tầng **không có bản vẽ** được coi là bản đồ ngoài trời (`isOutdoorFloor`), vẽ thẳng
+   trên nền OpenStreetMap. Trên tầng đó màn "Bạn đang ở đâu?" có thêm **Dùng GPS**, và lúc đi `useGps` theo dõi GPS:
+   sai số ≤ 20 m (`GPS_USABLE_ACCURACY`) thì `gpsTripUpdate` kéo vị trí tới chỗ gần nhất trên tuyến (không lùi khi GPS rung
+   ít hơn sai số; lệch tuyến > 25 m thì lập lại tuyến), bước chân lấp khoảng giữa hai lần đo. Tầng có bản vẽ (trong nhà)
+   không bật GPS. Ví dụ: địa điểm `iuh` (khuôn viên IUH, một tầng "Mặt đất", điểm loại `building` / `campus_gate` nhóm `campus`).
+
+## Quy trình (đi theo nhiều bước)
+
+`/v/:slug/journeys` liệt kê quy trình đã công khai (`model.journeys`). Chọn một quy trình:
+câu hỏi đầu (có/không) → điểm xuất phát (như "Bạn đang ở đâu?") → tổng quan → Bắt đầu.
+
+- **Chọn nơi cho từng bước** (`packages/core/src/journey.ts`, `planJourney`): bước theo loại có nhiều nơi phục vụ.
+  App chọn nơi cho cả chuỗi để tổng quãng ngắn nhất bằng quy hoạch động trên đồ thị phân tầng.
+  Quãng đường lấy từ `createDistanceOracle` (`routing.ts`): một Dijkstra một-nguồn cho mỗi ứng viên của bước trước.
+  `greedy: true` chọn nơi gần nhất từng bước, để so sánh trong báo cáo; test khẳng định quy hoạch động không dài hơn.
+- **Bỏ bước** khi mọi điều kiện `skipIf` thoả, hiện mờ kèm lý do. Bước tuỳ chọn không có nơi tới được cũng bị bỏ;
+  bước bắt buộc mà không có nơi tới được thì quy trình không bắt đầu được.
+- **Tổng quan** hiện nơi được chọn, tầng, quãng đường của từng bước, và tổng "đi bộ X phút + chờ khoảng Y phút" (ước tính).
+  "Đổi nơi" ghim nơi khách tự chọn (`pinned`), ví dụ đúng cửa ra máy bay của mình; các bước sau tự tính lại.
+- **Đi từng bước**: mỗi bước là một Trip bình thường (màn Đang đi, GPS, QR, mô phỏng vẫn dùng được).
+  Tới nơi → `JourneyStepArrived` hiện hướng dẫn tại bước + "Đã xong bước này" (bước tuỳ chọn có thêm "Bỏ qua").
+  Bấm xong thì lập tuyến tới bước sau từ chỗ đang đứng (`done`/`skip` trong `planJourney`); bước cuối dẫn tới màn tổng kết.
+- **Lưu tiến độ** (`journeyRun.ts`): localStorage `journey:<slug>`, tải lại trang thì đi tiếp (BR-34).
+- **Chưa làm:** phiên bản quy trình (BR-35), quy trình mẫu (UC029), lọc nơi theo thuộc tính (vd. quầy của hãng),
+  giờ mở cửa khi chọn nơi.
 
 ## Chạy
 

@@ -15,6 +15,7 @@ import vn.edu.indoormap.repository.LocationTypeRepository;
 import vn.edu.indoormap.repository.TypeTemplateRepository;
 import vn.edu.indoormap.security.VenueAccess;
 import vn.edu.indoormap.service.CatalogService;
+import vn.edu.indoormap.service.JourneyService;
 
 import java.util.List;
 import java.util.Set;
@@ -28,10 +29,12 @@ public class CatalogServiceImpl implements CatalogService {
     private final TypeTemplateRepository templates;
     private final VenueMapper mapper;
     private final VenueAccess access;
+    private final JourneyService journeys;
 
     public CatalogServiceImpl(LocationTypeRepository types, FacilityRepository facilities,
-                              TypeTemplateRepository templates, VenueMapper mapper, VenueAccess access) {
+                              TypeTemplateRepository templates, VenueMapper mapper, VenueAccess access, JourneyService journeys) {
         this.types = types; this.facilities = facilities; this.templates = templates; this.mapper = mapper; this.access = access;
+        this.journeys = journeys;
     }
 
     // ---------- Loại địa điểm của venue ----------
@@ -70,6 +73,7 @@ public class CatalogServiceImpl implements CatalogService {
     public void deleteType(Long venueId, Long id) {
         access.editable(venueId);
         LocationType t = types.findByIdAndVenue_Id(id, venueId).orElseThrow(() -> ApiException.notFound("loại địa điểm " + id));
+        journeys.checkTypeUnused(venueId, t.getCode());
         types.delete(t);
     }
 

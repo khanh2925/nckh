@@ -231,7 +231,8 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
 
 /* ---------- bản đồ Leaflet ---------- */
 .wf-map { width: 100%; height: 100%; background: var(--paper); font-family: var(--font); }
-.wf-map .wf-tiles-base { filter: grayscale(1); opacity: .45; }
+/* nền bản đồ có màu (dịu bớt chút cho chữ, ghim nổi lên); mặt bằng trong nhà đã có nền giấy riêng phủ lên */
+.wf-map .wf-tiles-base { filter: saturate(.85) contrast(.95); opacity: .9; }
 .wf-map .leaflet-control-attribution { font-size: 9px; background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--muted); }
 .wf-map .leaflet-control-attribution a { color: var(--muted); }
 .wf-map.is-compact .leaflet-control-attribution { display: none; }
@@ -252,6 +253,9 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
 }
 .wf-map:not(.is-far) .wf-poi.is-key .wf-lbl, .wf-map.is-near .wf-lbl { display: block; }
 .wf-map.is-far .wf-poi:not(.is-top) { display: none; }
+.wf-map .wf-poi.is-named .wf-lbl { display: block; }
+/* thu nhỏ quá xa (cả quận): nhãn chồng lên nhau, chỉ giữ ghim */
+.wf-map.is-overview .wf-lbl, .wf-map.is-overview .wf-poi.is-named .wf-lbl { display: none; }
 .wf-gate {
     display: flex; align-items: center; justify-content: center; width: 100%; height: 24px; box-sizing: border-box; padding: 0 6px; border-radius: 4px;
     background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 700; box-shadow: inset 0 0 0 1px var(--m-edge); cursor: pointer;

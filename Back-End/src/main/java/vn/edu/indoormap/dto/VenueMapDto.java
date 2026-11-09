@@ -19,4 +19,6 @@ public class VenueMapDto {
     private List<FacilityDto> facilities;
     private List<LocationDto> locations;
     private WalkwayNetworkDto walkways;
+    // Quy trình đã công khai (Viewer: "Bạn cần làm gì?")
+    private List<JourneyDto> journeys;
 }

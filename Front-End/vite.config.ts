@@ -17,7 +17,14 @@ export default defineConfig({
         host: true,
         // Cho phép link tạm của Cloudflare Tunnel (cloudflared tunnel --url http://localhost:5173) để test bằng 4G
         allowedHosts: [".trycloudflare.com"],
-        proxy: { "/api": backendUrl },
+        // Trình duyệt gọi /api cùng địa chỉ với trang (không phải CORS). Bỏ header Origin để backend không chặn
+        // khi trang mở qua link Cloudflare hoặc IP Wi-Fi (backend chỉ cho localhost trong danh sách CORS).
+        proxy: {
+            "/api": {
+                target: backendUrl,
+                configure: proxy => proxy.on("proxyReq", req => req.removeHeader("origin"))
+            }
+        },
         // @indoor-map/core nằm ngoài thư mục Front-End (../packages/core)
         fs: { allow: [".."] }
     }

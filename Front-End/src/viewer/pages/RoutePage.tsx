@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { formatMeters, positionUncertainty, type Place, type PlannedRoute, type Position, type VenueModel } from "@indoor-map/core";
+import { GPS_USABLE_ACCURACY, distance, formatMeters, isOutdoorFloor, positionUncertainty, type Place, type PlannedRoute, type Position, type VenueModel } from "@indoor-map/core";
 import Lc from "../../design/Lc";
-import { needsSensorPermission, useSensorPermission } from "../../lib/sensors";
+import { needsSensorPermission, readGps, useSensorPermission } from "../../lib/sensors";
 import { updateSettings, useSettings } from "../../lib/settings";
 import { useModel, useVenue } from "../VenueContext";
 import FloorMap from "../components/FloorMap";
@@ -30,14 +30,41 @@ export function FromToBar({ model, position, to, slug, onSwap, swapDisabled, bac
     );
 }
 
-/** Ba cách biết điểm đi, kèm sai số thật của từng cách (pdr.positionUncertainty) */
+/** Các cách biết điểm đi, kèm sai số thật của từng cách (pdr.positionUncertainty). Bản đồ ngoài trời có thêm GPS. */
 export function WhereFromRows({ slug, returnPath, floorId, to }: { slug: string; returnPath: string; floorId: number; to?: Place }) {
     const back = encodeURIComponent(returnPath);
     const err = (s: "qr" | "place" | "pick") => <span className="wf-t15 wf-row-val">±{positionUncertainty(0, s)} m</span>;
+    const model = useModel();
+    const { setPosition } = useVenue();
+    const navigate = useNavigate();
+    const [gps, setGps] = useState<{ busy: boolean; error?: string }>({ busy: false });
+    const outdoor = isOutdoorFloor(model.floorsById.get(floorId));
+
+    const locateByGps = async () => {
+        setGps({ busy: true });
+        try {
+            const fix = await readGps();
+            if (fix.accuracy > GPS_USABLE_ACCURACY * 1.5) throw new Error(`GPS chưa đủ chính xác (±${Math.round(fix.accuracy)} m). Ra chỗ thoáng hơn rồi thử lại, hoặc chọn điểm gần bạn.`);
+            const nodes = model.walkways.nodes.filter(n => n.floorId === floorId);
+            const nearest = Math.min(...nodes.map(n => distance(fix, n)));
+            if (!Number.isFinite(nearest) || nearest > 80) throw new Error(`Bạn đang ở ngoài khu vực bản đồ (cách khoảng ${formatMeters(nearest)}).`);
+            setPosition({ floorId, lat: fix.lat, lng: fix.lng, source: "gps", accuracy: fix.accuracy, label: "Vị trí GPS" });
+            setGps({ busy: false });
+            navigate(`/v/${slug}/${returnPath}`, { replace: true });
+        } catch (e) {
+            setGps({ busy: false, error: (e as Error).message });
+        }
+    };
+
     return (
         <div>
+            {outdoor && (
+                <Row title={gps.busy ? "Đang lấy GPS…" : "Dùng GPS"} sub="Khi đang ở ngoài trời" lead={<Lc name="locate-fixed" size={20} />}
+                    onClick={gps.busy ? undefined : () => void locateByGps()} trailing={<span className="wf-t15 wf-row-val">±5–15 m</span>} chevron />
+            )}
+            {gps.error && <p role="alert" className="wf-t13 wf-warn" style={{ padding: "4px 0 8px" }}>{gps.error}</p>}
             <Row title="Quét mã QR gần bạn" sub="Trên cột, biển chỉ dẫn" to={`/v/${slug}/scan?then=${back}`} trailing={err("qr")} chevron />
-            <Row title="Chọn điểm gần bạn" sub="Quầy, cửa, cửa hàng" to={to ? `/v/${slug}/search?pick=from&to=${to.id}` : `/v/${slug}/search?pick=here&return=${back}`} trailing={err("place")} chevron />
+            <Row title="Chọn điểm gần bạn" sub={outdoor ? "Toà nhà, cổng" : "Quầy, cửa, cửa hàng"} to={to ? `/v/${slug}/search?pick=from&to=${to.id}` : `/v/${slug}/search?pick=here&return=${back}`} trailing={err("place")} chevron />
             <Row title="Chỉ trên bản đồ" sub="Kéo dấu ngắm tới chỗ bạn đứng" to={`/v/${slug}/map?pick=position&floor=${floorId}&return=${back}`} trailing={err("pick")} chevron />
         </div>
     );
@@ -74,6 +101,8 @@ export default function RoutePage() {
     const legIndex = route ? Math.min(legView, route.legs.length - 1) : 0;
     const leg = route?.legs[legIndex];
     const returnHere = `route?to=${to?.id ?? ""}`;
+    // Địa điểm một tầng (khuôn viên) không có thang: bỏ tuỳ chọn "Chỉ thang máy"
+    const hasConnectors = useMemo(() => model.walkways.nodes.some(n => n.connector), [model]);
     const goBack = () => (window.history.length > 1 ? navigate(-1) : navigate(to ? `/v/${slug}/place/${to.id}` : `/v/${slug}/map`));
 
     const begin = (then: "go" | "camera") => {
@@ -110,7 +139,7 @@ export default function RoutePage() {
         <div className="wf-screen">
             <div className="wf-maparea">
                 <FloorMap model={model} floorId={mapFloor} route={route} activeLeg={legIndex} user={legIndex === 0 ? position : null}
-                    accuracy={position ? positionUncertainty(0, position.source) : null} destination={to} focus={focus} showMarkers={false} fitPadding={[104, 32]} />
+                    accuracy={position ? positionUncertainty(0, position.source, position.accuracy) : null} destination={to} focus={focus} showMarkers={false} fitPadding={[104, 32]} />
                 <FromToBar model={model} position={position} to={to} slug={slug} onSwap={swap} swapDisabled={!position?.placeId} back={goBack} />
                 {route && (
                     <div className="wf-side" style={{ top: 112 }}>
@@ -131,7 +160,7 @@ export default function RoutePage() {
                 <Sheet labelledBy="rt-where">
                     <div>
                         <h2 id="rt-where" className="wf-t28">Bạn đang ở đâu?</h2>
-                        <p className="wf-t13" style={{ marginTop: 4 }}>Trong nhà không có GPS. Chọn một cách để biết điểm đi.</p>
+                        <p className="wf-t13" style={{ marginTop: 4 }}>{isOutdoorFloor(model.floorsById.get(to.floorId)) ? "Chọn một cách để biết điểm đi." : "Trong nhà không có GPS. Chọn một cách để biết điểm đi."}</p>
                     </div>
                     <WhereFromRows slug={slug} returnPath={returnHere} floorId={to.floorId} to={to} />
                 </Sheet>
@@ -156,9 +185,9 @@ export default function RoutePage() {
                         <span className="wf-t17 wf-muted">{formatMeters(route.distance)}</span>
                         <span className="wf-t13" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>{changes.value === "0" ? "đi bộ, ước tính" : `${changes.value} ${changes.label}`}</span>
                     </div>
-                    <Segmented label="Tuỳ chọn tuyến" value={settings.avoidStairs ? "lift" : "short"}
+                    {hasConnectors && <Segmented label="Tuỳ chọn tuyến" value={settings.avoidStairs ? "lift" : "short"}
                         onChange={v => updateSettings({ avoidStairs: v === "lift" })}
-                        options={[{ value: "short", label: "Ngắn nhất" }, { value: "lift", label: "Chỉ thang máy" }]} />
+                        options={[{ value: "short", label: "Ngắn nhất" }, { value: "lift", label: "Chỉ thang máy" }]} />}
                     <div>
                         {route.legs.length > 1 && <Dots count={route.legs.length} current={legIndex} />}
                         <p className="wf-t13" style={{ marginTop: route.legs.length > 1 ? 8 : 0 }}>{legCaption(model, route, legIndex, to)}</p>

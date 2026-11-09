@@ -13,6 +13,7 @@ import vn.edu.indoormap.repository.*;
 import vn.edu.indoormap.security.CurrentUser;
 import vn.edu.indoormap.security.VenueAccess;
 import vn.edu.indoormap.service.CatalogService;
+import vn.edu.indoormap.service.JourneyService;
 import vn.edu.indoormap.service.VenueService;
 
 import java.util.List;
@@ -35,17 +36,18 @@ public class VenueServiceImpl implements VenueService {
     private final VenueAccess access;
     private final CurrentUser currentUser;
     private final CatalogService catalog;
+    private final JourneyService journeys;
 
     public VenueServiceImpl(VenueRepository venues, BuildingRepository buildings, FloorRepository floors, ZoneRepository zones,
                             LocationTypeRepository types, FacilityRepository facilities, LocationRepository locations,
                             WalkwayNodeRepository nodes, WalkwayEdgeRepository edges, VenueMapper venueMapper,
                             LocationMapper locationMapper, WalkwayMapper walkwayMapper, VenueAccess access,
-                            CurrentUser currentUser, CatalogService catalog) {
+                            CurrentUser currentUser, CatalogService catalog, JourneyService journeys) {
         this.venues = venues; this.buildings = buildings; this.floors = floors; this.zones = zones;
         this.types = types; this.facilities = facilities; this.locations = locations;
         this.nodes = nodes; this.edges = edges; this.venueMapper = venueMapper;
         this.locationMapper = locationMapper; this.walkwayMapper = walkwayMapper; this.access = access;
-        this.currentUser = currentUser; this.catalog = catalog;
+        this.currentUser = currentUser; this.catalog = catalog; this.journeys = journeys;
     }
 
     @Override
@@ -77,6 +79,7 @@ public class VenueServiceImpl implements VenueService {
                 .walkways(new WalkwayNetworkDto(
                         nodes.findByFloor_Building_Venue_IdOrderByIdAsc(id).stream().map(walkwayMapper::toDto).toList(),
                         edges.findByVenueId(id).stream().map(walkwayMapper::toDto).toList()))
+                .journeys(journeys.published(id))
                 .build();
     }
 

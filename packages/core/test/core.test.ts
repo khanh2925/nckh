@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
     HeadingFilter, StepDetector, advanceTrip, buildVenueModel, confirmFloorChange, createProjection, distance, findPieces, buildGraph,
-    findRoute, fixTripPosition, isAtFloorChange, isRouteError, parseQrPayload, findNodeByCode, plateText, planRoute, searchPlaces,
+    findRoute, fixTripPosition, gpsTripUpdate, createDistanceOracle, planJourney, isAtFloorChange, isRouteError, parseQrPayload, pointAt, findNodeByCode, plateText, planRoute, searchPlaces,
     startTrip, translateHours, viewTrip, type Position, type VenueMapDto
 } from "../src";
 
@@ -123,6 +123,26 @@ describe("trip", () => {
         expect(fixed.progress).toBeGreaterThan(0);
         expect(fixed.qrFixes).toBe(1);
         expect(fixed.rerouted).toBe(0);
+    });
+
+    it("GPS ngoài trời kéo vị trí tới đúng chỗ trên tuyến, bỏ qua GPS kém và rung lùi", () => {
+        const planned = planRoute(model, from, gate);
+        if ("error" in planned) throw new Error(planned.error);
+        const trip = startTrip(planned, from, gate, 0);
+        const pts = planned.legs[0]!.points;
+        const mid = pts[Math.floor(pts.length / 2)]!;
+        const moved = gpsTripUpdate(model, trip, { ...mid, source: "gps", accuracy: 6 });
+        expect(moved.progress).toBeGreaterThan(0);
+        expect(moved.lastFixSource).toBe("gps");
+        expect(moved.rerouted).toBe(0);
+        // trong nhà GPS sai ±40 m: giữ nguyên
+        expect(gpsTripUpdate(model, trip, { ...mid, source: "gps", accuracy: 40 })).toBe(trip);
+        // lùi ít hơn sai số: không lùi
+        const behind = pointAt(planned, moved.progress - 5)!;
+        expect(gpsTripUpdate(model, moved, { ...behind, source: "gps", accuracy: 10 }).progress).toBe(moved.progress);
+        // lùi rõ ràng (hơn sai số): theo GPS
+        const farBehind = pointAt(planned, moved.progress - 20)!;
+        expect(gpsTripUpdate(model, moved, { ...farBehind, source: "gps", accuracy: 5 }).progress).toBeCloseTo(moved.progress - 20, 0);
     });
 });
 
@@ -282,3 +302,72 @@ describe("đếm bước thích nghi", () => {
     });
 });
 
+
+describe("quy trình nhiều bước (chọn nơi phục vụ bằng quy hoạch động)", () => {
+    const t1Ground = t1f0!;
+    const start = model.locations.find(l => l.floorId === t1Ground.id && l.type === "restroom")!;
+    const from = { floorId: start.floorId, lat: start.lat, lng: start.lng };
+    const journey = {
+        questions: [{ id: "q1", text: "Bạn đã check-in trực tuyến chưa?" }],
+        steps: [
+            { title: "Làm thủ tục", targetType: "checkin", skipIf: [{ questionId: "q1", answer: true }], dwellMinutes: 15 },
+            { title: "Kiểm tra an ninh", targetType: "security", dwellMinutes: 10 },
+            { title: "Ra cửa máy bay", targetType: "gate" }
+        ]
+    };
+
+    it("bảng tra quãng đường khớp với chỉ đường thường trên cùng tầng", () => {
+        const others = model.locations.filter(l => l.floorId === t1Ground.id && l.id !== start.id).slice(0, 5);
+        const d = createDistanceOracle(model.walkways)(from, others);
+        others.forEach((o, i) => {
+            const r = findRoute(model.walkways, from, o);
+            if (isRouteError(r)) return;
+            if (r.legs.length === 1) expect(Math.abs(d[i]! - r.distance)).toBeLessThan(1.5);
+        });
+    });
+
+    it("chọn đủ nơi cho mọi bước, tổng quãng không dài hơn cách chọn gần nhất từng bước", () => {
+        const dp = planJourney(model, from, journey, { q1: false });
+        expect(dp.error).toBeNull();
+        expect(dp.steps.every(s => s.place)).toBe(true);
+        expect(dp.steps[0]!.place!.type).toBe("checkin");
+        expect(dp.steps[2]!.place!.type).toBe("gate");
+        expect(dp.dwellMinutes).toBe(25);
+        const greedy = planJourney(model, from, journey, { q1: false }, { greedy: true });
+        expect(greedy.error).toBeNull();
+        expect(dp.distance).toBeLessThanOrEqual(greedy.distance + 1);
+    });
+
+    it("trả lời đã check-in thì bỏ bước thủ tục, ghi rõ lý do", () => {
+        const plan = planJourney(model, from, journey, { q1: true });
+        expect(plan.steps[0]!.skipped).toBe(true);
+        expect(plan.steps[0]!.skipReason).toContain("check-in trực tuyến");
+        expect(plan.steps[1]!.place?.type).toBe("security");
+        expect(plan.dwellMinutes).toBe(10);
+    });
+
+    it("khách tự chọn nơi cho một bước (đúng cửa ra của mình)", () => {
+        const first = planJourney(model, from, journey, { q1: false });
+        const other = first.steps[2]!.choices.find(c => c.place.id !== first.steps[2]!.place!.id)!;
+        const pinned = planJourney(model, from, journey, { q1: false }, { pinned: { 2: other.place.id } });
+        expect(pinned.steps[2]!.place!.id).toBe(other.place.id);
+    });
+
+    it("đang đi giữa chừng: bước đã xong không tính nữa, lập tuyến tiếp từ chỗ đang đứng", () => {
+        const first = planJourney(model, from, journey, { q1: false });
+        const at = first.steps[0]!.place!;
+        const rest = planJourney(model, at, journey, { q1: false }, { done: [0] });
+        expect(rest.steps[0]!.skipReason).toBe("Đã xong");
+        expect(rest.steps[1]!.place?.type).toBe("security");
+        expect(rest.dwellMinutes).toBe(10);
+    });
+
+    it("bước bắt buộc không có nơi phục vụ thì báo lỗi, bước tuỳ chọn thì bỏ qua", () => {
+        const missing = { questions: [], steps: [{ title: "Quầy không có", targetType: "khong-co" }, { title: "Cửa ra", targetType: "gate" }] };
+        expect(planJourney(model, from, missing).error).toContain("chưa có nơi phục vụ");
+        const optional = { questions: [], steps: [{ title: "Quầy không có", targetType: "khong-co", optional: true }, { title: "Cửa ra", targetType: "gate" }] };
+        const plan = planJourney(model, from, optional);
+        expect(plan.error).toBeNull();
+        expect(plan.steps[0]!.skipped).toBe(true);
+    });
+});

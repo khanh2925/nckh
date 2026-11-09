@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-    advanceTrip, buildVenueModel, confirmFloorChange as confirmFloorChangeCore, fixTripPosition, planRoute as planRouteCore,
+    advanceTrip, buildVenueModel, confirmFloorChange as confirmFloorChangeCore, fixTripPosition, gpsTripUpdate, planRoute as planRouteCore,
     startTrip as startTripCore, type Place, type PlannedRoute, type Position, type Trip, type VenueModel
 } from "@indoor-map/core";
 import { api } from "../lib/data";
@@ -24,6 +24,8 @@ interface VenueState {
     advance(meters: number): void;
     confirmFloorChange(): void;
     fixPosition(position: Position): void;
+    /** Vị trí GPS trong lúc đi (ngoài trời) */
+    gpsUpdate(position: Position): void;
 }
 
 const VenueContext = createContext<VenueState | null>(null);
@@ -113,10 +115,13 @@ export function VenueProvider({ slug, children }: { slug: string; children: Reac
             return modelRef.current ? fixTripPosition(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs }) : t;
         });
     }, [setPosition, slug]);
+    const gpsUpdate = useCallback((point: Position) => {
+        setTrip(t => (t && modelRef.current ? gpsTripUpdate(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs }) : t));
+    }, []);
 
     const value = useMemo<VenueState>(() => ({
-        slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition
-    }), [slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition]);
+        slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition, gpsUpdate
+    }), [slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition, gpsUpdate]);
 
     return <VenueContext.Provider value={value}>{children}</VenueContext.Provider>;
 }

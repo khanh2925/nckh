@@ -1,5 +1,5 @@
 import type {
-    BuildingDto, FacilityDto, FloorDto, ImportResultDto, LocationDto, LocationTypeDto, LoginResponse, PlanDto, UserDto, UserStatus,
+    BuildingDto, FacilityDto, FloorDto, ImportResultDto, JourneyDto, LocationDto, LocationTypeDto, LoginResponse, PlanDto, UserDto, UserStatus,
     VenueDto, VenueStatus, WalkwayNetworkDto, ZoneDto
 } from "@indoor-map/core";
 import { del, get, post, put } from "./http";
@@ -76,4 +76,11 @@ export const adminApi = {
     createTemplate: (dto: Partial<LocationTypeDto>) => post<LocationTypeDto>("/api/admin/type-templates", dto),
     updateTemplate: (id: number, dto: Partial<LocationTypeDto>) => put<LocationTypeDto>(`/api/admin/type-templates/${id}`, dto),
     removeTemplate: (id: number) => del(`/api/admin/type-templates/${id}`)
+};
+
+export const journeyApi = {
+    list: (venueId: number) => get<JourneyDto[]>(`${v(venueId)}/journeys`),
+    create: (venueId: number, dto: Partial<JourneyDto>) => post<JourneyDto>(`${v(venueId)}/journeys`, dto),
+    update: (venueId: number, id: number, dto: Partial<JourneyDto>) => put<JourneyDto>(`${v(venueId)}/journeys/${id}`, dto),
+    remove: (venueId: number, id: number) => del(`${v(venueId)}/journeys/${id}`)
 };
