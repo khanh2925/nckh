@@ -3,6 +3,17 @@
 Mô hình: `users` → `venues` → `buildings` → `floors` → { `zones`, `locations`, `walkway_nodes` ↔ `walkway_edges` },
 `venues` → { `location_types`, `facilities` }; `type_templates` là danh mục mẫu của hệ thống.
 
+## Nhanh nhất: database có sẵn dữ liệu demo
+
+```bash
+cd Back-End
+./database/setup-demo-db.sh          # tạo database indoor_map_v2 từ database/v2/demo_data.sql
+```
+
+Có sẵn Sân bay Tân Sơn Nhất (705 điểm, 11 tầng có mặt bằng, mạng lối đi, 2 quy trình mẫu) và khuôn viên IUH.
+Không có tài khoản nào: đặt `ADMIN_EMAIL`, `ADMIN_PASSWORD` trong `Back-End/.env` (xem `.env.example`, `DB_URL=jdbc:postgresql://localhost:5432/indoor_map_v2`),
+backend tạo tài khoản quản trị hệ thống ở lần chạy đầu. Đổi schema thì xuất lại `demo_data.sql` (`pg_dump --no-owner --no-privileges`, bỏ dòng `\restrict`/`\unrestrict`).
+
 ## Database mới (trống)
 
 ```bash
