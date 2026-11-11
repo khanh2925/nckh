@@ -40,12 +40,13 @@ export function TripStatusChip({ engine, slug, then, prefix }: { engine: TripEng
     if (engine.lost) {
         return (
             <Link to={`/v/${slug}/scan?then=${then}`} className="wf-chip wf-lift">
-                <Lc name="triangle-alert" size={20} color="var(--warn)" /><span>Có thể đã lệch ±{Math.round(engine.uncertainty)} m, quét QR</span>
+                <Lc name="triangle-alert" size={20} color="var(--warn)" />
+                <span>{engine.offRoute ? "Có vẻ bạn đã đi khác tuyến, quét QR" : `Có thể đã lệch ±${Math.round(engine.uncertainty)} m, quét QR`}</span>
             </Link>
         );
     }
     const source = engine.trip.lastFixSource;
-    const from = engine.gpsLive || source === "gps" ? "GPS" : source === "qr" ? `QR ${engine.trip.from.nodeId ?? ""}`.trim() : source === "pick" ? "Chọn trên bản đồ" : clean(engine.trip.from.label) || "Địa điểm";
+    const from = engine.positioning === "pf" ? "Định vị nâng cao" : engine.gpsLive || source === "gps" ? "GPS" : source === "qr" ? `QR ${engine.trip.from.nodeId ?? ""}`.trim() : source === "pick" ? "Chọn trên bản đồ" : clean(engine.trip.from.label) || "Địa điểm";
     const text = engine.simulating
         ? `Mô phỏng đi bộ ${decimal(1.3, 1)} m/s`
         : `${from}${engine.stepsLive ? `, ${engine.steps} bước` : ""}, ±${Math.round(engine.uncertainty)} m`;
@@ -132,7 +133,7 @@ function TwoD({ engine }: { engine: TripEngine }) {
             <div className="wf-maparea">
                 <FloorMap model={model} floorId={floorId} route={trip.route} activeLeg={trip.activeLeg} destination={trip.to}
                     user={here} accuracy={engine.uncertainty} heading={engine.heading} headingUp={headingUp && engine.heading != null}
-                    focus={here ? { lat: here.lat, lng: here.lng, zoom: 20 } : "floor"} />
+                    particles={engine.particles} focus={here ? { lat: here.lat, lng: here.lng, zoom: 20 } : "floor"} />
                 <Hud glyph={stepIcon(next?.kind)} num={Math.round(view.toNext)} unit="m" text={next?.title ?? "Đi thẳng"} />
                 <div className="wf-float-chip" style={{ top: 136 }}>
                     {notice ? <span className="wf-chip wf-lift" role="status"><Lc name="check" size={20} /><span>{notice}</span></span> : <TripStatusChip engine={engine} slug={slug} then="go" />}

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { AdaptiveStepDetector, HeadingFilter } from "@indoor-map/core";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AdaptiveStepDetector, HeadingFilter, WeinbergStepDetector, headingFromOrientation, type StepSample } from "@indoor-map/core";
 
 // Cảm biến trên trình duyệt điện thoại. Thuật toán (đếm bước, làm mượt la bàn) nằm ở @indoor-map/core;
 // tệp này chỉ đọc sự kiện của trình duyệt. App React Native sau này đọc expo-sensors rồi dùng cùng thuật toán.
@@ -148,6 +148,92 @@ export function useStepDetector(enabled: boolean, onStep: () => void): boolean {
         };
     }, [enabled, granted]);
     return active;
+}
+
+export interface PdrStep extends StepSample {
+    /** Hướng đo bằng con quay (độ, gốc tuỳ ý); null khi máy không gửi DeviceOrientation */
+    heading: number | null;
+}
+
+/**
+ * Cảm biến cho định vị nâng cao: mỗi bước chân kèm biên độ gia tốc (Weinberg) và hướng từ con quay.
+ * Hướng lấy từ sự kiện "deviceorientation" (Android: tương đối theo con quay; iOS: alpha tương đối),
+ * không dùng la bàn tuyệt đối vì trong nhà bê tông cốt thép la bàn lệch nhiều. Bộ lọc tự học độ lệch.
+ * Trả về active (đã nhận số liệu gia tốc) và hàm đọc hướng hiện tại.
+ */
+export function usePdrSensors(enabled: boolean, onStep: (step: PdrStep) => void): { active: boolean; heading: () => number | null } {
+    const granted = useSensorPermission() === "granted";
+    const callback = useRef(onStep);
+    useEffect(() => {
+        callback.current = onStep;
+    }, [onStep]);
+    const headingRef = useRef<number | null>(null);
+    const [active, setActive] = useState(false);
+
+    useEffect(() => {
+        if (!enabled || !granted || !("DeviceMotionEvent" in window)) return undefined;
+        const detector = new WeinbergStepDetector();
+        const smooth = new HeadingFilter(0.5);
+        let seen = false;
+        const onOrientation = (e: DeviceOrientationEvent) => {
+            if (e.alpha == null || e.beta == null || e.gamma == null) return;
+            headingRef.current = smooth.push(headingFromOrientation(e.alpha, e.beta, e.gamma));
+        };
+        const onMotion = (e: DeviceMotionEvent) => {
+            const g = e.accelerationIncludingGravity;
+            if (!g || g.x == null || g.y == null || g.z == null) return;
+            if (!seen) {
+                seen = true;
+                setActive(true);
+            }
+            const sample = detector.push(g.x, g.y, g.z, e.timeStamp || performance.now());
+            if (sample) callback.current({ ...sample, heading: headingRef.current });
+        };
+        window.addEventListener("deviceorientation", onOrientation);
+        window.addEventListener("devicemotion", onMotion);
+        return () => {
+            window.removeEventListener("deviceorientation", onOrientation);
+            window.removeEventListener("devicemotion", onMotion);
+            headingRef.current = null;
+            setActive(false);
+        };
+    }, [enabled, granted]);
+
+    const heading = useCallback(() => headingRef.current, []);
+    return { active, heading };
+}
+
+type ScreenLock = { release(): Promise<void> };
+
+/** Giữ màn hình sáng khi đang dẫn đường: tắt màn hình thì trình duyệt ngừng gửi số liệu cảm biến */
+export function useWakeLock(active: boolean): void {
+    useEffect(() => {
+        const wakeLock = (navigator as Navigator & { wakeLock?: { request(type: "screen"): Promise<ScreenLock> } }).wakeLock;
+        if (!active || !wakeLock) return undefined;
+        let lock: ScreenLock | null = null;
+        let alive = true;
+        const request = () => {
+            wakeLock.request("screen")
+                .then(l => {
+                    if (alive) lock = l;
+                    else void l.release();
+                })
+                .catch(() => {
+                    // trình duyệt từ chối (pin yếu, không phải HTTPS): bỏ qua
+                });
+        };
+        // màn hình bật lại thì khoá cũ đã mất, xin lại
+        const onVisible = () => {
+            if (document.visibilityState === "visible") request();
+        };
+        request();
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            alive = false;
+            document.removeEventListener("visibilitychange", onVisible);
+            lock?.release().catch(() => undefined);
+        };
+    }, [active]);
 }
 
 export function vibrate(pattern: number | number[]): void {

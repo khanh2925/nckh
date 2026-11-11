@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-    advanceTrip, buildVenueModel, confirmFloorChange as confirmFloorChangeCore, fixTripPosition, gpsTripUpdate, planRoute as planRouteCore,
+    advanceTrip, buildVenueModel, confirmFloorChange as confirmFloorChangeCore, fixTripPosition, gpsTripUpdate, pdrTripUpdate, planRoute as planRouteCore,
     startTrip as startTripCore, type Place, type PlannedRoute, type Position, type Trip, type VenueModel
 } from "@indoor-map/core";
 import { api } from "../lib/data";
@@ -26,6 +26,8 @@ interface VenueState {
     fixPosition(position: Position): void;
     /** Vị trí GPS trong lúc đi (ngoài trời) */
     gpsUpdate(position: Position): void;
+    /** Vị trí ước lượng của định vị nâng cao (bộ lọc hạt) trong lúc đi; accuracy = bán kính sai số */
+    pdrUpdate(position: Position): void;
 }
 
 const VenueContext = createContext<VenueState | null>(null);
@@ -119,9 +121,13 @@ export function VenueProvider({ slug, children }: { slug: string; children: Reac
         setTrip(t => (t && modelRef.current ? gpsTripUpdate(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs }) : t));
     }, []);
 
+    const pdrUpdate = useCallback((point: Position) => {
+        setTrip(t => (t && modelRef.current ? pdrTripUpdate(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs }) : t));
+    }, []);
+
     const value = useMemo<VenueState>(() => ({
-        slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition, gpsUpdate
-    }), [slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition, gpsUpdate]);
+        slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition, gpsUpdate, pdrUpdate
+    }), [slug, model, error, position, setPosition, trip, planRoute, startTrip, endTrip, advance, confirmFloorChange, fixPosition, gpsUpdate, pdrUpdate]);
 
     return <VenueContext.Provider value={value}>{children}</VenueContext.Provider>;
 }

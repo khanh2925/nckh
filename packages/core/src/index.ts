@@ -9,6 +9,7 @@ export * from "./directions";
 export * from "./venueModel";
 export * from "./qr";
 export * from "./pdr";
+export * from "./positioning";
 export * from "./trip";
 export * from "./journey";
 export * from "./api";
