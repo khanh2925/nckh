@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AdaptiveStepDetector, HeadingFilter, WeinbergStepDetector, headingFromOrientation, type StepSample } from "@indoor-map/core";
+import { AdaptiveStepDetector, HeadingFilter, PostureMonitor, StepGate, WeinbergStepDetector, headingFromOrientation, type StepSample } from "@indoor-map/core";
+import { isRecording, logEvent } from "./positioningLog";
 
 // Cảm biến trên trình duyệt điện thoại. Thuật toán (đếm bước, làm mượt la bàn) nằm ở @indoor-map/core;
 // tệp này chỉ đọc sự kiện của trình duyệt. App React Native sau này đọc expo-sensors rồi dùng cùng thuật toán.
@@ -153,6 +154,8 @@ export function useStepDetector(enabled: boolean, onStep: () => void): boolean {
 export interface PdrStep extends StepSample {
     /** Hướng đo bằng con quay (độ, gốc tuỳ ý); null khi máy không gửi DeviceOrientation */
     heading: number | null;
+    /** Trình duyệt chỉ cho hướng la bàn tuyệt đối (một số máy Android): trong nhà nhiễu hơn con quay */
+    absolute: boolean;
 }
 
 /**
@@ -161,23 +164,35 @@ export interface PdrStep extends StepSample {
  * không dùng la bàn tuyệt đối vì trong nhà bê tông cốt thép la bàn lệch nhiều. Bộ lọc tự học độ lệch.
  * Trả về active (đã nhận số liệu gia tốc) và hàm đọc hướng hiện tại.
  */
-export function usePdrSensors(enabled: boolean, onStep: (step: PdrStep) => void): { active: boolean; heading: () => number | null } {
+export function usePdrSensors(
+    enabled: boolean, onStep: (step: PdrStep) => void, onPostureChange?: () => void
+): { active: boolean; heading: () => number | null } {
     const granted = useSensorPermission() === "granted";
     const callback = useRef(onStep);
+    const postureCallback = useRef(onPostureChange);
     useEffect(() => {
         callback.current = onStep;
-    }, [onStep]);
+        postureCallback.current = onPostureChange;
+    }, [onStep, onPostureChange]);
     const headingRef = useRef<number | null>(null);
     const [active, setActive] = useState(false);
 
     useEffect(() => {
         if (!enabled || !granted || !("DeviceMotionEvent" in window)) return undefined;
         const detector = new WeinbergStepDetector();
+        // chỉ tính bước khi đã có chuỗi bước đều nhịp (lắc máy, đặt máy xuống không thành bước)
+        const gate = new StepGate();
+        const posture = new PostureMonitor();
         const smooth = new HeadingFilter(0.5);
+        let absolute = false;
         let seen = false;
         const onOrientation = (e: DeviceOrientationEvent) => {
             if (e.alpha == null || e.beta == null || e.gamma == null) return;
-            headingRef.current = smooth.push(headingFromOrientation(e.alpha, e.beta, e.gamma));
+            absolute = e.absolute;
+            // xoay màn hình ngang: trục của máy quay 90°, khách vẫn nhìn hướng cũ -> bù góc màn hình
+            const screen = screenAngle();
+            headingRef.current = smooth.push(headingFromOrientation(e.alpha, e.beta, e.gamma) + screen);
+            if (isRecording()) logEvent({ t: e.timeStamp || performance.now(), type: "orientation", a: e.alpha, b: e.beta, g: e.gamma, abs: e.absolute, screen });
         };
         const onMotion = (e: DeviceMotionEvent) => {
             const g = e.accelerationIncludingGravity;
@@ -186,8 +201,15 @@ export function usePdrSensors(enabled: boolean, onStep: (step: PdrStep) => void)
                 seen = true;
                 setActive(true);
             }
-            const sample = detector.push(g.x, g.y, g.z, e.timeStamp || performance.now());
-            if (sample) callback.current({ ...sample, heading: headingRef.current });
+            const t = e.timeStamp || performance.now();
+            if (isRecording()) logEvent({ t, type: "motion", x: g.x, y: g.y, z: g.z });
+            if (posture.push(g.x, g.y, g.z, t)) {
+                if (isRecording()) logEvent({ t, type: "posture" });
+                postureCallback.current?.();
+            }
+            const sample = detector.push(g.x, g.y, g.z, t);
+            if (!sample) return;
+            for (const step of gate.push(sample)) callback.current({ ...step, heading: headingRef.current, absolute });
         };
         window.addEventListener("deviceorientation", onOrientation);
         window.addEventListener("devicemotion", onMotion);

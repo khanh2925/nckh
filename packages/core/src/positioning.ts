@@ -56,6 +56,168 @@ export function weinbergLength(k: number, amplitude: number): number {
 }
 
 /**
+ * Chỉ tính bước khi đã có một chuỗi bước đều nhịp (như máy đếm bước của Apple Watch / iPhone):
+ * cầm máy lắc một cái hay đặt xuống bàn không thành bước. Đủ "need" bước đều nhịp thì trả cả chuỗi (tính bù),
+ * sau đó cho qua từng bước; dừng lâu hơn maxGapMs thì phải đều nhịp lại từ đầu.
+ */
+export class StepGate {
+    private pending: StepSample[] = [];
+    private open = false;
+    private last: number | null = null;
+
+    constructor(private readonly need = 4, private readonly tolerance = 0.35, private readonly maxGapMs = 2000) {}
+
+    push(step: StepSample): StepSample[] {
+        if (this.last != null && step.t - this.last > this.maxGapMs) {
+            this.open = false;
+            this.pending = [];
+        }
+        this.last = step.t;
+        if (this.open) return [step];
+        this.pending.push(step);
+        if (this.pending.length < this.need) return [];
+        const recent = this.pending.slice(-this.need);
+        const gaps = recent.slice(1).map((s, i) => s.t - recent[i]!.t);
+        const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+        if (gaps.every(g => Math.abs(g - mean) <= this.tolerance * mean)) {
+            this.open = true;
+            this.pending = [];
+            return recent;
+        }
+        this.pending = this.pending.slice(-(this.need - 1));
+        return [];
+    }
+}
+
+/**
+ * Phát hiện đổi cách cầm máy (cầm tay -> bỏ túi, xoay ngang, áp tai nghe gọi): phương trọng lực trong hệ của máy
+ * đổi hơn angle độ và giữ như vậy quá holdMs. Khi đó độ dài bước (K) và độ lệch hướng cũ không còn đúng.
+ */
+export class PostureMonitor {
+    private g: [number, number, number] | null = null;
+    private ref: [number, number, number] | null = null;
+    private since: number | null = null;
+
+    constructor(private readonly angle = 35, private readonly holdMs = 800) {}
+
+    /** Trả về true đúng lúc vừa đổi cách cầm máy */
+    push(x: number, y: number, z: number, timeMs: number): boolean {
+        const g = this.g;
+        this.g = g ? [g[0] + (x - g[0]) * 0.1, g[1] + (y - g[1]) * 0.1, g[2] + (z - g[2]) * 0.1] : [x, y, z];
+        if (!this.ref) {
+            this.ref = [...this.g];
+            return false;
+        }
+        const [a, b] = [this.g, this.ref];
+        const cos = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (Math.hypot(...a) * Math.hypot(...b) || 1);
+        const degrees = (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+        if (degrees > this.angle) {
+            this.since ??= timeMs;
+            if (timeMs - this.since >= this.holdMs) {
+                this.ref = [...this.g];
+                this.since = null;
+                return true;
+            }
+        } else {
+            this.since = null;
+            // tư thế ổn định: mốc trôi theo rất chậm (tay mỏi hạ dần máy xuống)
+            for (let i = 0; i < 3; i++) b[i]! += (a[i]! - b[i]!) * 0.002;
+        }
+        return false;
+    }
+}
+
+export interface GpsSample extends LatLng {
+    /** Sai số (m) */
+    accuracy: number;
+    /** Thời điểm (ms, cùng đồng hồ với bước chân đưa vào StrideCalibrator) */
+    t: number;
+}
+
+export interface StrideCalibration {
+    /** Độ dài bước trung bình đo được (m) */
+    stepLength: number;
+    /** Hệ số Weinberg (null nếu không có biên độ gia tốc) */
+    k: number | null;
+    meters: number;
+    steps: number;
+}
+
+/**
+ * Tự đo độ dài bước bằng GPS khi đi ngoài trời (khuôn viên), theo cách Apple Watch hiệu chỉnh:
+ * chỉ dùng đoạn "đẹp" — GPS tốt, nhịp bước đều, đường gần thẳng, đủ dài. Độ dài bước = quãng GPS / số bước.
+ */
+export class StrideCalibrator {
+    private steps: { t: number; root: number | null }[] = [];
+    private fixes: GpsSample[] = [];
+
+    constructor(private readonly options = { maxAccuracy: 10, minMeters: 60, minSteps: 60, maxCadenceCv: 0.15, minStraightness: 0.92, maxGapMs: 3000 }) {}
+
+    reset(): void {
+        this.steps = [];
+        this.fixes = [];
+    }
+
+    /** Một bước chân lúc t; amplitude = biên độ gia tốc (null nếu không có) */
+    addStep(t: number, amplitude: number | null): void {
+        const last = this.steps[this.steps.length - 1];
+        if (last && t - last.t > this.options.maxGapMs) this.reset();
+        this.steps.push({ t, root: amplitude == null ? null : Math.pow(Math.max(amplitude, 0.05), 0.25) });
+    }
+
+    /** Một lần đo GPS; trả về kết quả khi vừa đi xong một đoạn đạt chuẩn */
+    addFix(fix: GpsSample): StrideCalibration | null {
+        const o = this.options;
+        if (fix.accuracy > o.maxAccuracy) {
+            this.reset();
+            return null;
+        }
+        // Chỉ giữ các lần đo cách nhau ≥ 8 m để tính độ thẳng: GPS rung vài mét giữa hai lần đo liền nhau
+        // sẽ làm quãng gấp khúc dài ra giả tạo
+        const lastKept = this.fixes[this.fixes.length - 1];
+        if (!lastKept || distance(lastKept, fix) >= 8) this.fixes.push(fix);
+        const first = this.fixes[0]!;
+        const meters = distance(first, fix);
+        const inside = this.steps.filter(s => s.t > first.t && s.t <= fix.t);
+        if (meters < o.minMeters || inside.length < o.minSteps) return null;
+        const kept = this.fixes[this.fixes.length - 1] === fix ? this.fixes : [...this.fixes, fix];
+        let path = 0;
+        for (let i = 1; i < kept.length; i++) path += distance(kept[i - 1]!, kept[i]!);
+        const gaps = inside.slice(1).map((s, i) => s.t - inside[i]!.t);
+        const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+        const cv = Math.sqrt(gaps.reduce((a, g) => a + (g - mean) ** 2, 0) / gaps.length) / mean;
+        if (meters / path >= o.minStraightness && cv <= o.maxCadenceCv) {
+            const stepLength = meters / inside.length;
+            const roots = inside.map(s => s.root);
+            const k = roots.every(r => r != null) ? meters / roots.reduce((a, r) => a + r!, 0) : null;
+            // bắt đầu đoạn mới từ chỗ này
+            this.fixes = [fix];
+            this.steps = this.steps.filter(s => s.t > fix.t);
+            if (stepLength < 0.3 || stepLength > 1.2) return null;
+            return { stepLength, k, meters, steps: inside.length };
+        }
+        // đoạn chưa đạt (cong, nhịp không đều): trượt cửa sổ, bỏ lần đo cũ nhất
+        this.fixes.shift();
+        return null;
+    }
+}
+
+/** Gộp kết quả hiệu chỉnh mới vào cái đã học, có trọng số theo quãng đường (giữ tối đa maxMeters để vẫn theo kịp thay đổi) */
+export function mergeStride(
+    old: { stepLength: number; k: number | null; meters: number } | null, next: StrideCalibration, maxMeters = 2000
+): { stepLength: number; k: number | null; meters: number } {
+    if (!old) return { stepLength: next.stepLength, k: next.k, meters: next.meters };
+    const w = Math.min(old.meters, maxMeters);
+    const total = w + next.meters;
+    const mix = (a: number, b: number) => (a * w + b * next.meters) / total;
+    return {
+        stepLength: mix(old.stepLength, next.stepLength),
+        k: old.k != null && next.k != null ? mix(old.k, next.k) : next.k ?? old.k,
+        meters: Math.min(total, maxMeters)
+    };
+}
+
+/**
  * Hướng điện thoại (độ, theo chiều kim đồng hồ) từ alpha/beta/gamma của DeviceOrientation.
  * Lấy hướng của (cạnh trên − mặt màn hình) chiếu xuống mặt sàn: đúng cả khi cầm nằm ngang lẫn dựng đứng,
  * không bị suy biến như chỉ dùng alpha. Với sự kiện "tương đối" (con quay), gốc 0 tuỳ ý — bộ lọc tự học độ lệch.
@@ -341,6 +503,18 @@ export class ParticleFilter {
         this.route = new Map([...lists].map(([f, l]) => [f, Float64Array.from(l)]));
     }
 
+    /**
+     * Khách vừa đổi cách cầm máy: độ dài bước và độ lệch hướng đã học không còn chắc.
+     * Nới rộng các giả thuyết đó (vị trí giữ nguyên) để bộ lọc học lại sau vài bước.
+     */
+    loosen(offsetSpread = 30, kSpread = 0.1): void {
+        for (let i = 0; i < this.options.count; i++) {
+            this.offset[i]! += this.gauss() * offsetSpread;
+            if (!Number.isNaN(this.k[i]!)) this.k[i]! *= 1 + this.gauss() * kSpread;
+        }
+        this.disagree = 0;
+    }
+
     /** Thêm nhiễu vị trí (ví dụ sau khi màn hình tắt một lúc, không biết đã đi bao xa) */
     diffuse(sigma: number): void {
         for (let i = 0; i < this.options.count; i++) {
@@ -353,9 +527,10 @@ export class ParticleFilter {
      * Một bước chân. heading = hướng đo được (độ, theo chiều kim đồng hồ, gốc tuỳ ý nếu là con quay tương đối).
      * Trả về false nếu bộ lọc chưa có vị trí ban đầu.
      */
-    step(sample: Pick<StepSample, "amplitude">, heading: number): boolean {
+    step(sample: Pick<StepSample, "amplitude">, heading: number, headingNoise?: number): boolean {
         if (!this.started) return false;
         const o = this.options;
+        const noise = headingNoise ?? o.headingNoise;
         const n = o.count;
         const root = Math.pow(Math.max(sample.amplitude, 0.05), 0.25);
         if (!this.offsetsReady) this.initOffsets(heading);
@@ -363,7 +538,7 @@ export class ParticleFilter {
         for (let i = 0; i < n; i++) {
             if (Number.isNaN(this.k[i]!)) this.k[i] = this.initialK(root);
             const length = Math.min(1.3, Math.max(0.2, this.k[i]! * root * (1 + this.gauss() * o.stepNoise)));
-            const theta = (heading + this.offset[i]! + this.gauss() * o.headingNoise) * DEG;
+            const theta = (heading + this.offset[i]! + this.gauss() * noise) * DEG;
             this.x[i]! += length * Math.sin(theta);
             this.y[i]! += length * Math.cos(theta);
             this.offset[i]! += this.gauss() * o.offsetDrift;

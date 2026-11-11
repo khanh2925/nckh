@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/data";
 import { hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useSensorPermission } from "../../lib/sensors";
 import { updateSettings, useSettings } from "../../lib/settings";
+import { clearLog, downloadLog, useLogSize } from "../../lib/positioningLog";
 import { Row, Toggle, TopBar } from "../components/ui";
 import { decimal } from "../format";
 
@@ -21,6 +22,7 @@ function SwitchRow({ id, title, sub, checked, onChange }: { id: string; title: s
 
 export default function SettingsPage() {
     const s = useSettings();
+    const logSize = useLogSize();
     const navigate = useNavigate();
     const permission = useSensorPermission();
     const aligned = Object.keys(s.headingOffsets ?? {}).length;
@@ -57,9 +59,26 @@ export default function SettingsPage() {
                         <SwitchRow id="s-particles" title="Hiện các giả thuyết trên bản đồ" sub="Chấm nhỏ màu xanh, dùng khi đi thử"
                             checked={s.showParticles} onChange={v => updateSettings({ showParticles: v })} />
                     )}
-                    {s.weinbergK != null && (
-                        <Row title="Bước chân đã học" sub={`Hệ số ${decimal(s.weinbergK, 3)}`}
-                            trailing={<button type="button" className="wf-link wf-t15" onClick={() => updateSettings({ weinbergK: null })}>Xoá</button>} />
+                    {s.positioning === "pf" && (
+                        <SwitchRow id="s-log" title="Ghi nhật ký cảm biến" sub="Để chạy lại trên máy tính và tinh chỉnh; quét QR dọc đường làm điểm đo sai số"
+                            checked={s.recordLog} onChange={v => updateSettings({ recordLog: v })} />
+                    )}
+                    {logSize > 0 && (
+                        <Row title="Nhật ký cảm biến" sub={`${logSize.toLocaleString("vi-VN")} mục trong bộ nhớ`}
+                            trailing={
+                                <span className="wf-row-val">
+                                    <button type="button" className="wf-link wf-t15" onClick={downloadLog}>Tải về</button>{" · "}
+                                    <button type="button" className="wf-link wf-t15" onClick={clearLog}>Xoá</button>
+                                </span>
+                            } />
+                    )}
+                    {(s.weinbergK != null || s.strideCalibration) && (
+                        <Row title="Bước chân đã học"
+                            sub={[
+                                s.strideCalibration ? `Đo bằng GPS trên ${Math.round(s.strideCalibration.meters)} m ngoài trời: ${decimal(s.strideCalibration.stepLength)} m/bước` : null,
+                                s.weinbergK != null ? `hệ số ${decimal(s.weinbergK, 3)}` : null
+                            ].filter(Boolean).join(", ")}
+                            trailing={<button type="button" className="wf-link wf-t15" onClick={() => updateSettings({ weinbergK: null, strideCalibration: null })}>Xoá</button>} />
                     )}
                     <Row title="La bàn và đếm bước" sub={sensorText}
                         trailing={hasMotionSensors && needsSensorPermission && permission !== "granted"

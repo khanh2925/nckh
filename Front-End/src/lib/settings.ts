@@ -20,13 +20,17 @@ export interface Settings {
     showParticles: boolean;
     /** Hệ số Weinberg (độ dài bước) đã học được của người dùng; null = chưa học */
     weinbergK: number | null;
+    /** Ghi nhật ký cảm biến khi đi (để chạy lại, tinh chỉnh định vị nâng cao) */
+    recordLog: boolean;
+    /** Độ dài bước tự đo bằng GPS khi đi ngoài trời (như Apple Watch); meters = tổng quãng đã dùng để đo */
+    strideCalibration: { stepLength: number; k: number | null; meters: number } | null;
     /** "slug:id" địa điểm đã xem gần đây */
     recent: string[];
 }
 
 const KEY = "indoor-map.settings.v2";
 const DEFAULTS: Settings = { avoidStairs: false, vibrate: true, voice: false, largeText: false, preferQr: true, stepLength: 0.7, headingOffsets: {},
-    positioning: "basic", showParticles: false, weinbergK: null, recent: [] };
+    positioning: "basic", showParticles: false, weinbergK: null, recordLog: false, strideCalibration: null, recent: [] };
 
 function read(): Settings {
     try {

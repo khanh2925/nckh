@@ -48,7 +48,9 @@ export function TripStatusChip({ engine, slug, then, prefix }: { engine: TripEng
     const source = engine.trip.lastFixSource;
     const from = engine.positioning === "pf" ? "Định vị nâng cao" : engine.gpsLive || source === "gps" ? "GPS" : source === "qr" ? `QR ${engine.trip.from.nodeId ?? ""}`.trim() : source === "pick" ? "Chọn trên bản đồ" : clean(engine.trip.from.label) || "Địa điểm";
     const text = engine.simulating
-        ? `Mô phỏng đi bộ ${decimal(1.3, 1)} m/s`
+        ? engine.positioning === "pf"
+            ? `Mô phỏng định vị nâng cao, ${engine.steps} bước, ±${Math.round(engine.uncertainty)} m`
+            : `Mô phỏng đi bộ ${decimal(1.3, 1)} m/s`
         : `${from}${engine.stepsLive ? `, ${engine.steps} bước` : ""}, ±${Math.round(engine.uncertainty)} m`;
     return (
         <span className="wf-chip wf-lift" role="status">

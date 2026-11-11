@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, it } from "vitest";
 import {
-    ParticleFilter, bearing, buildVenueModel, buildWalkwayIndex, distance, findRoute, isRouteError, offset, snapToRoute, weinbergLength,
+    ParticleFilter, replayPositioningLog, type PositioningLog, bearing, buildVenueModel, buildWalkwayIndex, distance, findRoute, isRouteError, offset, snapToRoute, weinbergLength,
     type LatLng, type Route, type VenueMapDto
 } from "../src";
 
@@ -11,6 +11,9 @@ import {
 // Giả lập: người đi đúng theo tuyến, bước thật = K_thật × A^(1/4) (A dao động 10%), hướng đo = hướng thật − độ lệch con quay
 // (không biết trước) + nhiễu 4°; bộ lọc không biết K, không biết độ lệch. "Cách cũ" = mỗi bước cộng 0,7 m dọc tuyến.
 // Đây là số liệu mô phỏng, chưa thay được đo thực tế bằng điện thoại.
+//
+// Nhật ký đi thật (Cài đặt -> Ghi nhật ký cảm biến -> Tải nhật ký): PF_LOG=đường/dẫn/nhat-ky.json npx vitest run test/positioning.eval.test.ts
+// in sai số tại từng mốc QR (trước khi mốc sửa lại). Thử tham số khác: thêm PF_OPTS='{"corridorSigma":1.5}'.
 
 const bundle = JSON.parse(
     readFileSync(new URL("../../../Front-End/public/data/venues/tan-son-nhat.json", import.meta.url), "utf8")
@@ -137,5 +140,21 @@ describe.skipIf(!process.env.PF_EVAL)("đánh giá bộ lọc hạt (mô phỏng
             }
         }
         console.log(`Rẽ nhầm (lệch tuyến dự định ≥ 25 m): nhận ra ${detected}/${total}`);
+    }, 300_000);
+});
+
+describe.skipIf(!process.env.PF_LOG)("chạy lại nhật ký đi thật", () => {
+    it("sai số tại các mốc", () => {
+        const log = JSON.parse(readFileSync(process.env.PF_LOG!, "utf8")) as PositioningLog;
+        const walkways = log.walkways ?? (JSON.parse(
+            readFileSync(new URL(`../../../Front-End/public/data/venues/${log.venue}.json`, import.meta.url), "utf8")
+        ) as VenueMapDto).walkways;
+        const result = replayPositioningLog(log, buildWalkwayIndex(walkways), JSON.parse(process.env.PF_OPTS || "{}"));
+        const rows = result.checkpoints.map(c => `${(c.t / 1000).toFixed(0).padStart(5)} s  ${c.source.padEnd(6)} nâng cao ${fmt(c.error)} m (tự báo ±${c.spread.toFixed(1)})   cách cũ ${c.basicError == null ? "     -" : fmt(c.basicError)} m`);
+        const errors = result.checkpoints.map(c => c.error).filter(Number.isFinite);
+        const basics = result.checkpoints.map(c => c.basicError).filter((v): v is number => v != null && Number.isFinite(v));
+        console.log([`${log.device}`, `${result.steps} bước, K cuối ${result.k?.toFixed(3) ?? "-"}`, ...rows,
+            `Định vị nâng cao: trung vị ${fmt(median(errors))} m, lớn nhất ${fmt(Math.max(...errors))} m`,
+            basics.length ? `Cách cũ (${log.settings.stepLength} m/bước): trung vị ${fmt(median(basics))} m, lớn nhất ${fmt(Math.max(...basics))} m` : ""].join("\n"));
     }, 300_000);
 });

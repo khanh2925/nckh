@@ -22,12 +22,46 @@ Bộ lọc hạt giữ cùng lúc ~400 **giả thuyết**, mỗi hạt = `{ x, y
 
 Đầu ra (`PositionEstimate`): vị trí trung bình có trọng số, bán kính sai số, K, độ lệch hướng, `offRoute`.
 `pdrTripUpdate` (trip.ts) đặt vị trí lên tuyến giống GPS; lệch > 10 m khi bộ lọc đã chắc thì lập lại tuyến.
+Đã `offRoute` mà bộ lọc chắc (±5 m) thì cũng đưa vị trí vào chuyến đi để tự lập lại tuyến; còn mơ hồ thì báo quét QR.
+
+## Học từ máy đếm bước của Apple Watch / iPhone
+
+- Apple: đi ngoài trời ~20 phút có GPS để Watch học độ dài bước ở từng tốc độ, và học tiếp mỗi lần đi ngoài trời
+  ([Apple Support 105048](https://support.apple.com/105048)). Bằng sáng chế US10001386 (Apple) chỉ dùng đoạn GPS "đẹp":
+  nhịp bước đều kéo dài, đường thẳng, tốc độ ổn định, đủ dài, rồi gộp với kết quả cũ theo trọng số.
+- Ở đây: `StrideCalibrator` tự đo khi đi ngoài trời (khuôn viên), cả hai cách định vị: GPS ≤ 10 m, ≥ 60 m và ≥ 60 bước,
+  độ thẳng ≥ 0,92 (chỉ lấy các lần đo cách nhau ≥ 8 m), nhịp bước lệch ≤ 15%; `mergeStride` gộp theo quãng đường
+  (giữ tối đa 2 km để vẫn theo kịp). Kết quả cập nhật `stepLength` (cách cơ bản) và `weinbergK` (định vị nâng cao).
+- `StepGate`: chỉ tính bước khi có ≥ 4 bước đều nhịp (lệch ≤ 35%), rồi tính bù cả chuỗi; dừng > 2 s thì phải đều nhịp lại.
+  Lắc máy, đặt máy xuống không thành bước. (Chỉ áp cho định vị nâng cao; cách cơ bản giữ nguyên.)
+- Weinberg đã tự co giãn độ dài bước theo tốc độ (đi nhanh nhấp nhô mạnh hơn), nên chưa cần bảng K theo từng tốc độ.
+
+## Xử lý các tình huống khi đi thật
+
+- **Đổi cách cầm máy** (`PostureMonitor`): phương trọng lực đổi > 35° quá 0,8 s -> `filter.loosen()` nới độ lệch hướng ±30°, K ±10%.
+- **Xoay màn hình ngang**: cộng góc màn hình vào hướng (như la bàn đang làm).
+- **Trình duyệt chỉ cho hướng la bàn tuyệt đối** (`absolute` = true, một số máy Android): nhiễu hướng mỗi bước 12° thay vì 6°.
+- **Tắt màn hình / chuyển tab**: giữ màn hình sáng khi đang đi (Wake Lock); quay lại thì nới vị trí theo thời gian đã mất.
+- **Mô phỏng trên máy tính**: bật định vị nâng cao rồi bấm Mô phỏng: "người thật" đi đúng tuyến với bước K 0,5 (~0,62 m) và
+  con quay lệch 40°, cảm biến giả có nhiễu đưa vào bộ lọc; chấm trên bản đồ là kết quả của bộ lọc. Không lưu K khi mô phỏng.
+
+## Nhật ký cảm biến và chạy lại
+
+- Cài đặt -> Định vị nâng cao -> **Ghi nhật ký cảm biến**. Ghi gia tốc, hướng, tuyến, mốc (kèm hướng ban đầu), GPS, đổi cách cầm,
+  ước lượng; giữ trong bộ nhớ trang (tối đa 400 000 mục ~ 40 phút). **Tải về** ra JSON (kèm mạng lối đi).
+- Quét QR bằng nút **Quét QR trong app** (mở link QR bằng app camera sẽ tải lại trang và mất nhật ký). Mỗi lần quét là một
+  điểm đo: sai số = vị trí bộ lọc đang tin ngay trước khi QR sửa lại.
+- Chạy lại: `PF_LOG=nhat-ky.json npx vitest run test/positioning.eval.test.ts` (trong `packages/core`), thử tham số bằng
+  `PF_OPTS='{"corridorSigma":1.5}'`. `replayPositioningLog` (positioningLog.ts) đi đúng chuỗi xử lý của app, cùng seed,
+  và tính luôn cách cũ (mỗi bước cộng stepLength dọc tuyến từ mốc trước) trên cùng lần đi để so sánh.
 
 ## Mã nguồn
 
 | Tệp | Nội dung |
 |---|---|
-| `packages/core/src/positioning.ts` | `WeinbergStepDetector`, `headingFromOrientation`, `buildWalkwayIndex` (lưới 10 m), `ParticleFilter` (seed cố định được) |
+| `packages/core/src/positioning.ts` | `WeinbergStepDetector`, `StepGate`, `PostureMonitor`, `StrideCalibrator`, `headingFromOrientation`, `buildWalkwayIndex` (lưới 10 m), `ParticleFilter` (seed cố định được) |
+| `packages/core/src/positioningLog.ts` | định dạng nhật ký, `replayPositioningLog` |
+| `Front-End/src/lib/positioningLog.ts` | ghi nhật ký trong bộ nhớ, tải về JSON |
 | `packages/core/src/trip.ts` | `pdrTripUpdate`, nguồn vị trí `"pdr"` |
 | `packages/core/src/geo.ts` | `fromLocalMeters` |
 | `Front-End/src/lib/sensors.ts` | `usePdrSensors` (gia tốc + hướng con quay), `useWakeLock` |
@@ -50,10 +84,11 @@ Bộ lọc hạt giữ cùng lúc ~400 **giả thuyết**, mỗi hạt = `{ x, y
 Rẽ nhầm (lệch tuyến ≥ 25 m): nhận ra 19/32 lần.
 
 **Giới hạn**: số liệu mô phỏng, chưa đo bằng điện thoại thật. Lưới lối đi tự sinh của sân bay dày (nhiều nét song song)
-nên khi đi tự do không có tuyến, bộ lọc dễ bám nhầm; cần mốc QR. Chưa ghi log cảm biến để chạy lại.
+nên khi đi tự do không có tuyến, bộ lọc dễ bám nhầm; cần mốc QR. Chỉ chạy trong lúc chỉ đường (màn "Bạn đang ở đâu?" chưa dùng).
+Đổi tầng vẫn xác nhận tay; đi thang cuốn không có bước chân.
 
 ## Việc tiếp theo
 
-- Ghi log cảm biến + nút đánh dấu điểm thật, chạy lại log trong Vitest (cùng seed) để tinh chỉnh tham số.
+- Đi thật có ghi nhật ký, chạy lại để tinh chỉnh tham số (corridorSigma, routeSigma, nhiễu hướng, ngưỡng rẽ nhầm…).
 - Đo thật ở IUH: so cách cũ / Weinberg / bộ lọc hạt / + mốc quy trình (thí nghiệm A–D cho báo cáo).
 - Nhận ra rẽ nhầm tốt hơn; đổi tầng tự động; beacon hoặc ảnh camera chỉ là thêm một loại mốc (`observe`).

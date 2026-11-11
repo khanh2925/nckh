@@ -10,6 +10,7 @@ export * from "./venueModel";
 export * from "./qr";
 export * from "./pdr";
 export * from "./positioning";
+export * from "./positioningLog";
 export * from "./trip";
 export * from "./journey";
 export * from "./api";

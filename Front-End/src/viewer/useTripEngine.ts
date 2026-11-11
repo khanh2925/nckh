@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    GPS_USABLE_ACCURACY, LOST_THRESHOLD_METERS, ParticleFilter, angleDiff, bearing, buildWalkwayIndex, isOutdoorFloor, pointAt, positionUncertainty,
-    viewTrip, type HeadingPrior, type LatLng, type PositionEstimate, type Trip, type TripView
+    GPS_USABLE_ACCURACY, LOST_THRESHOLD_METERS, ParticleFilter, StrideCalibrator, angleDiff, bearing, buildWalkwayIndex, isOutdoorFloor, legStart,
+    mergeStride, pointAt, positionUncertainty, viewTrip, weinbergLength, type HeadingPrior, type LatLng, type PositionEstimate, type Trip, type TripView
 } from "@indoor-map/core";
+import { logEvent, setLogVenue } from "../lib/positioningLog";
 import { getSettings, updateSettings, useSettings } from "../lib/settings";
 import {
     hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useCompass, useGps, usePdrSensors, useSensorPermission, useStepDetector,
@@ -16,8 +17,10 @@ import { useVenue } from "./VenueContext";
 // - tới bước mới thì rung + đọc chỉ dẫn (nếu bật trong Cài đặt)
 // - ngoài trời (khuôn viên) GPS đủ tốt thì kéo vị trí theo GPS, bước chân lấp khoảng giữa hai lần đo
 // - ước lượng độ lệch vị trí, quá ngưỡng thì gợi ý quét QR căn lại
+// - ngoài trời, đoạn đi thẳng đều nhịp có GPS tốt thì tự đo độ dài bước (như Apple Watch)
 // Định vị nâng cao (Cài đặt, thử nghiệm): thay "cộng stepLength" bằng bộ lọc hạt (@indoor-map/core/positioning):
 // bước Weinberg + hướng con quay + ràng buộc lối đi; QR, "Đã xong bước này", chọn trên bản đồ, GPS là mốc.
+// Mô phỏng khi bật định vị nâng cao: giả lập cảm biến có nhiễu (bước ngắn hơn giả định, con quay lệch) đưa vào bộ lọc.
 export interface TripEngine {
     trip: Trip;
     view: TripView;
@@ -42,18 +45,22 @@ export interface TripEngine {
     /** Khách đang quay mặt đúng hướng mũi tên: lấy độ lệch la bàn – tuyến làm độ bù. Trả về độ bù mới. */
     alignHeading(): number | null;
     resetHeading(): void;
-    /** "pf" khi định vị nâng cao đang chạy */
+    /** "pf" khi định vị nâng cao đang chạy (cảm biến thật hoặc mô phỏng) */
     positioning: "basic" | "pf";
     /** Ước lượng của bộ lọc hạt (định vị nâng cao) */
     estimate: PositionEstimate | null;
     /** Các giả thuyết để vẽ khi bật "Hiện các giả thuyết" */
     particles: LatLng[] | null;
-    /** Bộ lọc cho rằng khách đã đi khác tuyến (rẽ nhầm) */
+    /** Bộ lọc cho rằng khách đã đi khác tuyến (rẽ nhầm) và chưa đủ chắc để tự lập lại tuyến */
     offRoute: boolean;
 }
 
 const SIM_SPEED = 1.3; // m/s
 const DEFAULT_STEP = 0.7;
+// Mô phỏng định vị nâng cao: "người" có bước Weinberg K 0,5 (≈0,62 m, ngắn hơn giả định 0,7 m) và con quay lệch 40°
+const SIM_K = 0.5;
+const SIM_GYRO_OFFSET = 40;
+const SIM_STEP_MS = 480;
 
 /** Bán kính sai số (m) khi đặt lại bộ lọc theo nguồn của mốc */
 function anchorSigma(source: string, accuracy?: number, previous?: number): number {
@@ -63,6 +70,8 @@ function anchorSigma(source: string, accuracy?: number, previous?: number): numb
     if (source === "pick") return 4;
     return 3; // "place": đang đứng ở một địa điểm ("Đã xong bước này", bắt đầu từ địa điểm)
 }
+
+const gaussian = () => Math.sqrt(-2 * Math.log(Math.max(Math.random(), 1e-12))) * Math.cos(2 * Math.PI * Math.random());
 
 export function useTripEngine(trip: Trip): TripEngine {
     const { advance, gpsUpdate, pdrUpdate, model, slug, position } = useVenue();
@@ -74,15 +83,22 @@ export function useTripEngine(trip: Trip): TripEngine {
     const { heading: compass } = useCompass(!simulating);
 
     const paused = trip.arrived || view.atFloorChange;
-    const pfWanted = settings.positioning === "pf" && hasMotionSensors && !simulating;
+    const pfMode = settings.positioning === "pf";
+    const pfSensors = pfMode && hasMotionSensors && !simulating;
+    const pfSim = pfMode && simulating;
+    const pfWanted = pfSensors || pfSim;
+
+    // Tự đo độ dài bước bằng GPS ngoài trời (dùng cho cả hai cách định vị)
+    const calibratorRef = useRef<StrideCalibrator | null>(null);
 
     // ---------- Cách cơ bản: mỗi bước cộng stepLength dọc tuyến ----------
     const onStep = useCallback(() => {
         if (paused) return;
         setSteps(s => s + 1);
+        (calibratorRef.current ??= new StrideCalibrator()).addStep(Date.now(), null);
         advance(getSettings().stepLength);
     }, [advance, paused]);
-    const basicStepsLive = useStepDetector(!simulating && !pfWanted, onStep);
+    const basicStepsLive = useStepDetector(!simulating && !pfMode, onStep);
 
     // ---------- Định vị nâng cao: bộ lọc hạt ----------
     const walkIndex = useMemo(() => (model ? buildWalkwayIndex(model.walkways) : null), [model]);
@@ -90,34 +106,47 @@ export function useTripEngine(trip: Trip): TripEngine {
     const [estimate, setEstimate] = useState<PositionEstimate | null>(null);
     const [particles, setParticles] = useState<LatLng[] | null>(null);
 
+    useEffect(() => {
+        if (pfWanted && model) setLogVenue(slug, model.walkways);
+    }, [pfWanted, model, slug]);
+
     const publish = useCallback((filter: ParticleFilter) => {
         const est = filter.estimate();
         setEstimate(est);
         setParticles(est && getSettings().showParticles ? filter.sample(est.floorId, 250) : null);
-        // Đã rẽ nhầm thì không kéo chấm theo tuyến nữa; giao diện gợi ý quét QR / chọn lại vị trí
-        if (est && !est.offRoute) {
+        if (!est) return est;
+        logEvent({ t: performance.now(), type: "estimate", floorId: est.floorId, lat: est.lat, lng: est.lng, spread: est.spread });
+        // Rẽ nhầm mà bộ lọc còn mơ hồ: không kéo chấm theo tuyến, giao diện gợi ý quét QR.
+        // Đã chắc (±5 m) thì đưa vị trí vào chuyến đi: lệch xa tuyến sẽ tự lập lại tuyến từ chỗ đó.
+        if (!est.offRoute || est.spread <= 5) {
             pdrUpdate({ floorId: est.floorId, lat: est.lat, lng: est.lng, source: "pdr", accuracy: est.spread, label: "Vị trí ước lượng" });
         }
         return est;
     }, [pdrUpdate]);
 
+    const learn = useCallback((est: PositionEstimate | null) => {
+        // Học bước chân: K đã hội tụ thì lưu để lần sau bắt đầu chính xác hơn
+        if (est && est.steps % 25 === 0 && est.kSpread < 0.06) updateSettings({ weinbergK: Math.round(est.k * 1000) / 1000 });
+    }, []);
+
     const onPdrStep = useCallback((s: PdrStep) => {
         if (paused) return;
         setSteps(n => n + 1);
+        (calibratorRef.current ??= new StrideCalibrator()).addStep(Date.now(), s.amplitude);
         const filter = filterRef.current;
         // Máy không có con quay (không có DeviceOrientation): đi như cách cơ bản
         if (!filter || s.heading == null) {
             advance(getSettings().stepLength);
             return;
         }
-        filter.step(s, s.heading);
-        const est = publish(filter);
-        // Học bước chân: K đã hội tụ thì lưu để lần sau bắt đầu chính xác hơn
-        if (est && est.steps % 25 === 0 && est.kSpread < 0.06) updateSettings({ weinbergK: Math.round(est.k * 1000) / 1000 });
-    }, [paused, advance, publish]);
-    const pdr = usePdrSensors(pfWanted, onPdrStep);
-    const pfLive = pfWanted && pdr.active;
-    const stepsLive = pfWanted ? pdr.active : basicStepsLive;
+        // Hướng la bàn tuyệt đối (một số máy Android) nhiễu hơn trong nhà: nới nhiễu hướng
+        filter.step(s, s.heading, s.absolute ? 12 : undefined);
+        learn(publish(filter));
+    }, [paused, advance, publish, learn]);
+    const onPostureChange = useCallback(() => filterRef.current?.loosen(), []);
+    const pdr = usePdrSensors(pfSensors, onPdrStep, onPostureChange);
+    const pfLive = (pfSensors && pdr.active) || pfSim;
+    const stepsLive = pfSensors ? pdr.active : basicStepsLive;
 
     // GPS chỉ bật trên tầng ngoài trời (không có bản vẽ); trong nhà nó sai vài chục mét
     const legFloor = trip.route.legs[trip.activeLeg]?.floorId;
@@ -125,10 +154,20 @@ export function useTripEngine(trip: Trip): TripEngine {
     const gps = useGps(outdoor && !simulating && !trip.arrived);
     const gpsLive = gps != null && gps.accuracy <= GPS_USABLE_ACCURACY;
     useEffect(() => {
-        if (!gps || gps.accuracy > GPS_USABLE_ACCURACY || paused || legFloor == null) return;
+        if (!gps || legFloor == null) return;
+        // Tự đo độ dài bước: đoạn thẳng, đều nhịp, GPS tốt (≤ 10 m)
+        const result = (calibratorRef.current ??= new StrideCalibrator()).addFix({ lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, t: Date.now() });
+        if (result) {
+            updateSettings(s => {
+                const merged = mergeStride(s.strideCalibration, result);
+                return { strideCalibration: merged, stepLength: Math.round(merged.stepLength * 100) / 100, weinbergK: merged.k ?? s.weinbergK };
+            });
+        }
+        if (gps.accuracy > GPS_USABLE_ACCURACY || paused) return;
         const filter = filterRef.current;
         if (pfWanted && filter?.isStarted) {
             // định vị nâng cao: GPS là một mốc của bộ lọc
+            logEvent({ t: performance.now(), type: "gps", floorId: legFloor, lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy });
             filter.observe({ floorId: legFloor, lat: gps.lat, lng: gps.lng }, Math.max(3, gps.accuracy));
             publish(filter);
             return;
@@ -136,12 +175,40 @@ export function useTripEngine(trip: Trip): TripEngine {
         gpsUpdate({ floorId: legFloor, lat: gps.lat, lng: gps.lng, source: "gps", accuracy: gps.accuracy });
     }, [gps, paused, legFloor, gpsUpdate, pfWanted, publish]);
 
-    // Mô phỏng đi bộ (máy tính / trình diễn): tiến đều SIM_SPEED m/s
+    // Mô phỏng đi bộ (máy tính / trình diễn): cách cơ bản tiến đều SIM_SPEED m/s
     useEffect(() => {
-        if (!simulating || paused) return undefined;
+        if (!simulating || pfMode || paused) return undefined;
         const timer = window.setInterval(() => advance(SIM_SPEED / 2), 500);
         return () => window.clearInterval(timer);
-    }, [simulating, paused, advance]);
+    }, [simulating, pfMode, paused, advance]);
+
+    // Mô phỏng định vị nâng cao: một "người thật" đi đúng tuyến (simTruth = mét dọc tuyến),
+    // cảm biến giả có nhiễu đưa vào bộ lọc; chấm trên bản đồ là kết quả của bộ lọc, không phải người thật.
+    const simTruth = useRef(0);
+    const tripRef = useRef(trip);
+    useEffect(() => {
+        tripRef.current = trip;
+    }, [trip]);
+    useEffect(() => {
+        if (!pfSim || paused) return undefined;
+        const timer = window.setInterval(() => {
+            const t = tripRef.current;
+            const filter = filterRef.current;
+            const leg = t.route.legs[t.activeLeg];
+            if (!filter || !leg) return;
+            const legEnd = legStart(t.route, t.activeLeg) + leg.distance;
+            const amplitude = 2.4 * (1 + 0.1 * gaussian());
+            const here = pointAt(t.route, simTruth.current);
+            const ahead = pointAt(t.route, Math.min(legEnd, simTruth.current + 1.5));
+            if (!here || !ahead || simTruth.current >= legEnd) return; // "người thật" đã tới chân thang / nơi đến
+            const trueBearing = here.lat === ahead.lat && here.lng === ahead.lng ? 0 : bearing(here, ahead);
+            simTruth.current = Math.min(legEnd, simTruth.current + weinbergLength(SIM_K, amplitude));
+            setSteps(n => n + 1);
+            filter.step({ amplitude }, trueBearing - SIM_GYRO_OFFSET + 4 * gaussian());
+            learn(publish(filter));
+        }, SIM_STEP_MS);
+        return () => window.clearInterval(timer);
+    }, [pfSim, paused, publish, learn]);
 
     const routeBearing = useMemo(() => {
         const here = view.here;
@@ -164,9 +231,9 @@ export function useTripEngine(trip: Trip): TripEngine {
             : routeBearing != null ? { absolute: routeBearing, spread: 60 } : null;
     }, [heading, routeBearing, simulating]);
 
-    // Đặt lại bộ lọc ở mỗi mốc: bắt đầu chuyến, quét QR / chọn vị trí (position đổi), lập lại tuyến, đổi tầng xong.
-    // Những gì đã học (bước chân, độ lệch hướng) được giữ qua các lần đặt lại.
-    const anchorKey = `${trip.startedAt}|${position?.at ?? 0}|${trip.rerouted}|${trip.activeLeg}`;
+    // Đặt lại bộ lọc ở mỗi mốc: bắt đầu chuyến, quét QR / chọn vị trí (position đổi), lập lại tuyến, đổi tầng xong,
+    // bật / tắt mô phỏng. Những gì đã học (bước chân, độ lệch hướng) được giữ qua các lần đặt lại.
+    const anchorKey = `${trip.startedAt}|${position?.at ?? 0}|${trip.rerouted}|${trip.activeLeg}|${pfSim}`;
     useEffect(() => {
         if (!pfWanted || !walkIndex) {
             filterRef.current = null;
@@ -188,8 +255,16 @@ export function useTripEngine(trip: Trip): TripEngine {
         const fix = position && leg && position.floorId === leg.floorId && (position.at ?? 0) >= trip.startedAt - 5000 ? position : null;
         const here = fix ?? pointAt(trip.route, trip.progress);
         if (!here) return;
-        const sigma = trip.activeLeg > 0 && !fix ? 3 : anchorSigma(fix?.source ?? trip.lastFixSource, fix?.accuracy, previous);
-        filter.reset({ floorId: here.floorId, lat: here.lat, lng: here.lng }, sigma, priorRef.current);
+        const source = trip.activeLeg > 0 && !fix ? "floor" : fix?.source ?? trip.lastFixSource;
+        const sigma = source === "floor" ? 3 : anchorSigma(source, fix?.accuracy, previous);
+        const prior = pfSim ? (routeBearing != null ? { absolute: routeBearing, spread: 60 } : null) : priorRef.current;
+        logEvent({
+            t: performance.now(), type: "route",
+            legs: trip.route.legs.map(l => ({ floorId: l.floorId, points: l.points.map(p => [p.lat, p.lng] as [number, number]) }))
+        });
+        logEvent({ t: performance.now(), type: "anchor", source, floorId: here.floorId, lat: here.lat, lng: here.lng, sigma, prior });
+        filter.reset({ floorId: here.floorId, lat: here.lat, lng: here.lng }, sigma, prior);
+        simTruth.current = trip.progress;
         const est = filter.estimate();
         setEstimate(est);
         setParticles(est && getSettings().showParticles ? filter.sample(est.floorId, 250) : null);
@@ -199,7 +274,7 @@ export function useTripEngine(trip: Trip): TripEngine {
 
     // Màn hình tắt / chuyển tab: trình duyệt ngừng gửi cảm biến, không biết đã đi bao xa -> nới rộng giả thuyết
     useEffect(() => {
-        if (!pfWanted) return undefined;
+        if (!pfSensors) return undefined;
         let hiddenAt: number | null = null;
         const onVisibility = () => {
             if (document.visibilityState === "hidden") {
@@ -212,13 +287,16 @@ export function useTripEngine(trip: Trip): TripEngine {
         };
         document.addEventListener("visibilitychange", onVisibility);
         return () => document.removeEventListener("visibilitychange", onVisibility);
-    }, [pfWanted]);
+    }, [pfSensors]);
 
-    // Rời màn hình: lưu bước chân đã học nếu đã hội tụ
-    useEffect(() => () => {
-        const est = filterRef.current?.estimate();
-        if (est && est.steps >= 20 && est.kSpread < 0.08) updateSettings({ weinbergK: Math.round(est.k * 1000) / 1000 });
-    }, []);
+    // Rời màn hình: lưu bước chân đã học nếu đã hội tụ (mô phỏng thì không, đó không phải bước chân của khách)
+    useEffect(() => {
+        if (!pfSensors) return undefined;
+        return () => {
+            const est = filterRef.current?.estimate();
+            if (est && est.steps >= 20 && est.kSpread < 0.08) updateSettings({ weinbergK: Math.round(est.k * 1000) / 1000 });
+        };
+    }, [pfSensors]);
 
     useWakeLock(!simulating && !trip.arrived);
 
@@ -236,7 +314,7 @@ export function useTripEngine(trip: Trip): TripEngine {
     }, [view.stepIndex, view.atFloorChange, trip.arrived, message, settings.vibrate, settings.voice]);
 
     const pfEstimate = pfLive ? estimate : null;
-    const offRoute = Boolean(pfEstimate?.offRoute);
+    const offRoute = Boolean(pfEstimate?.offRoute && pfEstimate.spread > 5);
     const uncertainty = pfEstimate
         ? Math.max(1.5, pfEstimate.spread)
         : gpsLive ? Math.max(3, gps.accuracy) : positionUncertainty(trip.metersSinceFix, trip.lastFixSource);
@@ -247,7 +325,7 @@ export function useTripEngine(trip: Trip): TripEngine {
             await requestSensorPermission();
         },
         uncertainty,
-        lost: !simulating && (offRoute || uncertainty > LOST_THRESHOLD_METERS + 6),
+        lost: (!simulating || pfSim) && (offRoute || uncertainty > LOST_THRESHOLD_METERS + 6),
         steps,
         headingOffset,
         canAlign,
