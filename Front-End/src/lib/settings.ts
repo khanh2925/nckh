@@ -22,6 +22,8 @@ export interface Settings {
     weinbergK: number | null;
     /** Ghi nhật ký cảm biến khi đi (để chạy lại, tinh chỉnh định vị nâng cao) */
     recordLog: boolean;
+    /** GPS khi chỉ đường: "auto" = chỉ trên bản đồ ngoài trời (không có bản vẽ); "on" = mọi bản đồ; "off" = không dùng */
+    gpsMode: "auto" | "on" | "off";
     /** Độ dài bước tự đo bằng GPS khi đi ngoài trời (như Apple Watch); meters = tổng quãng đã dùng để đo */
     strideCalibration: { stepLength: number; k: number | null; meters: number } | null;
     /** "slug:id" địa điểm đã xem gần đây */
@@ -30,7 +32,7 @@ export interface Settings {
 
 const KEY = "indoor-map.settings.v2";
 const DEFAULTS: Settings = { avoidStairs: false, vibrate: true, voice: false, largeText: false, preferQr: true, stepLength: 0.7, headingOffsets: {},
-    positioning: "basic", showParticles: false, weinbergK: null, recordLog: false, strideCalibration: null, recent: [] };
+    positioning: "basic", showParticles: false, weinbergK: null, recordLog: false, gpsMode: "auto", strideCalibration: null, recent: [] };
 
 function read(): Settings {
     try {

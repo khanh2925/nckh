@@ -17,6 +17,7 @@ import NavigatePage from "./viewer/pages/NavigatePage";
 import { PreviewPage } from "./viewer/pages/MapPage";
 import PermissionPage from "./viewer/pages/PermissionPage";
 import StridePage from "./viewer/pages/StridePage";
+import PathTestPage from "./viewer/pages/PathTestPage";
 import SharePage from "./viewer/pages/SharePage";
 import SharedRoutePage from "./viewer/pages/SharedRoutePage";
 import JourneysPage from "./viewer/pages/JourneysPage";
@@ -44,6 +45,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/scan" element={<GlobalScanPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/stride" element={<StridePage />} />
+                <Route path="/settings/path-test" element={<PathTestPage />} />
                 <Route path="/v/:slug" element={<VenueLayout />}>
                     <Route index element={<VenueInfoPage />} />
                     <Route path="map" element={<MapPage />} />

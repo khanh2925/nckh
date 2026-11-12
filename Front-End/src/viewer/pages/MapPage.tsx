@@ -159,7 +159,9 @@ export default function MapPage({ mode = "explore", landingCode, landingMissing 
     } else {
         bar = (
             <div className="wf-bar">
-                {mode === "landing" && <IconButton kind="map" icon="arrow-left" label="Về bản đồ" to={`/v/${slug}/map?floor=${floorId}`} replace />}
+                {mode === "landing"
+                    ? <IconButton kind="map" icon="arrow-left" label="Về bản đồ" to={`/v/${slug}/map?floor=${floorId}`} replace />
+                    : <IconButton kind="map" icon="arrow-left" label="Về danh sách địa điểm" to="/" />}
                 <Link to={searchTo} role="search" className="wf-field wf-lift"><Lc name="search" size={20} color="var(--ink)" /><span className="wf-ell">Tìm trong {model.venue.name}</span></Link>
                 {mode !== "landing" && <IconButton kind="map" icon="scan-line" label="Quét mã QR định vị" to={`/v/${slug}/scan?then=map`} />}
             </div>
@@ -268,6 +270,7 @@ export default function MapPage({ mode = "explore", landingCode, landingMissing 
                 <div className="wf-side" style={{ top: pick || counts.length > 0 ? 136 : 84 }}>
                     <FloorSeg model={model} floorId={floorId} onPick={setFloor} />
                     {!pick && <IconButton kind="map-sm" icon="locate-fixed" label={position ? "Về vị trí của bạn" : "Bạn đang ở đâu?"} onClick={locate} />}
+                    {!pick && <IconButton kind="map-sm" icon="settings" label="Cài đặt" to="/settings" />}
                 </div>
             </div>
             {sheet}

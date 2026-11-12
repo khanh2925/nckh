@@ -3,7 +3,7 @@ import {
     GPS_USABLE_ACCURACY, LOST_THRESHOLD_METERS, ParticleFilter, StrideCalibrator, angleDiff, bearing, buildWalkwayIndex, isOutdoorFloor, legStart,
     mergeStride, pointAt, positionUncertainty, viewTrip, weinbergLength, type HeadingPrior, type LatLng, type PositionEstimate, type Trip, type TripView
 } from "@indoor-map/core";
-import { logEvent, setLogVenue } from "../lib/positioningLog";
+import { logEvent, setLogVenue, uploadLog } from "../lib/positioningLog";
 import { getSettings, updateSettings, useSettings } from "../lib/settings";
 import {
     hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useCompass, useGps, usePdrSensors, useSensorPermission, useStepDetector,
@@ -148,13 +148,20 @@ export function useTripEngine(trip: Trip): TripEngine {
     const pfLive = (pfSensors && pdr.active) || pfSim;
     const stepsLive = pfSensors ? pdr.active : basicStepsLive;
 
-    // GPS chỉ bật trên tầng ngoài trời (không có bản vẽ); trong nhà nó sai vài chục mét
+    // GPS mặc định chỉ bật trên tầng ngoài trời (không có bản vẽ); trong nhà nó sai vài chục mét.
+    // Cài đặt có thể ép bật ("on", để thử ngoài trời trên bản đồ có bản vẽ) hoặc tắt hẳn ("off").
+    // Đang ghi nhật ký thì vẫn đọc GPS để ghi lại làm mốc đối chiếu, dù không dùng để định vị.
     const legFloor = trip.route.legs[trip.activeLeg]?.floorId;
     const outdoor = legFloor != null && isOutdoorFloor(model?.floorsById.get(legFloor));
-    const gps = useGps(outdoor && !simulating && !trip.arrived);
-    const gpsLive = gps != null && gps.accuracy <= GPS_USABLE_ACCURACY;
+    const gpsUse = settings.gpsMode === "on" || (settings.gpsMode !== "off" && outdoor);
+    const gps = useGps((gpsUse || settings.recordLog) && !simulating && !trip.arrived);
+    const gpsLive = gpsUse && gps != null && gps.accuracy <= GPS_USABLE_ACCURACY;
     useEffect(() => {
         if (!gps || legFloor == null) return;
+        if (!gpsUse) {
+            logEvent({ t: performance.now(), type: "gps-ref", lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy });
+            return;
+        }
         // Tự đo độ dài bước: đoạn thẳng, đều nhịp, GPS tốt (≤ 10 m)
         const result = (calibratorRef.current ??= new StrideCalibrator()).addFix({ lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, t: Date.now() });
         if (result) {
@@ -173,7 +180,12 @@ export function useTripEngine(trip: Trip): TripEngine {
             return;
         }
         gpsUpdate({ floorId: legFloor, lat: gps.lat, lng: gps.lng, source: "gps", accuracy: gps.accuracy });
-    }, [gps, paused, legFloor, gpsUpdate, pfWanted, publish]);
+    }, [gps, gpsUse, paused, legFloor, gpsUpdate, pfWanted, publish]);
+
+    // Tới nơi mà đang ghi nhật ký: gửi ngay về máy, khỏi đợi lượt gửi 30 giây
+    useEffect(() => {
+        if (trip.arrived && settings.recordLog) void uploadLog();
+    }, [trip.arrived, settings.recordLog]);
 
     // Mô phỏng đi bộ (máy tính / trình diễn): cách cơ bản tiến đều SIM_SPEED m/s
     useEffect(() => {

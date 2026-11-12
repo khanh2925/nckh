@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/data";
 import { hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useSensorPermission } from "../../lib/sensors";
 import { updateSettings, useSettings } from "../../lib/settings";
-import { clearLog, downloadLog, useLogSize } from "../../lib/positioningLog";
-import { Row, Toggle, TopBar } from "../components/ui";
+import { clearLog, downloadLog, lastLogUpload, uploadLog, useLogSize } from "../../lib/positioningLog";
+import { Row, Segmented, Toggle, TopBar } from "../components/ui";
 import { decimal } from "../format";
 
 function Group({ id, title, children }: { id: string; title: string; children: ReactNode }) {
@@ -52,9 +52,16 @@ export default function SettingsPage() {
                     <Row title="Chiều dài bước" sub={`${decimal(s.stepLength)} m mỗi bước`} to="/settings/stride" trailing={<span className="wf-t15 wf-row-val">Đo lại</span>} chevron />
                     <Row title="Căn hướng la bàn" sub={aligned ? `Đã căn ở ${aligned} địa điểm` : "Chưa căn, căn trong lúc đang đi"}
                         trailing={aligned ? <button type="button" className="wf-link wf-t15" onClick={() => updateSettings({ headingOffsets: {} })}>Xoá</button> : undefined} />
+                    <Row title="Thử vẽ đường đi" sub="Đi một vòng kín, xem cảm biến vẽ lại có khép không" to="/settings/path-test" chevron />
                     <SwitchRow id="s-pf" title="Định vị nâng cao (thử nghiệm)"
                         sub="Bước chân + con quay + lối đi đã vẽ: tự học bước chân, tự sửa sai số qua khúc cua"
                         checked={s.positioning === "pf"} onChange={v => updateSettings({ positioning: v ? "pf" : "basic" })} />
+                    <div className="wf-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                        <span className="wf-row-text"><span className="wf-t17">GPS khi chỉ đường</span>
+                            <span className="wf-t13">Tự động: chỉ ở bản đồ ngoài trời. Bật: cả bản đồ có bản vẽ, để thử ngoài trời</span></span>
+                        <Segmented label="GPS khi chỉ đường" value={s.gpsMode} onChange={v => updateSettings({ gpsMode: v })}
+                            options={[{ value: "auto", label: "Tự động" }, { value: "on", label: "Bật" }, { value: "off", label: "Tắt" }]} />
+                    </div>
                     {s.positioning === "pf" && (
                         <SwitchRow id="s-particles" title="Hiện các giả thuyết trên bản đồ" sub="Chấm nhỏ màu xanh, dùng khi đi thử"
                             checked={s.showParticles} onChange={v => updateSettings({ showParticles: v })} />
@@ -64,9 +71,10 @@ export default function SettingsPage() {
                             checked={s.recordLog} onChange={v => updateSettings({ recordLog: v })} />
                     )}
                     {logSize > 0 && (
-                        <Row title="Nhật ký cảm biến" sub={`${logSize.toLocaleString("vi-VN")} mục trong bộ nhớ`}
+                        <Row title="Nhật ký cảm biến" sub={`${logSize.toLocaleString("vi-VN")} mục trong bộ nhớ${lastLogUpload() ? (lastLogUpload()!.ok ? ", đã gửi về máy" : ", chưa gửi được") : ""}`}
                             trailing={
                                 <span className="wf-row-val">
+                                    <button type="button" className="wf-link wf-t15" onClick={() => void uploadLog()}>Gửi về máy</button>{" · "}
                                     <button type="button" className="wf-link wf-t15" onClick={downloadLog}>Tải về</button>{" · "}
                                     <button type="button" className="wf-link wf-t15" onClick={clearLog}>Xoá</button>
                                 </span>

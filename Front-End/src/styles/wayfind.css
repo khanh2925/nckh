@@ -227,6 +227,9 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
     font-size: calc(17px * var(--fs)); font-weight: 600; color: var(--ink); text-align: left; cursor: pointer; padding: 0; text-decoration: none; flex-shrink: 0;
 }
 .wf-mi.is-danger { color: var(--danger); border-bottom: 0; }
+/* ".wf-screen button { font: inherit }" mạnh hơn .wf-mi: dòng menu là <button> bị nhạt hơn dòng là <a> */
+.wf-screen button.wf-mi { font-size: calc(17px * var(--fs)); font-weight: 600; }
+.wf-screen button.wf-mi.is-danger { color: var(--danger); }
 .wf-floorset { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* ---------- bản đồ Leaflet ---------- */
@@ -318,7 +321,11 @@ textarea.wf-input { height: auto; min-height: 104px; padding: 16px; resize: none
 .wf-pill { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; box-sizing: border-box; min-height: 44px; padding: 8px 16px; border-radius: 999px; background: var(--graphite); color: var(--surface); font-size: calc(15px * var(--fs)); font-weight: 600; }
 .wf-pill.is-light { background: var(--surface); color: var(--ink); }
 .wf-ar-tip { position: absolute; z-index: 4; left: 16px; right: 16px; bottom: 40px; display: flex; justify-content: center; }
-.wf-ar-mini { width: 96px; height: 96px; border-radius: 16px; overflow: hidden; flex-shrink: 0; display: block; }
+.wf-ar-floor { flex-direction: column; }
+.wf-ar-dist { margin-top: -24px; padding: 4px 14px; border-radius: 999px; background: var(--graphite); color: var(--surface); font-size: calc(22px * var(--fs)); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* bản đồ nhỏ góc dưới phải, nằm trên hình camera */
+.wf-ar-mini { position: absolute; z-index: 4; right: 16px; bottom: 100px; width: 112px; height: 112px; border-radius: 16px; overflow: hidden; display: block; border: 3px solid var(--surface); box-shadow: 0 2px 8px color-mix(in srgb, var(--graphite) 40%, transparent); }
+.wf-ar-mini .wf-map { pointer-events: none; }
 
 /* ---------- chờ / khung xương ---------- */
 .wf-skel { background: var(--surface-2); border-radius: 999px; }

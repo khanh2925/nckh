@@ -90,6 +90,16 @@ Front-End/
    ít hơn sai số; lệch tuyến > 25 m thì lập lại tuyến), bước chân lấp khoảng giữa hai lần đo. Tầng có bản vẽ (trong nhà)
    không bật GPS. Ví dụ: địa điểm `iuh` (khuôn viên IUH, một tầng "Mặt đất", điểm loại `building` / `campus_gate` nhóm `campus`).
 
+## Thử nghiệm định vị ngoài thực địa
+
+- **Đổi nhanh khi đang đi** (menu Thêm của màn Đang đi): Định vị nâng cao, GPS (`gpsMode`: Tự động = chỉ bản đồ không có bản vẽ / Bật = cả bản đồ có bản vẽ / Tắt), Ghi nhật ký cảm biến, Gửi nhật ký về máy.
+- **Nhật ký gửi về máy chạy `npm run dev`**: `lib/positioningLog.ts` POST `/__field-log` (plugin `fieldLogs` trong `vite.config.ts`) → `Front-End/.field-logs/<id>.json` (git bỏ qua). Tự gửi mỗi 30 giây khi đang ghi và khi tới nơi. Bản build tĩnh không có đường này, vẫn còn nút Tải về.
+  Đang ghi mà không dùng GPS thì GPS vẫn được ghi dạng `gps-ref` để đối chiếu.
+- **Thử vẽ đường đi** (`/settings/path-test`): cộng dồn bước Weinberg + hướng con quay, không có bản đồ; đi một vòng kín để xem sai số khép vòng.
+- **Màn Đang đi**: zoom ban đầu theo độ dài tuyến (tuyến ngắn xem gần), sau đó giữ mức zoom khách tự chỉnh (`focus.follow`).
+- **Camera**: mũi tên đặc trên sàn, số mét tới lượt kế tiếp, bản đồ nhỏ góc dưới phải (bấm để về 2D).
+- Màn bản đồ của địa điểm có nút về danh sách địa điểm và nút Cài đặt.
+
 ## Quy trình (đi theo nhiều bước)
 
 `/v/:slug/journeys` liệt kê quy trình đã công khai (`model.journeys`). Chọn một quy trình:

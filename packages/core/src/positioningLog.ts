@@ -14,6 +14,8 @@ export type PositioningLogEvent =
     /** Mốc đặt lại vị trí: bắt đầu chuyến, quét QR, "Đã xong bước này", chọn trên bản đồ, đổi tầng */
     | { t: number; type: "anchor"; source: string; floorId: number; lat: number; lng: number; sigma: number; prior?: { absolute: number; spread: number } | null }
     | { t: number; type: "gps"; floorId: number; lat: number; lng: number; accuracy: number }
+    /** GPS chỉ ghi lại để đối chiếu (không đưa vào bộ lọc), ví dụ khi tắt GPS mà vẫn ghi nhật ký ngoài trời */
+    | { t: number; type: "gps-ref"; lat: number; lng: number; accuracy: number }
     | { t: number; type: "posture" }
     /** Ước lượng app đã tính lúc đi (để so với lúc chạy lại) */
     | { t: number; type: "estimate"; floorId: number; lat: number; lng: number; spread: number };

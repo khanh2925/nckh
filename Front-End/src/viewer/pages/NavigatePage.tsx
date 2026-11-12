@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { formatMeters, isStepSkipped, planJourney, searchPlaces, type Trip } from "@indoor-map/core";
 import Lc from "../../design/Lc";
-import { getSettings } from "../../lib/settings";
+import { getSettings, updateSettings, useSettings } from "../../lib/settings";
+import { uploadLog, useLogSize } from "../../lib/positioningLog";
 import { useModel, useVenue } from "../VenueContext";
 import { useTripEngine, canSimulateByDefault, type TripEngine } from "../useTripEngine";
 import { useJourneyRun } from "../journeyRun";
@@ -66,8 +67,13 @@ export function TripMenu({ engine, open, onClose, onAlign, showSimulate }: {
     const { slug, endTrip } = useVenue();
     const navigate = useNavigate();
     const [confirm, setConfirm] = useState(false);
+    const settings = useSettings();
+    const logSize = useLogSize();
+    const [sent, setSent] = useState<string | null>(null);
     const { trip, view } = engine;
     const here = view.here;
+    const GPS_LABEL = { auto: "Tự động", on: "Bật", off: "Tắt" } as const;
+    const NEXT_GPS = { auto: "on", on: "off", off: "auto" } as const;
     if (!open && !confirm) return null;
     const close = () => {
         setConfirm(false);
@@ -98,6 +104,22 @@ export function TripMenu({ engine, open, onClose, onAlign, showSimulate }: {
                         </button>
                     )}
                     <Link role="menuitem" className="wf-mi" to={`/v/${slug}/map?pick=position&floor=${here?.floorId ?? trip.to.floorId}&return=go`}><Lc name="map-pin" size={20} />Tôi không ở chỗ này</Link>
+                    {/* Đổi nhanh khi đi thử, không phải vào Cài đặt */}
+                    <button role="menuitem" type="button" className="wf-mi" onClick={() => updateSettings({ positioning: settings.positioning === "pf" ? "basic" : "pf" })}>
+                        <Lc name="footprints" size={20} /><span style={{ flex: 1 }}>Định vị nâng cao</span><span className="wf-t15 wf-muted">{settings.positioning === "pf" ? "Bật" : "Tắt"}</span>
+                    </button>
+                    <button role="menuitem" type="button" className="wf-mi" onClick={() => updateSettings({ gpsMode: NEXT_GPS[settings.gpsMode] })}>
+                        <Lc name="locate-fixed" size={20} /><span style={{ flex: 1 }}>GPS</span><span className="wf-t15 wf-muted">{GPS_LABEL[settings.gpsMode]}</span>
+                    </button>
+                    <button role="menuitem" type="button" className="wf-mi"
+                        onClick={() => updateSettings(s => (s.recordLog ? { recordLog: false } : { recordLog: true, positioning: "pf" }))}>
+                        <Lc name="file-text" size={20} /><span style={{ flex: 1 }}>Ghi nhật ký cảm biến</span><span className="wf-t15 wf-muted">{settings.recordLog ? "Bật" : "Tắt"}</span>
+                    </button>
+                    {logSize > 0 && (
+                        <button role="menuitem" type="button" className="wf-mi" onClick={() => { setSent("Đang gửi…"); void uploadLog().then(ok => setSent(ok ? "Đã gửi" : "Không gửi được, dùng Tải về trong Cài đặt")); }}>
+                            <Lc name="upload" size={20} /><span style={{ flex: 1 }}>Gửi nhật ký về máy</span><span className="wf-t15 wf-muted">{sent ?? `${logSize.toLocaleString("vi-VN")} mục`}</span>
+                        </button>
+                    )}
                     <Link role="menuitem" className="wf-mi" to="/settings"><Lc name="settings" size={20} />Cài đặt chỉ đường</Link>
                     <Link role="menuitem" className="wf-mi" to={`/v/${slug}/report`}><Lc name="flag" size={20} />Báo sai đường</Link>
                     <button role="menuitem" type="button" className="wf-mi is-danger" onClick={() => setConfirm(true)}><Lc name="x" size={20} />Kết thúc chỉ đường…</button>
@@ -135,7 +157,7 @@ function TwoD({ engine }: { engine: TripEngine }) {
             <div className="wf-maparea">
                 <FloorMap model={model} floorId={floorId} route={trip.route} activeLeg={trip.activeLeg} destination={trip.to}
                     user={here} accuracy={engine.uncertainty} heading={engine.heading} headingUp={headingUp && engine.heading != null}
-                    particles={engine.particles} focus={here ? { lat: here.lat, lng: here.lng, zoom: 20 } : "floor"} />
+                    particles={engine.particles} focus={here ? { lat: here.lat, lng: here.lng, zoom: followZoom(trip.route.distance), follow: true } : "floor"} />
                 <Hud glyph={stepIcon(next?.kind)} num={Math.round(view.toNext)} unit="m" text={next?.title ?? "Đi thẳng"} />
                 <div className="wf-float-chip" style={{ top: 136 }}>
                     {notice ? <span className="wf-chip wf-lift" role="status"><Lc name="check" size={20} /><span>{notice}</span></span> : <TripStatusChip engine={engine} slug={slug} then="go" />}
@@ -197,6 +219,9 @@ function TwoD({ engine }: { engine: TripEngine }) {
         </div>
     );
 }
+
+// Mức zoom lúc bắt đầu đi: tuyến ngắn (căn hộ, hành lang) xem gần hơn; sau đó giữ mức khách tự phóng to/thu nhỏ
+const followZoom = (meters: number) => (meters < 30 ? 21.75 : meters < 80 ? 21 : 20);
 
 const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 

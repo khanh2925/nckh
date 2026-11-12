@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { angleDiff, positionUncertainty, type Trip } from "@indoor-map/core";
 import Lc from "../../design/Lc";
 import { cameraErrorMessage, openRearCamera, stopStream } from "../../lib/camera";
-import { useVenue } from "../VenueContext";
+import { useModel, useVenue } from "../VenueContext";
+import FloorMap from "../components/FloorMap";
 import { useTripEngine } from "../useTripEngine";
 import { Button, Hud, IconButton, Progress, Row, Sheet } from "../components/ui";
 import { clean, minutesOf, stepIcon } from "../format";
 import { TripMenu, TripStatusChip } from "./NavigatePage";
 
 // Chỉ đường bằng camera (AR-lite, thử nghiệm):
-// - hình nền = camera sau; mũi tên vàng "nằm trên sàn" = hướng đoạn tuyến phía trước − hướng điện thoại (la bàn)
+// - hình nền = camera sau; mũi tên đặc "nằm trên sàn" = hướng đoạn tuyến phía trước − hướng điện thoại (la bàn),
+//   kèm số mét tới lượt kế tiếp; góc dưới có bản đồ nhỏ xoay theo hướng đi (bấm để về 2D)
 // - vị trí tiến theo bước chân; căn lại bằng mã QR. Chưa có nhận diện cảnh (ghi rõ "Chưa khả dụng").
 export default function CameraPage() {
     const { trip, slug } = useVenue();
@@ -21,6 +23,7 @@ export default function CameraPage() {
 
 function CameraNav({ trip }: { trip: Trip }) {
     const { slug } = useVenue();
+    const model = useModel();
     const navigate = useNavigate();
     const engine = useTripEngine(trip);
     const { view } = engine;
@@ -77,10 +80,20 @@ function CameraNav({ trip }: { trip: Trip }) {
                     <div className="wf-ar-floor" aria-hidden="true">
                         {relative != null && (
                             <div className="wf-ar-arrow" style={{ transform: `rotateX(58deg) rotateZ(${relative}deg)` }}>
-                                <Lc name="arrow-up" size={180} stroke={2.6} />
+                                <svg viewBox="0 0 100 160" width="150" height="240">
+                                    <polygon points="50,4 96,60 66,60 66,156 34,156 34,60 4,60" fill="currentColor" stroke="#fff" strokeWidth="5" strokeLinejoin="round" />
+                                </svg>
                             </div>
                         )}
+                        {relative != null && <span className="wf-ar-dist">{Math.round(view.toNext)} m</span>}
                     </div>
+                )}
+                {!lost && (
+                    <Link to={`/v/${slug}/go`} replace className="wf-ar-mini" aria-label="Về bản đồ 2D">
+                        <FloorMap model={model} floorId={here?.floorId ?? trip.route.legs[trip.activeLeg]!.floorId} route={trip.route} activeLeg={trip.activeLeg}
+                            user={here} heading={engine.heading} headingUp={engine.heading != null} compact showMarkers={false}
+                            focus={here ? { lat: here.lat, lng: here.lng, zoom: 20, follow: true } : "floor"} />
+                    </Link>
                 )}
 
                 {lost ? (

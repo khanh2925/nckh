@@ -13,7 +13,8 @@ import { MAP, PLAN_PALETTE, lucideSvg } from "../mapTheme";
 // Leaflet vẽ trong <div>; React chỉ truyền dữ liệu, mỗi lớp vẽ lại khi dữ liệu của nó đổi.
 
 /** "floor" = vừa khít tầng; điểm (+zoom) = bay tới đó; bounds = vừa khít các điểm */
-export type MapFocus = "floor" | (LatLng & { zoom?: number }) | { bounds: LatLng[] } | null;
+/** follow: bám theo một điểm đang di chuyển; zoom chỉ áp dụng lần đầu, sau đó giữ mức zoom khách tự chỉnh */
+export type MapFocus = "floor" | (LatLng & { zoom?: number; follow?: boolean }) | { bounds: LatLng[] } | null;
 
 interface FloorMapProps {
     model: VenueModel;
@@ -331,6 +332,7 @@ export default function FloorMap({
         : focus && "bounds" in focus
             ? `b:${focus.bounds.map(p => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`).join(";")}`
             : focus ? `${focus.lat.toFixed(6)},${focus.lng.toFixed(6)},${focus.zoom ?? ""}` : null;
+    const followed = useRef(false);
     useEffect(() => {
         const map = mapRef.current;
         if (!ready || !map || !focusKey || !focus) return;
@@ -345,7 +347,9 @@ export default function FloorMap({
         } else if ("bounds" in focus) {
             if (focus.bounds.length) map.fitBounds(L.latLngBounds(focus.bounds.map(p => L.latLng(p.lat, p.lng))), { paddingTopLeft: padTL, paddingBottomRight: padBR, maxZoom: 21, animate: false });
         } else {
-            map.setView([focus.lat, focus.lng], focus.zoom ?? Math.max(map.getZoom(), 19), { animate: !compact });
+            const zoom = focus.follow && followed.current ? map.getZoom() : focus.zoom ?? Math.max(map.getZoom(), 19);
+            followed.current = Boolean(focus.follow);
+            map.setView([focus.lat, focus.lng], zoom, { animate: !compact });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ready, focusKey]);

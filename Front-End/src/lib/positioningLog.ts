@@ -44,6 +44,7 @@ export function logEvent(event: PositioningLogEvent): void {
 export function clearLog(): void {
     events = [];
     startedAt = "";
+    uploadedCount = 0;
     notify(true);
 }
 
@@ -57,13 +58,50 @@ export function useLogSize(): number {
     );
 }
 
-/** Tải nhật ký ra tệp JSON */
-export function downloadLog(): void {
+function currentLog(): PositioningLog {
     const s = getSettings();
-    const log: PositioningLog = {
+    return {
         version: 1, venue, startedAt, device: navigator.userAgent,
         settings: { stepLength: s.stepLength, weinbergK: s.weinbergK }, walkways, events
     };
+}
+
+// Gửi nhật ký về máy đang chạy "npm run dev" (vite.config.ts lưu vào Front-End/.field-logs/), để người phân tích
+// đọc ngay mà khách không phải tải tệp rồi gửi tay. Mỗi lần ghi là một tệp, gửi lại thì ghi đè tệp đó.
+// Bản build tĩnh không có đường /__field-log: báo không gửi được, vẫn còn nút Tải về.
+let uploadedCount = 0;
+let uploading: Promise<boolean> | null = null;
+let lastUpload: { at: number; ok: boolean } | null = null;
+
+export function uploadLog(): Promise<boolean> {
+    if (!events.length) return Promise.resolve(false);
+    if (uploading) return uploading;
+    const count = events.length;
+    const id = `${(startedAt || new Date().toISOString()).slice(0, 19).replace(/[:T]/g, "-")}-${venue || "dia-diem"}`;
+    uploading = fetch(`/__field-log?id=${encodeURIComponent(id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(currentLog()) })
+        .then(r => r.ok)
+        .catch(() => false)
+        .then(ok => {
+            if (ok) uploadedCount = count;
+            lastUpload = { at: Date.now(), ok };
+            uploading = null;
+            notify(true);
+            return ok;
+        });
+    return uploading;
+}
+
+/** Lần gửi gần nhất (để hiện "Đã gửi lúc …") */
+export const lastLogUpload = (): { at: number; ok: boolean } | null => lastUpload;
+
+// Đang ghi thì cứ 30 giây gửi phần mới một lần
+setInterval(() => {
+    if (getSettings().recordLog && events.length > uploadedCount + 50) void uploadLog();
+}, 30_000);
+
+/** Tải nhật ký ra tệp JSON */
+export function downloadLog(): void {
+    const log = currentLog();
     const blob = new Blob([JSON.stringify(log)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
