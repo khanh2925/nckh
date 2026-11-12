@@ -15,7 +15,9 @@ export const MAP = {
     /** --m-edge: chữ đậm 34% */
     edge: "#B3B3B3",
     /** --m-hatch */
-    hatch: "#CCCCCC"
+    hatch: "#CCCCCC",
+    /** chấm giả thuyết của định vị nâng cao (màu chủ đạo, mờ) */
+    particle: "#155DFC"
 } as const;
 
 /** Bảng màu mặt bằng: nền trắng, tường đậm, khu tiện ích/thương mại tô xanh nhạt theo màu chủ đạo */

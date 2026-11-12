@@ -5,7 +5,7 @@ import type { Place, VenueModel } from "./venueModel";
 
 // Trạng thái một chuyến đi đang chỉ đường, viết dạng hàm thuần (reducer) để web và React Native dùng chung.
 
-export type PositionSource = "qr" | "pick" | "place" | "sim" | "gps";
+export type PositionSource = "qr" | "pick" | "place" | "sim" | "gps" | "pdr";
 
 export interface Position extends FloorPoint {
     source: PositionSource;
@@ -132,6 +132,34 @@ export function gpsTripUpdate(model: VenueModel, trip: Trip, point: Position, op
     const progress = meters < trip.progress && trip.progress - meters < accuracy ? trip.progress : meters;
     const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 6));
     return { ...trip, progress, metersSinceFix: 0, lastFixSource: "gps", arrived, arrivedAt: arrived ? now : undefined };
+}
+
+/** Lệch khỏi tuyến hơn thế (m) và bộ lọc đã đủ chắc thì coi là đi sai đường, lập lại tuyến */
+export const PDR_OFF_ROUTE = 10;
+
+/**
+ * Cập nhật vị trí từ bộ lọc hạt (bước chân + hướng + lối đi) trong lúc đi; point.accuracy = bán kính sai số của bộ lọc.
+ * Giống GPS: gần tuyến thì đặt vị trí lên tuyến (chỉ trong chặng đang đi, không lùi vì rung nhỏ hơn sai số);
+ * lệch hẳn khỏi tuyến khi bộ lọc đã chắc (khách rẽ nhầm) thì lập lại tuyến từ chỗ đó.
+ */
+export function pdrTripUpdate(model: VenueModel, trip: Trip, point: Position, options: RouteOptions = {}, now = Date.now()): Trip {
+    if (trip.arrived) return trip;
+    const leg = trip.route.legs[trip.activeLeg];
+    if (!leg || point.floorId !== leg.floorId) return trip;
+    const accuracy = Math.max(1, point.accuracy ?? 5);
+    const snap = snapToRoute(trip.route, point);
+    if (!snap) return trip;
+    if (snap.gap > Math.max(PDR_OFF_ROUTE, accuracy * 2.5) && accuracy <= 6) {
+        return fixTripPosition(model, trip, { ...point, source: "pdr", label: point.label ?? "Vị trí ước lượng" }, options);
+    }
+    const start = legStart(trip.route, trip.activeLeg);
+    const end = start + leg.distance;
+    const meters = Math.min(end, Math.max(start, snap.meters));
+    const progress = meters < trip.progress && trip.progress - meters < accuracy ? trip.progress : meters;
+    const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 5));
+    return {
+        ...trip, progress, metersSinceFix: trip.metersSinceFix + Math.max(0, progress - trip.progress), arrived, arrivedAt: arrived ? now : undefined
+    };
 }
 
 export interface TripView {

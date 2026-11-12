@@ -27,6 +27,8 @@ interface FloorMapProps {
     user?: FloorPoint | null;
     /** Bán kính sai số quanh vị trí (m) */
     accuracy?: number | null;
+    /** Các giả thuyết vị trí của định vị nâng cao (chấm nhỏ), để thử nghiệm */
+    particles?: LatLng[] | null;
     /** Hướng của khách, độ từ Bắc */
     heading?: number | null;
     /** Xoay bản đồ theo hướng đi */
@@ -123,11 +125,12 @@ interface Layers {
     route: Leaflet.LayerGroup;
     markers: Leaflet.LayerGroup;
     dest: Leaflet.LayerGroup;
+    particles: Leaflet.LayerGroup;
     user: Leaflet.LayerGroup;
 }
 
 export default function FloorMap({
-    model, floorId, places, selectedId, onSelect, route, activeLeg = 0, user, accuracy = null, heading = null, headingUp = false,
+    model, floorId, places, selectedId, onSelect, route, activeLeg = 0, user, accuracy = null, particles = null, heading = null, headingUp = false,
     destination, focus = null, fitPadding = [80, 40], onCenterChange, compact = false, showMarkers = true, className = ""
 }: FloorMapProps) {
     const container = useRef<HTMLDivElement>(null);
@@ -163,7 +166,8 @@ export default function FloorMap({
 
         layers.current = {
             plan: L.layerGroup().addTo(map), zones: L.layerGroup().addTo(map), route: L.layerGroup().addTo(map),
-            markers: L.layerGroup().addTo(map), dest: L.layerGroup().addTo(map), user: L.layerGroup().addTo(map)
+            markers: L.layerGroup().addTo(map), dest: L.layerGroup().addTo(map), particles: L.layerGroup().addTo(map),
+            user: L.layerGroup().addTo(map)
         };
         map.on("moveend", () => callbacks.current.onCenterChange?.(map.getCenter()));
         const zoomClass = () => {
@@ -310,6 +314,16 @@ export default function FloorMap({
         const ring = accuracy != null ? ringPixels(map, user, accuracy) : 40;
         group.addLayer(L.marker([user.lat, user.lng], { icon: userIcon(angle, ring), interactive: false, zIndexOffset: 3000, keyboard: false }));
     }, [ready, user, heading, accuracy, floorId, viewTick]);
+
+    // 8b. Giả thuyết của định vị nâng cao (khi bật trong Cài đặt)
+    useEffect(() => {
+        const group = layers.current?.particles;
+        if (!ready || !group) return;
+        group.clearLayers();
+        for (const p of particles ?? []) {
+            group.addLayer(L.circleMarker([p.lat, p.lng], { radius: 2, stroke: false, fillColor: MAP.particle, fillOpacity: 0.45, interactive: false }));
+        }
+    }, [ready, particles]);
 
     // 9. Bay tới chỗ cần xem
     const focusKey = focus === "floor"

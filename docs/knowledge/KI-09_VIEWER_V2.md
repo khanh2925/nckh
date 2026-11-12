@@ -83,6 +83,7 @@ Front-End/
 5. **Camera (AR-lite, thử nghiệm)**: mũi tên vẽ trên sàn, góc = hướng đoạn tuyến phía trước − hướng la bàn.
    Chưa có nhận diện cảnh bằng AI (giai đoạn sau: DINOv2/NetVLAD so khớp ảnh mốc do chủ địa điểm chụp).
 6. **Mô phỏng đi bộ** (1,3 m/s): cho máy tính không có cảm biến và khi trình diễn.
+   **Định vị nâng cao (thử nghiệm, bật trong Cài đặt)**: thay "mỗi bước cộng stepLength" bằng bộ lọc hạt theo lối đi — xem [KI-11](KI-11_INDOOR_POSITIONING_PF.md).
 7. **GPS ngoài trời (khuôn viên)**: tầng **không có bản vẽ** được coi là bản đồ ngoài trời (`isOutdoorFloor`), vẽ thẳng
    trên nền OpenStreetMap. Trên tầng đó màn "Bạn đang ở đâu?" có thêm **Dùng GPS**, và lúc đi `useGps` theo dõi GPS:
    sai số ≤ 20 m (`GPS_USABLE_ACCURACY`) thì `gpsTripUpdate` kéo vị trí tới chỗ gần nhất trên tuyến (không lùi khi GPS rung

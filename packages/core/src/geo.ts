@@ -10,6 +10,11 @@ export function toLocalMeters(a: LatLng, b: LatLng): { x: number; y: number } {
     return { x: (b.lng - a.lng) * metersPerLng(a.lat), y: (b.lat - a.lat) * METERS_PER_LAT };
 }
 
+/** Ngược với toLocalMeters: (đông, bắc) tính bằng mét quanh gốc origin -> lat/lng */
+export function fromLocalMeters(origin: LatLng, x: number, y: number): LatLng {
+    return { lat: origin.lat + y / METERS_PER_LAT, lng: origin.lng + x / metersPerLng(origin.lat) };
+}
+
 export function distance(a: LatLng, b: LatLng): number {
     const d = toLocalMeters(a, b);
     return Math.hypot(d.x, d.y);
