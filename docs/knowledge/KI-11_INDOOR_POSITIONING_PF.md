@@ -33,6 +33,10 @@ Bộ lọc hạt giữ cùng lúc ~400 **giả thuyết**, mỗi hạt = `{ x, y
   độ thẳng ≥ 0,92 (chỉ lấy các lần đo cách nhau ≥ 8 m), nhịp bước lệch ≤ 15%; `mergeStride` gộp theo quãng đường
   (giữ tối đa 2 km để vẫn theo kịp). Kết quả cập nhật `stepLength` (cách cơ bản) và `weinbergK` (định vị nâng cao).
 - `StepGate`: chỉ tính bước khi có ≥ 4 bước đều nhịp (lệch ≤ 35%), rồi tính bù cả chuỗi; dừng > 2 s thì phải đều nhịp lại.
+  Thêm (12/11, thử thật ở quán): bước rung nhẹ (biên độ < 2 m/s²) mà máy nghiêng > 12° (phương trọng lực trong hệ máy)
+  là cầm máy xoay trong tay, không phải đi: bỏ và bắt nhịp lại. Dữ liệu thật ở `packages/core/test/fixtures/handling-twist.json`
+  (trước: 15 "bước", sau: ≤ 1). Bỏ túi đi bộ nghiêng nhiều nhưng rung mạnh nên vẫn tính. Chế độ thường (`useStepDetector`)
+  và màn đo bước chân cũng dùng `WeinbergStepDetector` + `StepGate`.
   Lắc máy, đặt máy xuống không thành bước. (Chỉ áp cho định vị nâng cao; cách cơ bản giữ nguyên.)
 - Weinberg đã tự co giãn độ dài bước theo tốc độ (đi nhanh nhấp nhô mạnh hơn), nên chưa cần bảng K theo từng tốc độ.
 

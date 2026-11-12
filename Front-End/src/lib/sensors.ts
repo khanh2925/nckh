@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AdaptiveStepDetector, HeadingFilter, PostureMonitor, StepGate, WeinbergStepDetector, headingFromOrientation, type StepSample } from "@indoor-map/core";
+import { HeadingFilter, PostureMonitor, StepGate, WeinbergStepDetector, headingFromOrientation, type StepSample } from "@indoor-map/core";
 import { isRecording, logEvent } from "./positioningLog";
 
 // Cảm biến trên trình duyệt điện thoại. Thuật toán (đếm bước, làm mượt la bàn) nằm ở @indoor-map/core;
@@ -131,7 +131,9 @@ export function useStepDetector(enabled: boolean, onStep: () => void): boolean {
 
     useEffect(() => {
         if (!enabled || !granted || !("DeviceMotionEvent" in window)) return undefined;
-        const detector = new AdaptiveStepDetector();
+        // Cùng bộ đếm với định vị nâng cao: phải đều nhịp vài bước mới tính, xoay máy trong tay không thành bước
+        const detector = new WeinbergStepDetector();
+        const gate = new StepGate();
         let seen = false;
         const onMotion = (e: DeviceMotionEvent) => {
             const g = e.accelerationIncludingGravity;
@@ -140,7 +142,8 @@ export function useStepDetector(enabled: boolean, onStep: () => void): boolean {
                 seen = true;
                 setActive(true);
             }
-            if (detector.push(g.x, g.y, g.z, e.timeStamp || performance.now())) callback.current();
+            const sample = detector.push(g.x, g.y, g.z, e.timeStamp || performance.now());
+            if (sample) for (let i = gate.push(sample).length; i > 0; i--) callback.current();
         };
         window.addEventListener("devicemotion", onMotion);
         return () => {

@@ -324,3 +324,25 @@ describe("định vị: chạy lại nhật ký cảm biến", () => {
         expect(result.checkpoints[0]!.basicError!).toBeGreaterThan(result.checkpoints[0]!.error);
     });
 });
+
+describe("không tính xoay máy trong tay thành bước", () => {
+    it("dữ liệu thật: xoay máy qua lại 8 giây rồi đặt xuống bàn, không đi bước nào", () => {
+        const { events } = JSON.parse(readFileSync(new URL("./fixtures/handling-twist.json", import.meta.url), "utf8")) as { events: { t: number; x: number; y: number; z: number }[] };
+        const detector = new WeinbergStepDetector();
+        const gate = new StepGate();
+        let steps = 0;
+        for (const e of events) {
+            const sample = detector.push(e.x, e.y, e.z, e.t);
+            if (sample) steps += gate.push(sample).length;
+        }
+        // trước khi sửa: 15 "bước" (StepGate mở sau 4 lần rung đều nhịp rồi nhận hết)
+        expect(steps).toBeLessThanOrEqual(1);
+    });
+
+    it("bước rung đủ mạnh vẫn được tính dù máy nghiêng (bỏ túi)", () => {
+        const gate = new StepGate();
+        let passed = 0;
+        for (let i = 0; i < 8; i++) passed += gate.push({ t: i * 550, amplitude: 4, durationMs: 550, tilt: 20 }).length;
+        expect(passed).toBe(8);
+    });
+});

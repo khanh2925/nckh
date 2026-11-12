@@ -20,6 +20,8 @@ export interface StepSample {
     /** Biên độ độ lớn gia tốc trong bước (m/s², đỉnh − đáy) */
     amplitude: number;
     durationMs: number;
+    /** Máy nghiêng đi bao nhiêu độ trong bước (phương trọng lực trong hệ của máy). Cầm máy đi thì gần như đứng yên. */
+    tilt?: number;
 }
 
 /** Đếm bước (AdaptiveStepDetector) và ghi biên độ gia tốc của từng bước cho Weinberg */
@@ -28,26 +30,43 @@ export class WeinbergStepDetector {
     private min = Infinity;
     private smooth: number | null = null;
     private lastStep: number | null = null;
+    private gravity: [number, number, number] | null = null;
+    private gravityAtStep: [number, number, number] | null = null;
 
     constructor(private readonly detector = new AdaptiveStepDetector()) {}
 
     push(x: number, y: number, z: number, timeMs: number): StepSample | null {
         const magnitude = Math.hypot(x, y, z);
+        // phương trọng lực (lọc thông thấp) để biết máy có bị xoay, nghiêng trong tay không
+        const g = this.gravity;
+        this.gravity = g ? [g[0] + (x - g[0]) * 0.1, g[1] + (y - g[1]) * 0.1, g[2] + (z - g[2]) * 0.1] : [x, y, z];
         // làm mượt rất nhẹ để một gai nhiễu không làm biên độ vọt lên
         this.smooth = this.smooth == null ? magnitude : this.smooth + (magnitude - this.smooth) * 0.5;
         this.max = Math.max(this.max, this.smooth);
         this.min = Math.min(this.min, this.smooth);
         if (!this.detector.push(x, y, z, timeMs)) return null;
+        const now = this.gravity;
+        const before = this.gravityAtStep;
+        this.gravityAtStep = [...now];
         const sample = {
             t: timeMs,
             amplitude: Number.isFinite(this.max - this.min) ? this.max - this.min : 0,
-            durationMs: this.lastStep == null ? 0 : timeMs - this.lastStep
+            durationMs: this.lastStep == null ? 0 : timeMs - this.lastStep,
+            tilt: before ? angleBetween(before, now) : 0
         };
         this.lastStep = timeMs;
         this.max = -Infinity;
         this.min = Infinity;
         return sample;
     }
+}
+
+function angleBetween(a: [number, number, number], b: [number, number, number]): number {
+    const na = Math.hypot(...a);
+    const nb = Math.hypot(...b);
+    if (!na || !nb) return 0;
+    const cos = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (na * nb);
+    return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
 }
 
 /** Độ dài bước Weinberg (m) */
@@ -65,9 +84,23 @@ export class StepGate {
     private open = false;
     private last: number | null = null;
 
-    constructor(private readonly need = 4, private readonly tolerance = 0.35, private readonly maxGapMs = 2000) {}
+    /**
+     * handling: cầm máy xoay qua lại / lật trong tay cũng ra "bước" đều nhịp (thử ở quán 12/11: biên độ 0,5–1,6 m/s²,
+     * máy nghiêng 13–27° mỗi "bước"). Bước rung nhẹ mà máy nghiêng nhiều thì bỏ và bắt nhịp lại từ đầu.
+     * Bỏ túi đi bộ cũng nghiêng nhưng rung mạnh (biên độ lớn) nên vẫn được tính.
+     */
+    constructor(
+        private readonly need = 4, private readonly tolerance = 0.35, private readonly maxGapMs = 2000,
+        private readonly handling = { maxTilt: 12, belowAmplitude: 2 }
+    ) {}
 
     push(step: StepSample): StepSample[] {
+        if (step.tilt != null && step.tilt > this.handling.maxTilt && step.amplitude < this.handling.belowAmplitude) {
+            this.open = false;
+            this.pending = [];
+            this.last = step.t;
+            return [];
+        }
         if (this.last != null && step.t - this.last > this.maxGapMs) {
             this.open = false;
             this.pending = [];
