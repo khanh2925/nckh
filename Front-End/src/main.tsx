@@ -25,6 +25,8 @@ import ReportPage from "./viewer/pages/ReportPage";
 import SettingsPage from "./viewer/pages/SettingsPage";
 import { Loading } from "./viewer/components/ui";
 import consoleRoutes from "./console/routes";
+import ErrorBoundary from "./viewer/components/ErrorBoundary";
+import { initMonitoring } from "./lib/monitoring";
 
 // Tải sau (camera, quét QR có thư viện jsQR; trang Builder/Admin) để trang bản đồ mở nhanh
 const ScanPage = lazy(() => import("./viewer/pages/ScanPage"));
@@ -34,9 +36,13 @@ const CameraPage = lazy(() => import("./viewer/pages/CameraPage"));
 const ComingSoon = lazy(() => import("./portal/ComingSoon"));
 const ConsoleRoot = lazy(() => import("./console/ConsoleRoot"));
 
+// Theo dõi lỗi (Sentry / GlitchTip), chỉ bật khi có VITE_SENTRY_DSN
+initMonitoring();
+
 // Bản đồ các trang. Viewer (khách tham quan) nằm dưới /v/:slug; Builder/Admin làm ở đợt 2.
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
+        <ErrorBoundary>
         <BrowserRouter>
             <Suspense fallback={<div className="wf-screen wf-center"><Loading text="Đang mở…" /></div>}>
             <Routes>
@@ -70,5 +76,6 @@ createRoot(document.getElementById("root")!).render(
             </Routes>
             </Suspense>
         </BrowserRouter>
+        </ErrorBoundary>
     </StrictMode>
 );

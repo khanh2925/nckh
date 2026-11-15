@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
     ParticleFilter, PostureMonitor, StepGate, StrideCalibrator, WeinbergStepDetector, mergeStride, replayPositioningLog, type PositioningLog, bearing, buildVenueModel, buildWalkwayIndex, distance, distanceToWalkway, findRoute, fromLocalMeters,
     headingFromOrientation, isRouteError, offset, pdrTripUpdate, planRoute, startTrip, toLocalMeters, weinbergLength,
+    AnchorCalibrator, GPS_MAX_ADVANCE, JumpMonitor, PDR_MAX_ADVANCE, PlausibilityGate, gpsTripUpdate, snapToRoute,
     type LatLng, type Position, type Route, type VenueMapDto
 } from "../src";
 
@@ -178,22 +179,39 @@ describe("định vị: cập nhật chuyến đi", () => {
     const trip = startTrip(planned, from, to);
 
     it("vị trí ước lượng gần tuyến thì tiến dọc tuyến, rung lùi nhỏ hơn sai số thì không lùi", () => {
-        const ahead = offset(planned.legs[0]!.points[0]!, bearing(planned.legs[0]!.points[0]!, planned.legs[0]!.points[1]!), 0);
-        const p20 = pdrTripUpdate(model, trip, { ...pointAlong(planned, 20), source: "pdr", accuracy: 3 });
+        let p20 = trip;
+        for (let m = 1; m <= 20; m++) p20 = pdrTripUpdate(model, p20, { ...pointAlong(planned, m), source: "pdr", accuracy: 3 });
         expect(p20.progress).toBeGreaterThan(17);
         expect(p20.progress).toBeLessThan(23);
         const back = pdrTripUpdate(model, p20, { ...pointAlong(planned, 18.5), source: "pdr", accuracy: 3 });
         expect(back.progress).toBe(p20.progress);
-        expect(ahead).toBeTruthy();
+    });
+
+    it("ước lượng vọt xa một lần: chấm chỉ tiến một đoạn ngắn rồi đuổi theo, không nhảy cóc", () => {
+        const jumped = pdrTripUpdate(model, trip, { ...pointAlong(planned, 50), source: "pdr", accuracy: 3 });
+        expect(jumped.progress).toBeLessThanOrEqual(PDR_MAX_ADVANCE + 3 + 1e-6);
+        let t = jumped;
+        for (let n = 0; n < 12; n++) t = pdrTripUpdate(model, t, { ...pointAlong(planned, 50), source: "pdr", accuracy: 3 });
+        expect(t.progress).toBeGreaterThan(45);
+        const win = snapToRoute(planned, pointAlong(planned, 50), { from: 0, to: 20 })!;
+        expect(win.meters).toBeLessThanOrEqual(20 + 1e-6);
+    });
+
+    it("GPS chỉ về chỗ xa trên tuyến: chấm tiến tối đa một đoạn mỗi lần", () => {
+        const g = gpsTripUpdate(model, trip, { ...pointAlong(planned, 55), source: "gps", accuracy: 5 });
+        expect(g.progress).toBeLessThanOrEqual(GPS_MAX_ADVANCE + 10 + 1e-6);
     });
 
     it("lệch hẳn khỏi tuyến khi bộ lọc đã chắc (rẽ nhầm) thì lập lại tuyến; còn mơ hồ thì chưa", () => {
         const here = pointAlong(planned, 15);
         const far = { ...offset(here, (bearing(planned.legs[0]!.points[0]!, here) + 90) % 360, 25), floorId: here.floorId };
-        const unsure = pdrTripUpdate(model, trip, { ...far, source: "pdr", accuracy: 12 });
+        const unsure = pdrTripUpdate(model, trip, { ...far, source: "pdr", accuracy: 12 }, { offRoute: true });
         expect(unsure.rerouted).toBe(0);
-        const sure = pdrTripUpdate(model, trip, { ...far, source: "pdr", accuracy: 3 });
-        expect(sure.rerouted + (sure.progress > 0 ? 1 : 0)).toBeGreaterThan(0);
+        // một lần ước lượng lệch đơn lẻ (bộ lọc chưa báo rẽ nhầm): không lập lại tuyến
+        const single = pdrTripUpdate(model, trip, { ...far, source: "pdr", accuracy: 3 });
+        expect(single.rerouted).toBe(0);
+        const sure = pdrTripUpdate(model, trip, { ...far, source: "pdr", accuracy: 3 }, { offRoute: true });
+        expect(sure.rerouted).toBe(1);
     });
 });
 
@@ -322,5 +340,56 @@ describe("định vị: chạy lại nhật ký cảm biến", () => {
         // cách cũ (0,7 m/bước) trên cùng lần đi: người bước ngắn hơn nên lệch nhiều hơn
         expect(result.checkpoints[0]!.basicError).not.toBeNull();
         expect(result.checkpoints[0]!.basicError!).toBeGreaterThan(result.checkpoints[0]!.error);
+    });
+});
+
+describe("định vị: phát hiện và chặn vị trí nhảy", () => {
+    const f = t1f1!.id;
+    const loc = model.locations.find(l => l.floorId === f)!;
+    const start = { lat: loc.lat, lng: loc.lng };
+    const at = (m: number, deg = 90) => ({ floorId: f, ...offset(start, deg, m) });
+
+    it("PlausibilityGate: đi bộ bình thường thì nhận, GPS nhảy 60 m thì bỏ, ba lần liền cùng chỗ mới thì nhận", () => {
+        const gate = new PlausibilityGate();
+        for (let s = 0; s <= 10; s++) expect(gate.check(at(s * 1.4), s * 1000, 5).ok).toBe(true);
+        expect(gate.check(at(14 + 60), 11_000, 5).ok).toBe(false);
+        expect(gate.check(at(15.4), 12_000, 5).ok).toBe(true);
+        expect(gate.check(at(80), 13_000, 5).ok).toBe(false);
+        expect(gate.check(at(81), 14_000, 5).ok).toBe(false);
+        expect(gate.check(at(82), 15_000, 5).ok).toBe(true);
+    });
+
+    it("JumpMonitor: bước chân không phải sự cố; vọt 30 m trong 1 giây là sự cố; QR luôn ghi khoảng sửa", () => {
+        const mon = new JumpMonitor();
+        expect(mon.update(at(0), 0, "step")).toBeNull();
+        expect(mon.update(at(0.7), 500, "step")).toBeNull();
+        const jump = mon.update(at(30.7), 1500, "gps")!;
+        expect(jump.cause).toBe("gps");
+        expect(jump.correction).toBe(false);
+        expect(jump.meters).toBeGreaterThan(29);
+        const fix = mon.update(at(32), 2500, "qr")!;
+        expect(fix.correction).toBe(true);
+        expect(fix.meters).toBeGreaterThan(1);
+    });
+
+    it("AnchorCalibrator: quãng giữa hai QR chia số bước ra độ dài bước và K; ít bước thì bỏ", () => {
+        const cal = new AnchorCalibrator();
+        for (let i = 0; i < 40; i++) cal.addStep(2.6);
+        const r = cal.finish(40 * 0.62)!;
+        expect(r.stepLength).toBeCloseTo(0.62, 2);
+        expect(r.k!).toBeCloseTo(0.62 / Math.pow(2.6, 0.25), 3);
+        for (let i = 0; i < 10; i++) cal.addStep(2.6);
+        expect(cal.finish(6)).toBeNull();
+    });
+
+    it("StepGate: đang đi đều, một bước tới quá sớm (lắc máy) bị bỏ", () => {
+        const gate = new StepGate();
+        const step = (t: number) => gate.push({ t, amplitude: 2.5, durationMs: 500 });
+        let counted = 0;
+        for (let i = 0; i < 6; i++) counted += step(i * 500).length;
+        expect(counted).toBe(6);
+        expect(step(2500 + 180)).toHaveLength(0);
+        expect(gate.rejected).toBe(1);
+        expect(step(3000)).toHaveLength(1);
     });
 });

@@ -109,54 +109,92 @@ export function fixTripPosition(model: VenueModel, trip: Trip, point: Position, 
     };
 }
 
+/** Lập tuyến mới từ chỗ khách đang đứng (đi sai đường), không bám lại tuyến cũ */
+function rerouteFrom(model: VenueModel, trip: Trip, point: Position, options: RouteOptions): Trip {
+    const planned = planRoute(model, point, trip.to, options);
+    if ("error" in planned) return trip;
+    return { ...trip, from: point, route: planned, progress: 0, activeLeg: 0, metersSinceFix: 0, lastFixSource: point.source, rerouted: trip.rerouted + 1, arrived: false };
+}
+
+/**
+ * Cửa sổ bám tuyến quanh chỗ khách đang đứng (mét dọc tuyến, trong chặng đang đi): lùi tối đa back, tiến tối đa ahead.
+ * Vị trí mới chỉ được chọn trong cửa sổ này, nên chấm không nhảy sang nhánh khác của tuyến (tuyến vòng chữ U, hành lang
+ * song song) và nếu ước lượng vọt xa thì chấm đuổi theo từng đoạn ngắn thay vì nhảy một lần.
+ */
+/**
+ * Chỗ trên tuyến cho một vị trí đo được: trong cửa sổ quanh chỗ đang đứng nếu vị trí nằm sát phần tuyến đó;
+ * không thì lấy chỗ gần nhất trên cả tuyến nhưng kẹp vào cửa sổ (đuổi theo từng đoạn, không nhảy cóc).
+ */
+function metersInWindow(route: Route, point: FloorPoint, anywhere: { gap: number; meters: number }, win: { from: number; to: number }, accuracy: number): number {
+    const near = snapToRoute(route, point, win);
+    if (near && near.gap <= Math.max(3, accuracy * 1.5)) return near.meters;
+    return Math.min(win.to, Math.max(win.from, anywhere.meters));
+}
+
+function routeWindow(trip: Trip, back: number, ahead: number): { from: number; to: number; start: number; end: number } | null {
+    const leg = trip.route.legs[trip.activeLeg];
+    if (!leg) return null;
+    const start = legStart(trip.route, trip.activeLeg);
+    const end = start + leg.distance;
+    return { from: Math.max(start, trip.progress - back), to: Math.min(end, trip.progress + ahead), start, end };
+}
+
 /** GPS chỉ dùng được ngoài trời; sai số lớn hơn thế (trong nhà, sát toà cao) thì bỏ qua, để bước chân lo */
 export const GPS_USABLE_ACCURACY = 20;
 
+/** Mỗi lần GPS cập nhật, chấm tiến dọc tuyến tối đa chừng này (m), cộng thêm 2 lần sai số GPS */
+export const GPS_MAX_ADVANCE = 15;
+
 /**
  * Cập nhật vị trí từ GPS trong lúc đi (khuôn viên, ngoài trời).
- * Gần tuyến thì kéo vị trí tới chỗ đó trên tuyến (chỉ trong chặng đang đi, không lùi vì GPS rung);
- * lệch hẳn khỏi tuyến thì lập lại tuyến.
+ * Gần tuyến thì kéo vị trí tới chỗ đó trên tuyến, chỉ trong cửa sổ quanh chỗ đang đứng (không nhảy cóc, không lùi vì GPS rung);
+ * lệch hẳn khỏi tuyến thì lập lại tuyến. GPS nhảy bất thường đã bị loại trước đó (PlausibilityGate).
  */
 export function gpsTripUpdate(model: VenueModel, trip: Trip, point: Position, options: RouteOptions = {}, now = Date.now()): Trip {
     const accuracy = point.accuracy ?? GPS_USABLE_ACCURACY;
     if (trip.arrived || accuracy > GPS_USABLE_ACCURACY) return trip;
-    const snap = snapToRoute(trip.route, point);
-    if (!snap) return trip;
-    if (snap.gap > Math.max(25, accuracy * 2)) return fixTripPosition(model, trip, point, options);
-    const leg = trip.route.legs[trip.activeLeg];
-    if (!leg) return trip;
-    const start = legStart(trip.route, trip.activeLeg);
-    const end = start + leg.distance;
-    const meters = Math.min(end, Math.max(start, snap.meters));
+    const anywhere = snapToRoute(trip.route, point);
+    if (!anywhere) return trip;
+    if (anywhere.gap > Math.max(25, accuracy * 2)) return fixTripPosition(model, trip, point, options);
+    const win = routeWindow(trip, accuracy * 2, GPS_MAX_ADVANCE + accuracy * 2);
+    if (!win) return trip;
+    const meters = Math.min(win.end, Math.max(win.start, metersInWindow(trip.route, point, anywhere, win, accuracy)));
     // GPS rung qua lại vài mét: chỉ lùi khi lùi rõ ràng (hơn sai số)
     const progress = meters < trip.progress && trip.progress - meters < accuracy ? trip.progress : meters;
-    const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 6));
+    const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= win.end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 6));
     return { ...trip, progress, metersSinceFix: 0, lastFixSource: "gps", arrived, arrivedAt: arrived ? now : undefined };
 }
 
 /** Lệch khỏi tuyến hơn thế (m) và bộ lọc đã đủ chắc thì coi là đi sai đường, lập lại tuyến */
 export const PDR_OFF_ROUTE = 10;
+/** Mỗi lần bộ lọc cập nhật (một bước chân), chấm tiến dọc tuyến tối đa chừng này (m), cộng thêm sai số của bộ lọc */
+export const PDR_MAX_ADVANCE = 4;
 
 /**
  * Cập nhật vị trí từ bộ lọc hạt (bước chân + hướng + lối đi) trong lúc đi; point.accuracy = bán kính sai số của bộ lọc.
- * Giống GPS: gần tuyến thì đặt vị trí lên tuyến (chỉ trong chặng đang đi, không lùi vì rung nhỏ hơn sai số);
- * lệch hẳn khỏi tuyến khi bộ lọc đã chắc (khách rẽ nhầm) thì lập lại tuyến từ chỗ đó.
+ * Đặt vị trí lên tuyến nhưng chỉ trong cửa sổ quanh chỗ khách đang đứng: không nhảy sang nhánh khác của tuyến,
+ * ước lượng vọt xa thì chấm đuổi theo từng đoạn ngắn, rung lùi nhỏ hơn sai số thì giữ nguyên.
+ * Chỉ lập lại tuyến khi bộ lọc đã báo rẽ nhầm (options.offRoute: lệch hướng tuyến nhiều bước liền), đã chắc (±6 m)
+ * và đang cách tuyến xa: một lần ước lượng lệch đơn lẻ không đủ.
  */
-export function pdrTripUpdate(model: VenueModel, trip: Trip, point: Position, options: RouteOptions = {}, now = Date.now()): Trip {
+export function pdrTripUpdate(
+    model: VenueModel, trip: Trip, point: Position, options: RouteOptions & { offRoute?: boolean } = {}, now = Date.now()
+): Trip {
     if (trip.arrived) return trip;
     const leg = trip.route.legs[trip.activeLeg];
     if (!leg || point.floorId !== leg.floorId) return trip;
     const accuracy = Math.max(1, point.accuracy ?? 5);
-    const snap = snapToRoute(trip.route, point);
-    if (!snap) return trip;
-    if (snap.gap > Math.max(PDR_OFF_ROUTE, accuracy * 2.5) && accuracy <= 6) {
-        return fixTripPosition(model, trip, { ...point, source: "pdr", label: point.label ?? "Vị trí ước lượng" }, options);
+    const { offRoute, ...routeOptions } = options;
+    const anywhere = snapToRoute(trip.route, point);
+    if (!anywhere) return trip;
+    if (offRoute && accuracy <= 6 && anywhere.gap > Math.max(PDR_OFF_ROUTE, accuracy * 2.5)) {
+        return rerouteFrom(model, trip, { ...point, source: "pdr", label: point.label ?? "Vị trí ước lượng" }, routeOptions);
     }
-    const start = legStart(trip.route, trip.activeLeg);
-    const end = start + leg.distance;
-    const meters = Math.min(end, Math.max(start, snap.meters));
+    const win = routeWindow(trip, Math.max(3, accuracy * 2), PDR_MAX_ADVANCE + accuracy);
+    if (!win) return trip;
+    const meters = Math.min(win.end, Math.max(win.start, metersInWindow(trip.route, point, anywhere, win, accuracy)));
     const progress = meters < trip.progress && trip.progress - meters < accuracy ? trip.progress : meters;
-    const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 5));
+    const arrived = trip.activeLeg === trip.route.legs.length - 1 && progress >= win.end - Math.max(ARRIVE_WITHIN, Math.min(accuracy, 5));
     return {
         ...trip, progress, metersSinceFix: trip.metersSinceFix + Math.max(0, progress - trip.progress), arrived, arrivedAt: arrived ? now : undefined
     };

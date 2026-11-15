@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    GPS_USABLE_ACCURACY, LOST_THRESHOLD_METERS, ParticleFilter, StrideCalibrator, angleDiff, bearing, buildWalkwayIndex, isOutdoorFloor, legStart,
-    mergeStride, pointAt, positionUncertainty, viewTrip, weinbergLength, type HeadingPrior, type LatLng, type PositionEstimate, type Trip, type TripView
+    AnchorCalibrator, GPS_FUSION_INTERVAL_MS, GPS_USABLE_ACCURACY, JumpMonitor, LOST_THRESHOLD_METERS, ParticleFilter, PlausibilityGate, StrideCalibrator, angleDiff, bearing, buildWalkwayIndex, isOutdoorFloor, legStart,
+    gpsFusionSigma, mergeStride, pointAt, positionUncertainty, viewTrip, weinbergLength, type HeadingPrior, type LatLng, type PositionEstimate, type StrideCalibration,
+    type Trip, type TripView
 } from "@indoor-map/core";
-import { logEvent, setLogVenue } from "../lib/positioningLog";
+import { reportPositionJump, addMonitoringBreadcrumb } from "../lib/monitoring";
+import { logEvent, recordIssue, setLogVenue } from "../lib/positioningLog";
 import { getSettings, updateSettings, useSettings } from "../lib/settings";
 import {
     hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useCompass, useGps, usePdrSensors, useSensorPermission, useStepDetector,
@@ -71,6 +73,24 @@ function anchorSigma(source: string, accuracy?: number, previous?: number): numb
     return 3; // "place": đang đứng ở một địa điểm ("Đã xong bước này", bắt đầu từ địa điểm)
 }
 
+// Sống qua các lần mở lại màn chỉ đường (quét QR rời màn này rồi quay lại):
+// - jumps: theo dõi chấm trên bản đồ, nhảy xa hơn quãng đi được thì ghi một sự cố (kèm nguyên nhân)
+// - gpsGate: loại số đo GPS nhảy bất thường trước khi dùng
+// - qr: học độ dài bước từ quãng dọc tuyến giữa hai mã QR liền nhau
+const session = {
+    jumps: new JumpMonitor(),
+    gpsGate: new PlausibilityGate(),
+    calibrator: new AnchorCalibrator(),
+    /** Nguyên nhân của lần đổi vị trí gần nhất: step, gps, sim… */
+    cause: "start",
+    seen: null as { at: number; rerouted: number; leg: number; startedAt: number } | null,
+    lastQr: null as { at: number; startedAt: number; rerouted: number; leg: number; progress: number } | null,
+    /** Bộ lọc đã báo rẽ nhầm kể từ mã QR trước: quãng dọc tuyến không còn là quãng thật */
+    offRouteSeen: false,
+    /** Lần gần nhất đưa GPS vào bộ lọc (ms) */
+    lastGpsFusion: 0
+};
+
 const gaussian = () => Math.sqrt(-2 * Math.log(Math.max(Math.random(), 1e-12))) * Math.cos(2 * Math.PI * Math.random());
 
 export function useTripEngine(trip: Trip): TripEngine {
@@ -96,6 +116,8 @@ export function useTripEngine(trip: Trip): TripEngine {
         if (paused) return;
         setSteps(s => s + 1);
         (calibratorRef.current ??= new StrideCalibrator()).addStep(Date.now(), null);
+        session.calibrator.addStep(null);
+        session.cause = "step";
         advance(getSettings().stepLength);
     }, [advance, paused]);
     const basicStepsLive = useStepDetector(!simulating && !pfMode, onStep);
@@ -118,8 +140,9 @@ export function useTripEngine(trip: Trip): TripEngine {
         logEvent({ t: performance.now(), type: "estimate", floorId: est.floorId, lat: est.lat, lng: est.lng, spread: est.spread });
         // Rẽ nhầm mà bộ lọc còn mơ hồ: không kéo chấm theo tuyến, giao diện gợi ý quét QR.
         // Đã chắc (±5 m) thì đưa vị trí vào chuyến đi: lệch xa tuyến sẽ tự lập lại tuyến từ chỗ đó.
+        if (est.offRoute) session.offRouteSeen = true;
         if (!est.offRoute || est.spread <= 5) {
-            pdrUpdate({ floorId: est.floorId, lat: est.lat, lng: est.lng, source: "pdr", accuracy: est.spread, label: "Vị trí ước lượng" });
+            pdrUpdate({ floorId: est.floorId, lat: est.lat, lng: est.lng, source: "pdr", accuracy: est.spread, label: "Vị trí ước lượng" }, est.offRoute);
         }
         return est;
     }, [pdrUpdate]);
@@ -133,6 +156,8 @@ export function useTripEngine(trip: Trip): TripEngine {
         if (paused) return;
         setSteps(n => n + 1);
         (calibratorRef.current ??= new StrideCalibrator()).addStep(Date.now(), s.amplitude);
+        session.calibrator.addStep(s.amplitude);
+        session.cause = "step";
         const filter = filterRef.current;
         // Máy không có con quay (không có DeviceOrientation): đi như cách cơ bản
         if (!filter || s.heading == null) {
@@ -155,6 +180,14 @@ export function useTripEngine(trip: Trip): TripEngine {
     const gpsLive = gps != null && gps.accuracy <= GPS_USABLE_ACCURACY;
     useEffect(() => {
         if (!gps || legFloor == null) return;
+        // GPS nhảy bất thường (phản xạ giữa các toà nhà, vừa bắt lại vệ tinh): bỏ, trừ khi nhiều lần liền cùng chỉ về chỗ mới
+        const verdict = session.gpsGate.check({ floorId: legFloor, lat: gps.lat, lng: gps.lng }, Date.now(), gps.accuracy);
+        if (!verdict.ok) {
+            logEvent({ t: performance.now(), type: "outlier", source: "gps", floorId: legFloor, lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, meters: verdict.meters });
+            recordIssue("outlier");
+            return;
+        }
+        session.cause = "gps";
         // Tự đo độ dài bước: đoạn thẳng, đều nhịp, GPS tốt (≤ 10 m)
         const result = (calibratorRef.current ??= new StrideCalibrator()).addFix({ lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy, t: Date.now() });
         if (result) {
@@ -166,9 +199,12 @@ export function useTripEngine(trip: Trip): TripEngine {
         if (gps.accuracy > GPS_USABLE_ACCURACY || paused) return;
         const filter = filterRef.current;
         if (pfWanted && filter?.isStarted) {
-            // định vị nâng cao: GPS là một mốc của bộ lọc
+            // định vị nâng cao: GPS là một mốc mềm của bộ lọc, 5 s một lần (sai số GPS kéo dài nhiều giây, xem GPS_FUSION_INTERVAL_MS)
+            const now = Date.now();
+            if (now - session.lastGpsFusion < GPS_FUSION_INTERVAL_MS) return;
+            session.lastGpsFusion = now;
             logEvent({ t: performance.now(), type: "gps", floorId: legFloor, lat: gps.lat, lng: gps.lng, accuracy: gps.accuracy });
-            filter.observe({ floorId: legFloor, lat: gps.lat, lng: gps.lng }, Math.max(3, gps.accuracy));
+            filter.observe({ floorId: legFloor, lat: gps.lat, lng: gps.lng }, gpsFusionSigma(gps.accuracy));
             publish(filter);
             return;
         }
@@ -204,6 +240,7 @@ export function useTripEngine(trip: Trip): TripEngine {
             const trueBearing = here.lat === ahead.lat && here.lng === ahead.lng ? 0 : bearing(here, ahead);
             simTruth.current = Math.min(legEnd, simTruth.current + weinbergLength(SIM_K, amplitude));
             setSteps(n => n + 1);
+            session.cause = "sim";
             filter.step({ amplitude }, trueBearing - SIM_GYRO_OFFSET + 4 * gaussian());
             learn(publish(filter));
         }, SIM_STEP_MS);
@@ -263,6 +300,7 @@ export function useTripEngine(trip: Trip): TripEngine {
             legs: trip.route.legs.map(l => ({ floorId: l.floorId, points: l.points.map(p => [p.lat, p.lng] as [number, number]) }))
         });
         logEvent({ t: performance.now(), type: "anchor", source, floorId: here.floorId, lat: here.lat, lng: here.lng, sigma, prior });
+        addMonitoringBreadcrumb("positioning", `mốc ${source}`, { floorId: here.floorId, sigma });
         filter.reset({ floorId: here.floorId, lat: here.lat, lng: here.lng }, sigma, prior);
         simTruth.current = trip.progress;
         const est = filter.estimate();
@@ -271,6 +309,58 @@ export function useTripEngine(trip: Trip): TripEngine {
         // anchorKey gói đủ các thay đổi cần đặt lại; trip / position đổi mỗi bước nên không đưa vào
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [anchorKey, pfWanted, walkIndex]);
+
+    // Học từ lần sai giữa hai mã QR: cùng tuyến, cùng chặng, không rẽ nhầm -> quãng dọc tuyến giữa hai mã là quãng thật
+    useEffect(() => {
+        if (!position || position.source !== "qr" || simulating) return;
+        const at = position.at ?? 0;
+        if (session.lastQr?.at === at) return;
+        const now = { at, startedAt: trip.startedAt, rerouted: trip.rerouted, leg: trip.activeLeg, progress: trip.progress };
+        const prev = session.lastQr;
+        if (prev && prev.startedAt === now.startedAt && prev.rerouted === now.rerouted && prev.leg === now.leg && !session.offRouteSeen) {
+            const result: StrideCalibration | null = session.calibrator.finish(now.progress - prev.progress);
+            if (result) {
+                const merged = mergeStride(getSettings().strideCalibration, result);
+                updateSettings(s => ({ strideCalibration: merged, stepLength: Math.round(merged.stepLength * 100) / 100, weinbergK: merged.k ?? s.weinbergK }));
+                if (merged.k != null) filterRef.current?.retuneK(merged.k);
+                logEvent({ t: performance.now(), type: "stride", source: "qr", stepLength: result.stepLength, k: result.k, meters: result.meters, steps: result.steps });
+            }
+        }
+        session.calibrator.restart();
+        session.offRouteSeen = false;
+        session.lastQr = now;
+        // chỉ chạy khi có lần quét QR mới
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [position?.at]);
+
+    // Theo dõi chấm trên bản đồ: nhảy xa hơn quãng đi được thì ghi sự cố kèm nguyên nhân (Cài đặt -> Sự cố định vị, nhật ký)
+    useEffect(() => {
+        const here = view.here;
+        if (!here || simulating) return;
+        const seen = session.seen;
+        let cause = session.cause;
+        if (seen && seen.startedAt !== trip.startedAt) cause = "start";
+        else if (position && (position.at ?? 0) !== seen?.at) cause = position.source;
+        else if (seen && trip.rerouted !== seen.rerouted) cause = "reroute";
+        else if (seen && trip.activeLeg !== seen.leg) cause = "floor";
+        session.seen = { at: position?.at ?? 0, rerouted: trip.rerouted, leg: trip.activeLeg, startedAt: trip.startedAt };
+        const point = { floorId: here.floorId, lat: here.lat, lng: here.lng };
+        if (cause === "start") {
+            session.jumps.update(point, performance.now(), cause);
+            return;
+        }
+        if (cause === "qr" || cause === "pick" || cause === "place") session.gpsGate.anchor(point, Date.now());
+        const jump = session.jumps.update(point, performance.now(), cause);
+        if (!jump) return;
+        logEvent({
+            t: performance.now(), type: "jump", floorId: jump.floorId, from: [jump.from.lat, jump.from.lng], to: [jump.to.lat, jump.to.lng],
+            meters: jump.meters, dtMs: jump.dtMs, cause: jump.cause, correction: jump.correction
+        });
+        recordIssue(jump.correction ? "correction" : "jump", { cause: jump.cause, meters: jump.meters });
+        reportPositionJump(jump, { venue: slug, mode: pfWanted ? "pf" : "basic", spread: filterRef.current?.estimate()?.spread ?? null, steps });
+        // chỉ phản ứng khi vị trí hiển thị đổi
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [view.here]);
 
     // Màn hình tắt / chuyển tab: trình duyệt ngừng gửi cảm biến, không biết đã đi bao xa -> nới rộng giả thuyết
     useEffect(() => {

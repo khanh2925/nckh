@@ -156,5 +156,15 @@ describe.skipIf(!process.env.PF_LOG)("chạy lại nhật ký đi thật", () =>
         console.log([`${log.device}`, `${result.steps} bước, K cuối ${result.k?.toFixed(3) ?? "-"}`, ...rows,
             `Định vị nâng cao: trung vị ${fmt(median(errors))} m, lớn nhất ${fmt(Math.max(...errors))} m`,
             basics.length ? `Cách cũ (${log.settings.stepLength} m/bước): trung vị ${fmt(median(basics))} m, lớn nhất ${fmt(Math.max(...basics))} m` : ""].join("\n"));
+        // Sự cố app đã ghi lúc đi: chấm nhảy (kèm nguyên nhân), QR sửa bao xa, GPS bị loại, bước bị bỏ, bước học được giữa hai QR
+        const issues = log.events.flatMap(e => {
+            const at = `${(e.t / 1000).toFixed(0).padStart(5)} s`;
+            if (e.type === "jump") return [`${at}  ${e.correction ? "QR sửa  " : "NHẢY    "} ${fmt(e.meters)} m trong ${(e.dtMs / 1000).toFixed(1)} s, do ${e.cause}`];
+            if (e.type === "outlier") return [`${at}  bỏ ${e.source.padEnd(5)}  lệch ${fmt(e.meters)} m (±${e.accuracy.toFixed(0)})`];
+            if (e.type === "stride") return [`${at}  học bước giữa hai QR: ${e.stepLength.toFixed(2)} m/bước, K ${e.k?.toFixed(3) ?? "-"} trên ${e.meters.toFixed(0)} m`];
+            return [];
+        });
+        const rejected = log.events.filter(e => e.type === "stepReject").length;
+        if (issues.length || rejected) console.log(["Sự cố lúc đi:", ...issues, rejected ? `${rejected} bước bị bỏ vì sai nhịp` : ""].join("\n"));
     }, 300_000);
 });

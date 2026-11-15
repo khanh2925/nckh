@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdaptiveStepDetector, HeadingFilter, PostureMonitor, StepGate, WeinbergStepDetector, headingFromOrientation, type StepSample } from "@indoor-map/core";
-import { isRecording, logEvent } from "./positioningLog";
+import { isRecording, logEvent, recordIssue } from "./positioningLog";
 
 // Cảm biến trên trình duyệt điện thoại. Thuật toán (đếm bước, làm mượt la bàn) nằm ở @indoor-map/core;
 // tệp này chỉ đọc sự kiện của trình duyệt. App React Native sau này đọc expo-sensors rồi dùng cùng thuật toán.
@@ -209,7 +209,14 @@ export function usePdrSensors(
             }
             const sample = detector.push(g.x, g.y, g.z, t);
             if (!sample) return;
-            for (const step of gate.push(sample)) callback.current({ ...step, heading: headingRef.current, absolute });
+            const rejectedBefore = gate.rejected;
+            const steps = gate.push(sample);
+            if (gate.rejected > rejectedBefore) {
+                // bước tới sớm hơn hẳn nhịp đang đi: không tính, ghi lại để biết cảm biến đếm nhầm ở đâu
+                if (isRecording()) logEvent({ t, type: "stepReject" });
+                recordIssue("stepReject");
+            }
+            for (const step of steps) callback.current({ ...step, heading: headingRef.current, absolute });
         };
         window.addEventListener("deviceorientation", onOrientation);
         window.addEventListener("devicemotion", onMotion);

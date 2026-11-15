@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { PositioningLog, PositioningLogEvent, WalkwayNetworkDto } from "@indoor-map/core";
+import { addMonitoringBreadcrumb } from "./monitoring";
 import { getSettings } from "./settings";
 
 // Nhật ký cảm biến của định vị nâng cao (Cài đặt -> Ghi nhật ký cảm biến). Chỉ giữ trong bộ nhớ của trang;
@@ -73,4 +74,56 @@ export function downloadLog(): void {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+// ---------- Sự cố định vị: luôn đếm (không cần bật ghi nhật ký), xem trong Cài đặt ----------
+// jump = chấm nhảy xa hơn quãng đi được mà không do QR; correction = QR / chọn trên bản đồ sửa vị trí (khoảng sửa = sai số);
+// outlier = số đo GPS bị loại vì nhảy bất thường; stepReject = "bước" bị bỏ vì tới quá sớm so với nhịp.
+
+export type IssueKind = "jump" | "correction" | "outlier" | "stepReject";
+
+export interface IssueSummary {
+    jump: number;
+    correction: number;
+    outlier: number;
+    stepReject: number;
+    /** Khoảng sửa trung bình / lớn nhất khi quét QR (m): sai số thật của vị trí ngay trước đó */
+    correctionMean: number | null;
+    correctionMax: number | null;
+    /** Vài lần nhảy gần nhất: nguyên nhân và khoảng nhảy (m) */
+    recent: { cause: string; meters: number; at: number }[];
+}
+
+const EMPTY: IssueSummary = { jump: 0, correction: 0, outlier: 0, stepReject: 0, correctionMean: null, correctionMax: null, recent: [] };
+let issues: IssueSummary = EMPTY;
+const issueListeners = new Set<() => void>();
+
+export function recordIssue(kind: IssueKind, detail?: { cause: string; meters: number }): void {
+    const next = { ...issues, [kind]: issues[kind] + 1 };
+    if (kind === "correction" && detail) {
+        next.correctionMean = ((issues.correctionMean ?? 0) * issues.correction + detail.meters) / next.correction;
+        next.correctionMax = Math.max(issues.correctionMax ?? 0, detail.meters);
+    }
+    if ((kind === "jump" || kind === "correction") && detail) {
+        next.recent = [{ ...detail, at: Date.now() }, ...issues.recent].slice(0, 5);
+    }
+    issues = next;
+    issueListeners.forEach(fn => fn());
+    // đi kèm lỗi xảy ra sau đó (nếu có), để biết trước lỗi định vị đã gặp gì
+    addMonitoringBreadcrumb("positioning", kind, detail);
+}
+
+export function clearIssues(): void {
+    issues = EMPTY;
+    issueListeners.forEach(fn => fn());
+}
+
+export function useIssues(): IssueSummary {
+    return useSyncExternalStore(
+        fn => {
+            issueListeners.add(fn);
+            return () => issueListeners.delete(fn);
+        },
+        () => issues
+    );
 }

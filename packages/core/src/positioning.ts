@@ -65,15 +65,35 @@ export class StepGate {
     private open = false;
     private last: number | null = null;
 
-    constructor(private readonly need = 4, private readonly tolerance = 0.35, private readonly maxGapMs = 2000) {}
+    /** Khoảng cách trung bình giữa hai bước đang đi (ms) */
+    private cadence: number | null = null;
+    /** Số "bước" đã bỏ vì tới quá sớm so với nhịp */
+    rejected = 0;
+
+    constructor(
+        private readonly need = 4, private readonly tolerance = 0.35, private readonly maxGapMs = 2000, private readonly minFraction = 0.6
+    ) {}
 
     push(step: StepSample): StepSample[] {
         if (this.last != null && step.t - this.last > this.maxGapMs) {
             this.open = false;
             this.pending = [];
+            this.cadence = null;
+        }
+        if (this.open) {
+            // Đang đi đều mà một "bước" tới sớm hơn hẳn nhịp (lắc máy, va chạm): không tính, giữ nhịp cũ
+            if (this.last != null && this.cadence != null && step.t - this.last < this.minFraction * this.cadence) {
+                this.rejected++;
+                return [];
+            }
+            if (this.last != null) {
+                const gap = step.t - this.last;
+                this.cadence = this.cadence == null ? gap : this.cadence * 0.8 + gap * 0.2;
+            }
+            this.last = step.t;
+            return [step];
         }
         this.last = step.t;
-        if (this.open) return [step];
         this.pending.push(step);
         if (this.pending.length < this.need) return [];
         const recent = this.pending.slice(-this.need);
@@ -81,6 +101,7 @@ export class StepGate {
         const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
         if (gaps.every(g => Math.abs(g - mean) <= this.tolerance * mean)) {
             this.open = true;
+            this.cadence = mean;
             this.pending = [];
             return recent;
         }
@@ -141,6 +162,147 @@ export interface StrideCalibration {
     k: number | null;
     meters: number;
     steps: number;
+}
+
+/**
+ * Kết hợp GPS vào bộ lọc hạt (ngoài trời). Sai số GPS điện thoại kéo dài nhiều giây (phản xạ, bị che), các lần đo liền nhau
+ * sai giống nhau: dùng mỗi lần đo như một bằng chứng độc lập sẽ tin GPS quá mức và kéo vị trí lệch theo.
+ * Nên chỉ đưa vào bộ lọc mỗi GPS_FUSION_INTERVAL_MS một lần, với bán kính sai số nhân GPS_FUSION_SIGMA_SCALE.
+ * Mô phỏng khuôn viên (GPS lệch ~5–10 m, 2% lần nhảy xa): trung vị 2,0–2,6 m -> 0,8–0,9 m, p90 6,7–15 m -> 2,4–3,2 m.
+ */
+export const GPS_FUSION_INTERVAL_MS = 5000;
+export const GPS_FUSION_SIGMA_SCALE = 2;
+
+/** Bán kính sai số dùng khi đưa một lần đo GPS vào bộ lọc */
+export function gpsFusionSigma(accuracy: number): number {
+    return Math.max(3, accuracy) * GPS_FUSION_SIGMA_SCALE;
+}
+
+/** Tốc độ đi bộ nhanh nhất còn hợp lý (m/s), dùng để nhận ra vị trí nhảy bất thường */
+export const WALK_MAX_SPEED = 2.5;
+
+/**
+ * Loại số đo vị trí nhảy bất thường (GPS bật lại giữa các toà nhà, phản xạ tín hiệu…), như bước "innovation gating"
+ * của bộ lọc Kalman: một lần đo cách lần tin trước xa hơn quãng có thể đi được (tốc độ × thời gian + sai số) thì bỏ.
+ * Nếu nhiều lần đo liền nhau cùng chỉ về chỗ mới (khách thật sự ở đó) thì chấp nhận.
+ */
+export class PlausibilityGate {
+    private last: { point: FloorPoint; t: number; accuracy: number } | null = null;
+    private pending: { point: FloorPoint; t: number; accuracy: number }[] = [];
+
+    constructor(private readonly maxSpeed = WALK_MAX_SPEED, private readonly margin = 5, private readonly confirm = 3) {}
+
+    /** true = dùng được; false = bất thường, bỏ qua. meters = khoảng cách tới lần tin trước */
+    check(point: FloorPoint, t: number, accuracy: number): { ok: boolean; meters: number } {
+        const fix = { point, t, accuracy };
+        const last = this.last;
+        if (!last || last.point.floorId !== point.floorId) {
+            this.accept(fix);
+            return { ok: true, meters: 0 };
+        }
+        const meters = distance(last.point, point);
+        if (meters <= this.limit(last, fix)) {
+            this.accept(fix);
+            return { ok: true, meters };
+        }
+        // Các lần đo bất thường liền nhau có khớp với nhau không
+        const prev = this.pending[this.pending.length - 1];
+        if (prev && distance(prev.point, point) > this.limit(prev, fix)) this.pending = [];
+        this.pending.push(fix);
+        if (this.pending.length >= this.confirm) {
+            this.accept(fix);
+            return { ok: true, meters };
+        }
+        return { ok: false, meters };
+    }
+
+    /** Biết chắc vị trí (QR, chọn trên bản đồ): lấy làm mốc so sánh mới */
+    anchor(point: FloorPoint, t: number, accuracy = 2): void {
+        this.accept({ point, t, accuracy });
+    }
+
+    private limit(a: { t: number; accuracy: number }, b: { t: number; accuracy: number }): number {
+        return this.maxSpeed * Math.max(0, b.t - a.t) / 1000 + a.accuracy + b.accuracy + this.margin;
+    }
+
+    private accept(fix: { point: FloorPoint; t: number; accuracy: number }): void {
+        this.last = fix;
+        this.pending = [];
+    }
+}
+
+export interface JumpEvent {
+    floorId: number;
+    from: LatLng;
+    to: LatLng;
+    meters: number;
+    dtMs: number;
+    /** Điều gì làm vị trí đổi: step, gps, qr, pick, place, reroute, floor, sim… */
+    cause: string;
+    /** QR / chọn trên bản đồ / đang ở địa điểm: là lần sửa sai có chủ đích, khoảng nhảy = sai số trước đó */
+    correction: boolean;
+}
+
+const CORRECTIONS = new Set(["qr", "pick", "place"]);
+
+/**
+ * Theo dõi vị trí hiển thị trên bản đồ: nhảy xa hơn quãng đi được trong khoảng thời gian đó thì ghi lại một sự cố.
+ * Lần nhảy do QR / chọn trên bản đồ là lần sửa sai, khoảng nhảy chính là sai số của vị trí trước đó.
+ */
+export class JumpMonitor {
+    private last: { point: FloorPoint; t: number } | null = null;
+
+    constructor(private readonly maxSpeed = WALK_MAX_SPEED, private readonly margin = 3) {}
+
+    update(point: FloorPoint, t: number, cause: string): JumpEvent | null {
+        const last = this.last;
+        this.last = { point, t };
+        if (!last || last.point.floorId !== point.floorId) return null;
+        const meters = distance(last.point, point);
+        const dtMs = Math.max(0, t - last.t);
+        const correction = CORRECTIONS.has(cause);
+        // Lần sửa bằng QR luôn ghi lại (kể cả khi nhỏ): khoảng sửa là thước đo sai số thật của vị trí trước đó
+        if (!correction && meters <= this.maxSpeed * dtMs / 1000 + this.margin) return null;
+        return {
+            floorId: point.floorId, from: { lat: last.point.lat, lng: last.point.lng }, to: { lat: point.lat, lng: point.lng },
+            meters, dtMs, cause, correction
+        };
+    }
+}
+
+/**
+ * Học từ lần sai giữa hai mã QR: khách đi theo tuyến từ QR này tới QR kia, quãng dọc tuyến giữa hai mã là quãng thật,
+ * chia cho số bước (và tổng độ nhấp nhô^¼) ra độ dài bước / hệ số K thật. Như đo bằng GPS ngoài trời, nhưng dùng được trong nhà.
+ */
+export class AnchorCalibrator {
+    private steps = 0;
+    private roots = 0;
+    private allAmplitudes = true;
+
+    constructor(private readonly options = { minMeters: 20, minSteps: 25 }) {}
+
+    addStep(amplitude: number | null): void {
+        this.steps++;
+        if (amplitude == null) this.allAmplitudes = false;
+        else this.roots += Math.pow(Math.max(amplitude, 0.05), 0.25);
+    }
+
+    restart(): void {
+        this.steps = 0;
+        this.roots = 0;
+        this.allAmplitudes = true;
+    }
+
+    /** walkedMeters = quãng dọc tuyến giữa hai mốc; null = không đủ điều kiện hoặc kết quả vô lý */
+    finish(walkedMeters: number): StrideCalibration | null {
+        const { steps, roots, allAmplitudes } = this;
+        this.restart();
+        if (!(walkedMeters >= this.options.minMeters) || steps < this.options.minSteps) return null;
+        const stepLength = walkedMeters / steps;
+        if (stepLength < 0.35 || stepLength > 1.1) return null;
+        const k = allAmplitudes && roots > 0 ? walkedMeters / roots : null;
+        return { stepLength, k: k != null && k >= 0.25 && k <= 0.8 ? k : null, meters: walkedMeters, steps };
+    }
 }
 
 /**
@@ -369,7 +531,7 @@ export interface ParticleFilterOptions {
 }
 
 export const DEFAULT_PF_OPTIONS: ParticleFilterOptions = {
-    count: 400, seed: 1, corridorSigma: 2, maxOffPath: 7, stepNoise: 0.08, headingNoise: 6, offsetDrift: 0.1, kDrift: 0.01,
+    count: 1000, seed: 1, corridorSigma: 2, maxOffPath: 7, stepNoise: 0.08, headingNoise: 6, offsetDrift: 0.1, kDrift: 0.01,
     stepLength: { mean: 0.7, spread: 0.2 }, learnedK: null, inject: 0.06, routeSigma: 6, routeFloor: 0.15, routeInject: 0.03, routeWindow: 25, offRouteSteps: 6, offRouteAngle: 50,
     roughen: { k: 0.01, offset: 1 }
 };
@@ -507,6 +669,12 @@ export class ParticleFilter {
      * Khách vừa đổi cách cầm máy: độ dài bước và độ lệch hướng đã học không còn chắc.
      * Nới rộng các giả thuyết đó (vị trí giữ nguyên) để bộ lọc học lại sau vài bước.
      */
+    /** Đặt lại hệ số bước của mọi giả thuyết quanh k (vừa đo được giữa hai mốc), giữ vị trí và hướng */
+    retuneK(k: number, spread = 0.04): void {
+        if (!(k > 0)) return;
+        for (let i = 0; i < this.options.count; i++) this.k[i] = k * (1 + this.gauss() * spread);
+    }
+
     loosen(offsetSpread = 30, kSpread = 0.1): void {
         for (let i = 0; i < this.options.count; i++) {
             this.offset[i]! += this.gauss() * offsetSpread;

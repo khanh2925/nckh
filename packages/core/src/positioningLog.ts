@@ -1,6 +1,6 @@
 import { closestPointOnSegment, distance } from "./geo";
 import { HeadingFilter } from "./pdr";
-import { ParticleFilter, StepGate, WeinbergStepDetector, headingFromOrientation, type ParticleFilterOptions, type WalkwayIndex } from "./positioning";
+import { ParticleFilter, StepGate, WeinbergStepDetector, headingFromOrientation, type ParticleFilterOptions, type WalkwayIndex, gpsFusionSigma } from "./positioning";
 import type { FloorPoint, LatLng, WalkwayNetworkDto } from "./types";
 
 // Nhật ký cảm biến của định vị nâng cao: app ghi lại khi đi thật, rồi chạy lại y hệt ở đây (Node/Vitest, cùng seed)
@@ -16,7 +16,15 @@ export type PositioningLogEvent =
     | { t: number; type: "gps"; floorId: number; lat: number; lng: number; accuracy: number }
     | { t: number; type: "posture" }
     /** Ước lượng app đã tính lúc đi (để so với lúc chạy lại) */
-    | { t: number; type: "estimate"; floorId: number; lat: number; lng: number; spread: number };
+    | { t: number; type: "estimate"; floorId: number; lat: number; lng: number; spread: number }
+    /** Vị trí hiển thị nhảy xa hơn quãng đi được (JumpMonitor); correction = do QR / chọn trên bản đồ sửa lại */
+    | { t: number; type: "jump"; floorId: number; from: [number, number]; to: [number, number]; meters: number; dtMs: number; cause: string; correction: boolean }
+    /** Số đo vị trí bị loại vì nhảy bất thường (PlausibilityGate) */
+    | { t: number; type: "outlier"; source: string; floorId: number; lat: number; lng: number; accuracy: number; meters: number }
+    /** "Bước" bị bỏ vì tới quá sớm so với nhịp đang đi */
+    | { t: number; type: "stepReject" }
+    /** Độ dài bước học được giữa hai mã QR */
+    | { t: number; type: "stride"; source: string; stepLength: number; k: number | null; meters: number; steps: number };
 
 export interface PositioningLog {
     version: 1;
@@ -138,7 +146,7 @@ export function replayPositioningLog(log: PositioningLog, index: WalkwayIndex, o
                 break;
             }
             case "gps":
-                filter.observe({ floorId: e.floorId, lat: e.lat, lng: e.lng }, Math.max(3, e.accuracy));
+                filter.observe({ floorId: e.floorId, lat: e.lat, lng: e.lng }, gpsFusionSigma(e.accuracy));
                 break;
             case "posture":
                 filter.loosen();

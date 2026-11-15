@@ -27,7 +27,7 @@ interface VenueState {
     /** Vị trí GPS trong lúc đi (ngoài trời) */
     gpsUpdate(position: Position): void;
     /** Vị trí ước lượng của định vị nâng cao (bộ lọc hạt) trong lúc đi; accuracy = bán kính sai số */
-    pdrUpdate(position: Position): void;
+    pdrUpdate(position: Position, offRoute?: boolean): void;
 }
 
 const VenueContext = createContext<VenueState | null>(null);
@@ -121,8 +121,8 @@ export function VenueProvider({ slug, children }: { slug: string; children: Reac
         setTrip(t => (t && modelRef.current ? gpsTripUpdate(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs }) : t));
     }, []);
 
-    const pdrUpdate = useCallback((point: Position) => {
-        setTrip(t => (t && modelRef.current ? pdrTripUpdate(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs }) : t));
+    const pdrUpdate = useCallback((point: Position, offRoute = false) => {
+        setTrip(t => (t && modelRef.current ? pdrTripUpdate(modelRef.current, t, point, { avoidStairs: getSettings().avoidStairs, offRoute }) : t));
     }, []);
 
     const value = useMemo<VenueState>(() => ({

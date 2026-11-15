@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../lib/data";
 import { hasMotionSensors, needsSensorPermission, requestSensorPermission, speak, useSensorPermission } from "../../lib/sensors";
 import { updateSettings, useSettings } from "../../lib/settings";
-import { clearLog, downloadLog, useLogSize } from "../../lib/positioningLog";
+import { clearIssues, clearLog, downloadLog, useIssues, useLogSize } from "../../lib/positioningLog";
 import { Row, Toggle, TopBar } from "../components/ui";
 import { decimal } from "../format";
 
@@ -20,9 +20,15 @@ function SwitchRow({ id, title, sub, checked, onChange }: { id: string; title: s
     return <Row titleId={id} title={title} sub={sub} trailing={<Toggle labelledBy={id} checked={checked} onChange={onChange} />} />;
 }
 
+/** Tên dễ đọc cho nguyên nhân chấm nhảy */
+const CAUSE: Record<string, string> = {
+    step: "bước chân", gps: "GPS", qr: "QR", pick: "chọn trên bản đồ", place: "đã tới địa điểm", reroute: "lập lại tuyến", floor: "đổi tầng", sim: "mô phỏng"
+};
+
 export default function SettingsPage() {
     const s = useSettings();
     const logSize = useLogSize();
+    const issues = useIssues();
     const navigate = useNavigate();
     const permission = useSensorPermission();
     const aligned = Object.keys(s.headingOffsets ?? {}).length;
@@ -75,10 +81,22 @@ export default function SettingsPage() {
                     {(s.weinbergK != null || s.strideCalibration) && (
                         <Row title="Bước chân đã học"
                             sub={[
-                                s.strideCalibration ? `Đo bằng GPS trên ${Math.round(s.strideCalibration.meters)} m ngoài trời: ${decimal(s.strideCalibration.stepLength)} m/bước` : null,
+                                s.strideCalibration ? `Đo trên ${Math.round(s.strideCalibration.meters)} m (GPS ngoài trời, giữa hai mã QR): ${decimal(s.strideCalibration.stepLength)} m/bước` : null,
                                 s.weinbergK != null ? `hệ số ${decimal(s.weinbergK, 3)}` : null
                             ].filter(Boolean).join(", ")}
                             trailing={<button type="button" className="wf-link wf-t15" onClick={() => updateSettings({ weinbergK: null, strideCalibration: null })}>Xoá</button>} />
+                    )}
+                    {issues.jump + issues.correction + issues.outlier + issues.stepReject > 0 && (
+                        <Row title="Sự cố định vị (lần mở app này)"
+                            sub={[
+                                `${issues.jump} lần chấm nhảy bất thường`,
+                                issues.correction > 0 && issues.correctionMean != null && issues.correctionMax != null
+                                    ? `QR sửa ${issues.correction} lần: lệch trung bình ${decimal(issues.correctionMean)} m, xa nhất ${decimal(issues.correctionMax)} m` : null,
+                                issues.outlier > 0 ? `${issues.outlier} lần GPS nhảy bị bỏ` : null,
+                                issues.stepReject > 0 ? `${issues.stepReject} bước bị bỏ (sai nhịp)` : null,
+                                issues.recent.length > 0 ? `gần nhất: ${issues.recent.map(r => `${CAUSE[r.cause] ?? r.cause} ${decimal(r.meters)} m`).join(", ")}` : null
+                            ].filter(Boolean).join(" · ")}
+                            trailing={<button type="button" className="wf-link wf-t15" onClick={clearIssues}>Xoá</button>} />
                     )}
                     <Row title="La bàn và đếm bước" sub={sensorText}
                         trailing={hasMotionSensors && needsSensorPermission && permission !== "granted"

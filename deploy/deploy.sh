@@ -15,6 +15,9 @@ DB_PASSWORD=$(openssl rand -hex 16)
 ADMIN_EMAIL=admin@aeroproce.local
 ADMIN_PASSWORD=${admin_password}
 JWT_SECRET=$(openssl rand -hex 32)
+# Theo dõi lỗi (tuỳ chọn): DSN của Sentry / GlitchTip cho backend và cho trang web
+SENTRY_DSN=
+VITE_SENTRY_DSN=
 EOF
     chmod 600 .env
     echo "Đã tạo deploy/.env. Tài khoản /admin: admin@aeroproce.local / ${admin_password}"

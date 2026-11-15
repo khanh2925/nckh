@@ -140,9 +140,11 @@ describe("trip", () => {
         // lùi ít hơn sai số: không lùi
         const behind = pointAt(planned, moved.progress - 5)!;
         expect(gpsTripUpdate(model, moved, { ...behind, source: "gps", accuracy: 10 }).progress).toBe(moved.progress);
-        // lùi rõ ràng (hơn sai số): theo GPS
+        // lùi rõ ràng (hơn sai số): theo GPS, mỗi lần lùi tối đa một đoạn (không nhảy cóc), vài lần thì tới
         const farBehind = pointAt(planned, moved.progress - 20)!;
-        expect(gpsTripUpdate(model, moved, { ...farBehind, source: "gps", accuracy: 5 }).progress).toBeCloseTo(moved.progress - 20, 0);
+        let back = moved;
+        for (let n = 0; n < 6; n++) back = gpsTripUpdate(model, back, { ...farBehind, source: "gps", accuracy: 5 });
+        expect(back.progress).toBeCloseTo(moved.progress - 20, 0);
     });
 });
 

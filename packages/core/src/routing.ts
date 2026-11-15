@@ -295,18 +295,30 @@ export function pointAt(route: Route, meters: number): PointOnRoute | null {
 }
 
 /** Chiếu một điểm lên tuyến: quãng dọc tuyến và khoảng lệch (m). null nếu tuyến không đi qua tầng đó. */
-export function snapToRoute(route: Route, point: FloorPoint): { gap: number; meters: number } | null {
+/**
+ * Điểm gần nhất trên tuyến (cùng tầng). window = chỉ xét đoạn tuyến từ window.from tới window.to (mét dọc tuyến):
+ * dùng để bám liên tục quanh chỗ khách đang đứng, không nhảy sang nhánh khác của tuyến chỉ vì nó nằm gần.
+ */
+export function snapToRoute(route: Route, point: FloorPoint, window?: { from: number; to: number }): { gap: number; meters: number } | null {
     let best: { gap: number; meters: number } | null = null;
     let offset = 0;
     for (const leg of route.legs) {
         if (leg.floorId === point.floorId) {
             for (let k = 1; k < leg.points.length; k++) {
-                const spot = closestPointOnSegment(point, leg.points[k - 1]!, leg.points[k]!);
-                const gap = distance(point, spot);
-                if (!best || gap < best.gap) {
-                    const along = leg.cumulative[k - 1]! + (leg.cumulative[k]! - leg.cumulative[k - 1]!) * spot.t;
-                    best = { gap, meters: offset + along };
+                const a = leg.points[k - 1]!;
+                const b = leg.points[k]!;
+                const from = offset + leg.cumulative[k - 1]!;
+                const length = leg.cumulative[k]! - leg.cumulative[k - 1]!;
+                let t = closestPointOnSegment(point, a, b).t;
+                if (window) {
+                    if (from + length < window.from || from > window.to) continue;
+                    const lo = length > 0 ? Math.max(0, (window.from - from) / length) : 0;
+                    const hi = length > 0 ? Math.min(1, (window.to - from) / length) : 1;
+                    t = Math.min(hi, Math.max(lo, t));
                 }
+                const spot = { lat: a.lat + t * (b.lat - a.lat), lng: a.lng + t * (b.lng - a.lng) };
+                const gap = distance(point, spot);
+                if (!best || gap < best.gap) best = { gap, meters: from + length * t };
             }
         }
         offset += leg.distance;
