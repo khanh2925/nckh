@@ -27,3 +27,8 @@ services:
       # Signs the login tokens; Render makes a random value once
       - key: JWT_SECRET
         generateValue: true
+      # Optional error tracking: DSN of the Spring Boot project on Sentry / GlitchTip (empty = off)
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
