@@ -1,0 +1,54 @@
+# AeroProce trên máy Oracle A1: database + backend + web, chỉ mở ra ngoài qua Caddy của máy (cổng 127.0.0.1:8090).
+# Chạy bằng deploy/deploy.sh (tự tạo .env, build, thêm tên miền vào Caddy).
+name: aeroproce
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: indoor_map
+      POSTGRES_USER: indoor_map
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Thiếu DB_PASSWORD trong deploy/.env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Chỉ nạp ở lần chạy đầu (volume còn trống): sân bay Tân Sơn Nhất + IUH, 2 quy trình
+      - ../Back-End/database/v2/demo_data.sql:/docker-entrypoint-initdb.d/01_demo_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indoor_map -d indoor_map"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    mem_limit: 512m
+
+  api:
+    build: ../Back-End
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/indoor_map
+      DB_USERNAME: indoor_map
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_POOL_SIZE: "5"
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Thiếu ADMIN_EMAIL trong deploy/.env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Thiếu ADMIN_PASSWORD trong deploy/.env}
+      JWT_SECRET: ${JWT_SECRET:?Thiếu JWT_SECRET trong deploy/.env}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN:?Thiếu DOMAIN trong deploy/.env}
+    # Dockerfile cho Java dùng 70% RAM của container: 1 GB -> heap ~700 MB
+    mem_limit: 1g
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8090:80"
+    mem_limit: 256m
+
+volumes:
+  db-data:

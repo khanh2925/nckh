@@ -1,0 +1,8 @@
+# Chỉ gửi những gì web.Dockerfile cần
+*
+!packages/core
+!Front-End
+!deploy/Caddyfile
+**/node_modules
+Front-End/dist
+packages/core/test

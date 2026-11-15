@@ -1,0 +1,26 @@
+# Caddy trong container web: phục vụ trang React và chuyển /api sang backend.
+# HTTPS do Caddy của máy (tầng ngoài) lo, ở đây chỉ HTTP nội bộ.
+{
+	admin off
+	servers {
+		# Tin header X-Forwarded-* từ Caddy tầng ngoài để backend biết trang đang chạy HTTPS
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		# Trang một trang (React Router): đường dẫn không có file thì trả về index.html
+		try_files {path} /index.html
+		file_server
+	}
+}

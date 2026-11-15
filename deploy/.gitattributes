@@ -1,0 +1,2 @@
+# Script chạy trên Linux: luôn giữ xuống dòng kiểu LF, kể cả khi commit từ Windows
+* text eol=lf
