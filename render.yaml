@@ -27,3 +27,8 @@ services:
       # Signs the login tokens; Render makes a random value once
       - key: JWT_SECRET
         generateValue: true
+      # Error tracking: DSN of the Spring Boot project (aeroproce-api) on Sentry. A DSN only lets you send events, not read them
+      - key: SENTRY_DSN
+        value: https://4b813f9a52490ea3c9c7fad6cf62bc19@o4512436061339648.ingest.de.sentry.io/4512436084277328
+      - key: SENTRY_ENVIRONMENT
+        value: production

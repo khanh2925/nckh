@@ -5,9 +5,16 @@ import "bootstrap-icons/font/bootstrap-icons.css";
 import "leaflet/dist/leaflet.css";
 import "./App.css";
 import Root from "./Root.jsx";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
+import { initMonitoring } from "./monitoring/monitoring.js";
+
+// Error tracking (Sentry / GlitchTip), only when VITE_SENTRY_DSN is set
+initMonitoring();
 
 createRoot(document.getElementById("root")).render(
     <StrictMode>
-        <Root />
+        <ErrorBoundary>
+            <Root />
+        </ErrorBoundary>
     </StrictMode>
 );
